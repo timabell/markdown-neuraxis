@@ -67,3 +67,7 @@ It will be a huge encouragement to my efforts if I know others think the same wa
 ## Technology & design
 
 See [design.md](design.md)
+
+## Development
+
+See [development.md](development.md) for setup instructions and development workflow.
