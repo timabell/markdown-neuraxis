@@ -33,6 +33,7 @@ struct MarkdownApp {
     notes_path: PathBuf,
     markdown_files: Vec<PathBuf>,
     markdown_input: String,
+    selected_file: Option<PathBuf>,
 }
 
 impl MarkdownApp {
@@ -42,6 +43,19 @@ impl MarkdownApp {
             notes_path,
             markdown_files,
             markdown_input: String::new(),
+            selected_file: None,
+        }
+    }
+
+    fn load_file(&mut self, file_path: &Path) {
+        match fs::read_to_string(file_path) {
+            Ok(content) => {
+                self.markdown_input = content;
+                self.selected_file = Some(file_path.to_path_buf());
+            }
+            Err(e) => {
+                eprintln!("Error reading file {:?}: {}", file_path, e);
+            }
         }
     }
 }
@@ -82,31 +96,57 @@ impl eframe::App for MarkdownApp {
                 self.markdown_files.len()
             ));
 
+            let mut file_to_load = None;
+            let pages_path = self.notes_path.join("pages");
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for file in &self.markdown_files {
-                    if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
-                        ui.label(name);
+                    let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
+                        relative.to_string_lossy().to_string()
+                    } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
+                        name.to_string()
+                    } else {
+                        "Unknown".to_string()
+                    };
+
+                    let is_selected = self.selected_file.as_ref() == Some(file);
+                    let response = ui.selectable_label(is_selected, display_name);
+                    if response.clicked() {
+                        file_to_load = Some(file.clone());
                     }
                 }
             });
+
+            if let Some(file) = file_to_load {
+                self.load_file(&file);
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("markdown-neuraxis");
-
-            ui.horizontal(|ui| {
-                ui.label("Markdown:");
-                ui.text_edit_multiline(&mut self.markdown_input);
-            });
+            if let Some(ref file) = self.selected_file {
+                let pages_path = self.notes_path.join("pages");
+                let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
+                    relative.to_string_lossy().to_string()
+                } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
+                    name.to_string()
+                } else {
+                    "Selected File".to_string()
+                };
+                ui.heading(format!("📝 {}", display_name));
+            } else {
+                ui.heading("markdown-neuraxis");
+                ui.label("Select a file from the sidebar to view its content");
+            }
 
             ui.separator();
 
             if !self.markdown_input.is_empty() {
                 let doc = parse_markdown_outline(&self.markdown_input);
                 ui.label("Parsed outline:");
-                for item in &doc.outline {
-                    show_outline_item(ui, item, 0);
-                }
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for item in &doc.outline {
+                        show_outline_item(ui, item, 0);
+                    }
+                });
             }
         });
     }
