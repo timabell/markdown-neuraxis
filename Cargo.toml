@@ -2,5 +2,13 @@
 name = "markdown-neuraxis"
 version = "0.1.0"
 edition = "2024"
+authors = ["Tim Abell"]
+description = "Local-first structured thought and knowledge management tool"
+license = "AGPL-3.0"
+repository = "https://github.com/timabell/markdown-neuraxis"
 
 [dependencies]
+pulldown-cmark = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
