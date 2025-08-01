@@ -5,17 +5,15 @@
 This document outlines the technical and product design for the MVP of **`markdown-neuraxis`** — a local-first, markdown-based tool for organizing thoughts, tasks, and knowledge using familiar text files, structured outlines, and meaningful links.
 
 The goal is to create a fast, keyboard-first desktop application that unifies:
+
 - **Task management** (GTD/Sunsama style)
 - **Note-taking & outlining** (Logseq/Markdown/Wiki hybrid)
 - **Local-first file storage**, with folder support and plaintext primacy
 
-This doc is designed to be directly actionable by a capable AI coding assistant (e.g. Claude, GPT-4) or a senior developer.
-
----
-
 ## 📦 MVP Feature Scope
 
 ### Core Concepts
+
 - Local-first app, no server or sync in MVP
 - Markdown is the **single source of truth**
 - Notes are just `.md` files in folders
@@ -26,30 +24,49 @@ This doc is designed to be directly actionable by a capable AI coding assistant 
   - Task states (`TODO`, `DOING`, `DONE`, etc.)
   - Tags and page links (`#tag`, `[[wiki-link]]`)
   - Properties (`property:: value` inline metadata)
-
----
+- Executable takes single argument - path to root of note folder to open
 
 ## 🧱 File & Folder Structure
 
-The following structure is inspired by Logseq:
+The following structure is inspired by Logseq & PARA
 
 ```
 notes/
 ├── journal/
 │   ├── 2025_08_01.md
 │   ├── 2025_08_02.md
+│   ├── assets/
+│   │   ├── image1.png
 ├── pages/
-│   ├── project-x.md
-│   ├── client-y.md
-├── assets/
-│   ├── image1.png
+│   ├── index.md
+│   ├── something.md
+│   ├── anything-else.md
+│   ├── 0_Inbox/
+│   │   ├── 19991231-232359-foo.md
+│   │   ├── 19991231-232359-bar.png
+│   │   ├── 19991231-232359-baz.eml
+│   ├── 1_Projects/
+│   │   ├── BigProj1/
+│   │   │   ├── index.md
+│   │   │   ├── something.md
+│   │   ├── BigProj2/
+│   │   │   ├── something.md
+│   ├── 2_Areas/
+│   │   ├── Family/
+│   ├── 3_Resources/
+│   ├── 4_Archive/
+│   ├── Companies/
+│   │   ├── BigCorpA.md
+│   │   ├── BigCorpB.md
+│   ├── People/
+│   │   ├── Jo Bloggers.md
+│   ├── assets/
+│   │   ├── image1.png
 ```
 
-- `journal/` — one file per day, for daily logs/tasks
+- `journal/` — one file per day, for daily logs/tasks, engineering notebook
 - `pages/` — user-created notes, wiki-style
-- `assets/` — optional embedded files/images
-
----
+- `assets/` — optional embedded files/images for md files in root 
 
 ## ⚙️ Application Stack (Proposed)
 
@@ -61,16 +78,14 @@ notes/
 | File Access   | Direct OS filesystem, cross-platform |
 | State Mgmt    | In-memory + indexed local cache for links and metadata |
 
-Optional future layers:
-- Plugin system via WASM or Rust trait loading
-- Sync layer (Syncthing or custom rsync-like plugin)
-- AI plugin via local LLM or API endpoint
+## Tests
 
----
+Outside in integration tests for all features. Unit tests as needed to fill in details, variations and thrash out modules/functions. It must not be possible to break a delivered feature of the app without a test failing.
+
+<https://0x5.uk/2024/03/27/why-do-automated-tests-matter/>
 
 ## 🖥️ UI Layout (Initial Idea)
 
-- **Tabbed Interface** like VSCode or Firefox
 - **Left Sidebar**: File tree (folders/files) or backlinks
 - **Main View**: Markdown editor (WYSIWYM, not WYSIWYG)
 - **Keyboard Shortcuts** for everything:
@@ -79,95 +94,94 @@ Optional future layers:
   - Outline collapse/expand
   - Search
 
----
+### 🪟 Layout Philosophy: Split, Not Tabbed
+
+`markdown-neuraxis` intentionally avoids browser-style tabs.
+
+Tabs create hidden state — which means your brain has to **remember what’s open but not visible**. This adds unnecessary **cognitive load**. Our goal is the opposite: offloading your mental stack into plain sight.
+
+Instead, `markdown-neuraxis` supports **arbitrary split views**, inspired by `tmux`, `i3`, and terminals — where every open note is visible, side-by-side, at once.
+
+This means:
+- **No hidden context** — everything is on screen, nothing is tucked away
+- **No tab juggling** or mental tax for “what’s open where”
+- Vertical and horizontal splits, keyboard-driven
+- Perfect for systems thinkers who want multiple perspectives visible (e.g. journal + task list + project file)
+
+The result is a calm, intentional, distraction-free workspace — where you don’t have to remember anything the tool isn’t showing you.
+
+If you want tabs for more complex tasks, you can still use VSCode with your notes as there is no proprietary data store, it's all just folders and markdown files.
 
 ## 🔍 Core Features (MVP Build Targets)
 
-1. **Markdown File Parsing**
-   - Load `.md` files from a selected folder root
-   - Parse headings, bullet lists, code blocks, metadata
+### Markdown File Parsing
 
-2. **Outliner UI**
-   - Collapsible bullets (`-`, `*`, `+`)
-   - Show/hide child items
+- Load `.md` files from a selected folder root
+- Parse headings, bullet lists, code blocks, metadata
 
-3. **Backlink Index**
-   - On opening a file, show list of inbound links
-   - Cross-reference by scanning `[[link]]` usage across files
+### Outliner UI
 
-4. **Folder Navigation**
-   - True folder support (unlike Logseq namespaces)
-   - Folders = first-class UX in sidebar
+- Collapsible bullets (Multiple styles supported: `-`, `*`, `+`, mvp will read all, but only write `-` bullets)
+- Show/hide child items
 
-5. **Link Autocomplete**
-   - When typing `[[...`, suggest matching files/pages
+### Backlink Index
 
-6. **Metadata Handling**
-   - Bullet properties (e.g. `status:: active`, `due:: 2025-08-03`)
-   - Queryable
+- On opening a file, show list of inbound links
+- Cross-reference by scanning `[[link]]` usage across files
 
-7. **Simple Query Feature**
-   - Allow rendering dynamic lists like:
-     ```
-     query:: status:: contacted
-     ```
-   - Render matching bullets/blocks across files
+### Folder Navigation
 
-8. **Theme Support**
-   - Dark/light mode themes with CSS-like styling
+- True folder support (unlike Logseq namespaces)
+- Folders = first-class UX in sidebar
 
-9. **Tabs and Panes**
-   - Open multiple notes side-by-side
-   - Optional: Drag-to-rearrange
+### Link Autocomplete
 
-10. **Logseq Namespace Import Tool**
-   - Convert `my-file/my-subnote.md` into `my-file/subnote.md`
-   - Clean up old `my-file_my-subnote.md` patterns
+- When typing `[[...`, suggest matching files/pages
 
----
+### Metadata Handling
+
+- Bullet properties (e.g. `status:: active`, `due:: 2025-08-03`)
+- Queryable
+
+### Simple Query Feature
+
+- Allow rendering dynamic lists like:
+   ```
+   query:: status:: contacted
+   ```
+- Render matching bullets/blocks across files
+
+### Tabs and Panes
+
+- Open multiple notes side-by-side
+- Open note(s) in new window
+
+### Theme Support
+
+   - Solarized Dark/light mode themes with CSS-like styling
+
+### More MVP features
+
+- Instant write - no save button
+- Filesystem watch - instant reload of on-disk changes from other applications
+- Timeline View (Chronological journal review)
+- Journal calendar (plugin?)
 
 ## 💡 Nice-to-Haves (Later Phases)
 
 - Command Palette (like VSCode)
-- Timeline View (Chronological journal review)
-- Mobile-friendly Markdown reader (read-only)
-- Plugin API
-- Web publishing from `.md` files
-- AI integration (task triage, daily summaries, voice-to-task)
-- Git-backed version control (optionally)
+- graph view of nearby / all pages and how they link
+- automatic dark/light switching based on system theme changes
+- slash-commands
+- plugin support
+- cloud things
+- Android/iOS
+- much much more
 
----
+## 🏁 Initial goals
 
-## 🧪 Dev & Debug Tools
-
-- Logging to console + file
-- Live reload of markdown edits
-- Keyboard shortcut logger/debugger
-
----
-
-## 🏁 First User Goal: Tim (you)
-
-You're the first power user. MVP should enable:
 - Daily journaling with timestamped bullets
-- Organizing project work across `pages/`
+- Organizing project work across `pages/` with para method folders
 - Linking context between client/project/goals
 - Copy-paste rich bullet lists to Docs/Writer
 - Seeing backlinks and forward context in a glance
-
----
-
-## 📎 GitHub Repo
-
-https://github.com/timabell/markdown-neuraxis
-
----
-
-## ✅ Final Note
-
-This project is your digital CNS — your **markdown neuraxis**.
-Start small. Move fast. Dogfood early.
-And let the system emerge from use.
-
-> Build the brain you want to live in.
-
