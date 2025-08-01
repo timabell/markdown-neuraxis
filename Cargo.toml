@@ -10,5 +10,7 @@ repository = "https://github.com/timabell/markdown-neuraxis"
 [dependencies]
 pulldown-cmark = "0.11"
 serde = { version = "1.0", features = ["derive"] }
+eframe = "0.29"
+egui = "0.29"
 
 [dev-dependencies]
