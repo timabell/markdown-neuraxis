@@ -4,24 +4,25 @@
 
 [github.com/timabell/markdown-neuraxis](https://github.com/timabell/markdown-neuraxis)
 
----
-
 ## 🧠 What is `markdown-neuraxis`?
 
 `markdown-neuraxis` is an experimental, local-first tool for structured thought, life organization, and personal knowledge management — all powered by plain Markdown files.
 
 It draws inspiration from:
-- 🧘 **GTD** and **Sunsama** for task and life planning
-- 📚 **Logseq**, **Obsidian**, and **Tana** for networked thinking
-- 📦 **Trello** and **Kanban** for flow-based task movement
-- 🧠 The **PARA** and **Zettelkasten** methods for knowledge organization
 
-And it's all held together by:
+- 🧘 **GTD** method
+- 🌅 **Sunsama** for task and daily planning with clarity of mind and focus (props to the founder for such great thinking)
+- 📚 **Logseq** for outlining and journalling (engineering notebook), plus many other cool features
+- 📦 **Trello** and **Kanban** for flow-based task movement - see also "The Toyota Way"
+- 🧠 The **PARA** method for knowledge organization
+
+You will get more value from this tool if you have read the GTD book, the PARA method, and have followed the Sunsama journey.
+
+It's all held together by:
+
 - ✍️ Plain Markdown files
 - 🧩 A fast, keyboard-driven UI (coming)
 - 🧠 A mental model that connects **goals → tasks → notes** into a coherent, navigable system
-
----
 
 ## 🧬 Why the name `markdown-neuraxis`?
 
@@ -33,8 +34,6 @@ In this project, your **Markdown files** form that core. They represent everythi
 - A **single, fast, local** system for thinking, planning, and remembering
 - A digital nervous system you **actually trust** and control
 - A way to integrate daily action with lifelong purpose
-
----
 
 ## 🚧 Current Status
 
@@ -51,19 +50,20 @@ The goal of the **first working MVP**:
 - Optional query syntax for dashboards (`lead-status:: contacted`, etc.)
 - Migration tool from Logseq (namespace → folder)
 
----
-
 ## 🌱 Why This, Now?
 
 All existing tools either:
+
 - Sacrifice local control (SaaS lock-in)
 - Slow down (Electron bloat)
 - Miss the glue between **task**, **note**, **project**, and **life purpose**
 
-You don't need a new app.
-You need a **markdown neuraxis**.
+Logseq is very good and incredibly complete, but moving to database-first and away from its roots as a markdown-first tool.
 
----
+## Get involved, show your support
 
-More soon: [github.com/timabell/markdown-neuraxis](https://github.com/timabell/markdown-neuraxis)
+It will be a huge encouragement to my efforts if I know others think the same way, show your support by starring the repo (so I know you're there), adding issues and discussions, making suggestions, and posting about this in your favourite places to hang out online.
 
+## Technology & design
+
+See [design.md](design.md)
