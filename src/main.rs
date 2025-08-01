@@ -1,61 +1,154 @@
-use eframe::egui;
+use dioxus::prelude::*;
 use markdown_neuraxis::{OutlineItem, parse_markdown_outline};
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-fn main() -> eframe::Result {
+fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: {} <notes-folder-path>", args[0]);
         std::process::exit(1);
     }
-
+    
     let notes_path = PathBuf::from(&args[1]);
     if !notes_path.exists() || !notes_path.is_dir() {
         eprintln!("Error: '{}' is not a valid directory", args[1]);
         std::process::exit(1);
     }
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
-        ..Default::default()
-    };
 
-    eframe::run_native(
-        "markdown-neuraxis",
-        options,
-        Box::new(move |_cc| Ok(Box::new(MarkdownApp::new(notes_path)))),
-    )
+    dioxus::launch(move || {
+        rsx! {
+            App { notes_path: notes_path.clone() }
+        }
+    });
 }
 
-struct MarkdownApp {
-    notes_path: PathBuf,
-    markdown_files: Vec<PathBuf>,
-    markdown_input: String,
-    selected_file: Option<PathBuf>,
-}
+#[component]
+fn App(notes_path: PathBuf) -> Element {
+    let mut markdown_files = use_signal(|| scan_markdown_files(&notes_path));
+    let mut selected_file = use_signal(|| None::<PathBuf>);
+    let mut markdown_content = use_signal(|| String::new());
 
-impl MarkdownApp {
-    fn new(notes_path: PathBuf) -> Self {
-        let markdown_files = scan_markdown_files(&notes_path);
-        Self {
-            notes_path,
-            markdown_files,
-            markdown_input: String::new(),
-            selected_file: None,
+    rsx! {
+        style { {SOLARIZED_LIGHT_CSS} }
+        div {
+            class: "app-container",
+            div {
+                class: "sidebar",
+                h2 { "Files" }
+                p { "Found {markdown_files.read().len()} markdown files:" }
+                div {
+                    class: "file-list",
+                    for file in markdown_files.read().iter() {
+                        FileItem {
+                            file: file.clone(),
+                            notes_path: notes_path.clone(),
+                            is_selected: selected_file.read().as_ref() == Some(file),
+                            on_select: move |file_path: PathBuf| {
+                                match fs::read_to_string(&file_path) {
+                                    Ok(content) => {
+                                        *markdown_content.write() = content;
+                                        *selected_file.write() = Some(file_path);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Error reading file {:?}: {}", file_path, e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            div {
+                class: "main-content",
+                if let Some(ref file) = *selected_file.read() {
+                    MainPanel { 
+                        file: file.clone(),
+                        notes_path: notes_path.clone(),
+                        content: markdown_content.read().clone()
+                    }
+                } else {
+                    div {
+                        class: "welcome",
+                        h1 { "markdown-neuraxis" }
+                        p { "Select a file from the sidebar to view its content" }
+                    }
+                }
+            }
         }
     }
+}
 
-    fn load_file(&mut self, file_path: &Path) {
-        match fs::read_to_string(file_path) {
-            Ok(content) => {
-                self.markdown_input = content;
-                self.selected_file = Some(file_path.to_path_buf());
+#[component]
+fn FileItem(
+    file: PathBuf,
+    notes_path: PathBuf,
+    is_selected: bool,
+    on_select: EventHandler<PathBuf>
+) -> Element {
+    let pages_path = notes_path.join("pages");
+    let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
+        relative.to_string_lossy().to_string()
+    } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
+        name.to_string()
+    } else {
+        "Unknown".to_string()
+    };
+
+    rsx! {
+        div {
+            class: if is_selected { "file-item selected" } else { "file-item" },
+            onclick: move |_| on_select.call(file.clone()),
+            "{display_name}"
+        }
+    }
+}
+
+#[component]
+fn MainPanel(file: PathBuf, notes_path: PathBuf, content: String) -> Element {
+    let pages_path = notes_path.join("pages");
+    let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
+        relative.to_string_lossy().to_string()
+    } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
+        name.to_string()
+    } else {
+        "Selected File".to_string()
+    };
+
+    let doc = parse_markdown_outline(&content);
+
+    rsx! {
+        h1 { "📝 {display_name}" }
+        hr {}
+        if !content.is_empty() {
+            div {
+                class: "outline-container",
+                h3 { "Parsed outline:" }
+                div {
+                    class: "outline-content",
+                    for item in &doc.outline {
+                        OutlineItemComponent { item: item.clone(), indent: 0 }
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("Error reading file {:?}: {}", file_path, e);
-            }
+        }
+    }
+}
+
+#[component]
+fn OutlineItemComponent(item: OutlineItem, indent: usize) -> Element {
+    let indent_str = "  ".repeat(indent);
+    
+    rsx! {
+        div {
+            class: "outline-item",
+            style: "margin-left: {indent * 20}px;",
+            "[{item.level}] {item.content}"
+        }
+        for child in &item.children {
+            OutlineItemComponent { item: child.clone(), indent: indent + 1 }
         }
     }
 }
@@ -87,75 +180,105 @@ fn scan_directory_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-impl eframe::App for MarkdownApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("file_browser").show(ctx, |ui| {
-            ui.heading("Files");
-            ui.label(format!(
-                "Found {} markdown files:",
-                self.markdown_files.len()
-            ));
-
-            let mut file_to_load = None;
-            let pages_path = self.notes_path.join("pages");
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for file in &self.markdown_files {
-                    let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
-                        relative.to_string_lossy().to_string()
-                    } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
-                        name.to_string()
-                    } else {
-                        "Unknown".to_string()
-                    };
-
-                    let is_selected = self.selected_file.as_ref() == Some(file);
-                    let response = ui.selectable_label(is_selected, display_name);
-                    if response.clicked() {
-                        file_to_load = Some(file.clone());
-                    }
-                }
-            });
-
-            if let Some(file) = file_to_load {
-                self.load_file(&file);
-            }
-        });
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some(ref file) = self.selected_file {
-                let pages_path = self.notes_path.join("pages");
-                let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
-                    relative.to_string_lossy().to_string()
-                } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
-                    name.to_string()
-                } else {
-                    "Selected File".to_string()
-                };
-                ui.heading(format!("📝 {}", display_name));
-            } else {
-                ui.heading("markdown-neuraxis");
-                ui.label("Select a file from the sidebar to view its content");
-            }
-
-            ui.separator();
-
-            if !self.markdown_input.is_empty() {
-                let doc = parse_markdown_outline(&self.markdown_input);
-                ui.label("Parsed outline:");
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for item in &doc.outline {
-                        show_outline_item(ui, item, 0);
-                    }
-                });
-            }
-        });
-    }
+const SOLARIZED_LIGHT_CSS: &str = r#"
+:root {
+    --base03: #002b36;
+    --base02: #073642;
+    --base01: #586e75;
+    --base00: #657b83;
+    --base0: #839496;
+    --base1: #93a1a1;
+    --base2: #eee8d5;
+    --base3: #fdf6e3;
+    --yellow: #b58900;
+    --orange: #cb4b16;
+    --red: #dc322f;
+    --magenta: #d33682;
+    --violet: #6c71c4;
+    --blue: #268bd2;
+    --cyan: #2aa198;
+    --green: #859900;
 }
 
-fn show_outline_item(ui: &mut egui::Ui, item: &OutlineItem, indent: usize) {
-    let indent_str = "  ".repeat(indent);
-    ui.label(format!("{}[{}] {}", indent_str, item.level, item.content));
-    for child in &item.children {
-        show_outline_item(ui, child, indent + 1);
-    }
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--base3);
+    color: var(--base01);
 }
+
+.app-container {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: 300px;
+    background-color: var(--base2);
+    border-right: 1px solid var(--base1);
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.sidebar h2 {
+    margin-top: 0;
+    color: var(--base01);
+}
+
+.file-list {
+    margin-top: 12px;
+}
+
+.file-item {
+    padding: 8px 12px;
+    margin: 2px 0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.file-item:hover {
+    background-color: var(--base1);
+}
+
+.file-item.selected {
+    background-color: var(--blue);
+    color: var(--base3);
+}
+
+.main-content {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 50%;
+    text-align: center;
+}
+
+.outline-container {
+    margin-top: 16px;
+}
+
+.outline-content {
+    margin-top: 12px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.outline-item {
+    padding: 2px 0;
+    line-height: 1.4;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--base1);
+    margin: 16px 0;
+}
+"#;
