@@ -124,6 +124,12 @@ If you want tabs for more complex tasks, you can still use VSCode with your note
 - Collapsible bullets (Multiple styles supported: `-`, `*`, `+`, mvp will read all, but only write `-` bullets)
 - Show/hide child items
 
+### Indentation Style
+
+- **Preferred**: Tab characters for indentation, spaces for alignment (tab-for-indent, space-for-alignment)
+- **Support**: Read and parse all common markdown indentation styles (2-space, 4-space, tab)
+- **Future**: Make indentation style configurable per-project (because whitespace wars will never be resolved)
+
 ### Backlink Index
 
 - On opening a file, show list of inbound links
