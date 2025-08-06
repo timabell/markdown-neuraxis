@@ -6,28 +6,27 @@ use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: {} <notes-folder-path>", args[0]);
-        std::process::exit(1);
-    }
-    
-    let notes_path = PathBuf::from(&args[1]);
-    if !notes_path.exists() || !notes_path.is_dir() {
-        eprintln!("Error: '{}' is not a valid directory", args[1]);
-        std::process::exit(1);
-    }
-
-    dioxus::launch(move || {
-        rsx! {
-            App { notes_path: notes_path.clone() }
-        }
-    });
+    dioxus::launch(App);
 }
 
 #[component]
-fn App(notes_path: PathBuf) -> Element {
-    let mut markdown_files = use_signal(|| scan_markdown_files(&notes_path));
+fn App() -> Element {
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        let usage = format!("Usage: {} <notes-folder-path>", args[0]);
+        return rsx! {
+            div { "{usage}" }
+        };
+    }
+
+    let notes_path = PathBuf::from(&args[1]);
+    if !notes_path.exists() || !notes_path.is_dir() {
+        let error = format!("Error: '{}' is not a valid directory", args[1]);
+        return rsx! {
+            div { "{error}" }
+        };
+    }
+    let markdown_files = use_signal(|| scan_markdown_files(&notes_path));
     let mut selected_file = use_signal(|| None::<PathBuf>);
     let mut markdown_content = use_signal(|| String::new());
 
@@ -64,7 +63,7 @@ fn App(notes_path: PathBuf) -> Element {
             div {
                 class: "main-content",
                 if let Some(ref file) = *selected_file.read() {
-                    MainPanel { 
+                    MainPanel {
                         file: file.clone(),
                         notes_path: notes_path.clone(),
                         content: markdown_content.read().clone()
@@ -86,7 +85,7 @@ fn FileItem(
     file: PathBuf,
     notes_path: PathBuf,
     is_selected: bool,
-    on_select: EventHandler<PathBuf>
+    on_select: EventHandler<PathBuf>,
 ) -> Element {
     let pages_path = notes_path.join("pages");
     let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
@@ -139,8 +138,8 @@ fn MainPanel(file: PathBuf, notes_path: PathBuf, content: String) -> Element {
 
 #[component]
 fn OutlineItemComponent(item: OutlineItem, indent: usize) -> Element {
-    let indent_str = "  ".repeat(indent);
-    
+    let _indent_str = "  ".repeat(indent);
+
     rsx! {
         div {
             class: "outline-item",
