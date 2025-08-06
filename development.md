@@ -35,9 +35,33 @@ rustc --version
 cargo --version
 ```
 
-### Additional Dependencies
+### System Dependencies
 
-Once we begin implementation, additional dependencies will be documented here based on the chosen GUI framework (Tauri + Svelte or pure Rust GUI).
+The following system packages are required to build the application on Linux:
+
+```bash
+# Ubuntu/Debian
+sudo apt install libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libxdo-dev
+
+# Fedora/RHEL
+sudo dnf install gtk3-devel glib2-devel cairo-devel pango-devel gdk-pixbuf2-devel atk-devel webkit2gtk4.1-devel libxdo-devel
+
+# Arch Linux
+sudo pacman -S gtk3 glib2 cairo pango gdk-pixbuf2 atk webkit2gtk libxdo
+```
+
+Or run the included setup script:
+```bash
+./dev-setup.sh
+```
+
+### Building the Application
+
+```bash
+cargo build
+cargo test
+cargo run <path-to-notes-folder>
+```
 
 ## Project Structure
 
