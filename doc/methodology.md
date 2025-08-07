@@ -6,7 +6,6 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
 
 - Inspired by *The Unicorn Project*, Logseq, and engineering team habits.
 - Each day opens a fresh `journal/YYYY_MM_DD.md` file.
-- Bullets written here (in meetings, thoughts, etc.) are considered your **primary inbox**.
 - Items may be immediately marked with `INBOX`, `TODO`, `WAITING`, etc.
 - Structure is flat, quick to capture — encourages flow.
 - Plugins can automatically collect and index inbox-type entries from journals.
@@ -14,9 +13,41 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
 ## 🎯 Goal Tracking
 
 - Rare but critical.
-- Goals are written as outlines and/or files, and uniquely ID’d.
+- Goals are written as outlines and/or files, and can be uniquely ID’d for reference from other files/bullets.
 - Tasks and entries anywhere in the system can link directly to goals via `((uuid))`, forming an unbroken chain from life vision → actions.
 - Fractal outlines allow arbitrarily deep nesting and linking.
+
+e.g.
+
+```md
+# pages/goals.md
+
+- finance
+  - work
+    - get a promotion
+      id:: 68951faf-4df2-4851-9c38-12474ce9806a <-- hidden id to allow cross-linking logseq-style
+    - invest in skills
+  - investing
+  - assets
+  - cost control
+- happyness
+  - be excellent
+    - improve skills
+      - see also ((68951faf-4df2-4851-9c38-12474ce9806a)) <-- auto-linked to "get a promotion"
+```
+
+```md
+# journal/yyyy-mm-dd.md
+
+- meditated (not really, kids up first)
+- made coffee
+- TODAY check email
+- INBOX bob called, call him back
+- DOING watch ai coding course
+  goal::((68951faf-4df2-4851-9c38-12474ce9806a)) <-- magic cross-link to above goal bullet in different file
+- TODO reflect & journal
+```
+
 
 ## 🧬 Fractal Notes, Not Projects
 
@@ -51,7 +82,7 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
   - Statuses (TODO/DOING/DONE/WIP)
   - Stages (e.g. GTD stages, marketing pipelines, delivery flows)
 - Inspired by *The Toyota Way*, *The Goal*, and Trello’s visual simplicity.
-- WIP limits optional but encouraged.
+- The visual kanban allows you to easily see when you've planned too much, or where your bottleneck is.
 
 ## ☀️ Daily Planning
 
@@ -66,7 +97,6 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
 ## 🔍 Query-Driven Views
 
 - Simple syntax like `query:: status:: DOING` to generate dashboards.
-- Plugin engine allows more complex queries (e.g. `goal:: XYZ` or `tag:: #client-abc`).
 - Queries power:
   - Kanban views
   - Focus views
@@ -78,8 +108,11 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
 - Outlines via bullets are optional — works with flat markdown too.
 - Ideal for documenting complex software processes, analysis, etc.
 - Supports backlinks, headings, and metadata (`property:: value`).
+- Supports normal filesystem folders to give "namespacing" as needed. No odd separator characters in filenames, and better interoperability with other systems.
 
 ## 📥 Universal Inbox Folder
+
+Pulling from the GTD concept that you *must* capture everything that needs (or demands) your attention into a universal "inbox" for processing - something that has had a huge positive impact on my calmness of mind in a busy life - the plan is a strong support for a simple filesystem based inbox, using filesystem dates to track when they were added.
 
 - `/0_Inbox/` folder accepts anything:
   - Markdown notes
@@ -89,12 +122,15 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
   - Scans
   - Shared links
   - Anything else the OS can hold
-- Future plugins may populate from:
+- Journal notes and markdown pages are scanned for the `INBOX` prefix on bullets and those are merged in to the virtual universal inbox on the fly ready for triage.
+- Future plugins & services may populate from:
   - Browser extension
   - Android share intents
   - Email forwarding
   - Screenshot services
   - Drag & drop from file manager
+
+The system will provide low-friction ways to process INBOX entries into where they should live - whether that's PARA folders for future reference, an addition to the hierarchy of goals, a specific project, an action for the action list, etc etc. or just to have their status flipped to `SOMEDAY`, `WAITING`, or `ABANDONED`.
 
 ## 🧠 Philosophy
 
@@ -104,7 +140,3 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
 - **Fractal structure** — from daily notes to multi-year goals
 - **Opinionated plugin-first UX**, keeping the core tool minimal
 - **Extensible but sane** — start simple, build naturally
-
----
-
-This is the system we've always wanted. Now we're building it.
