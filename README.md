@@ -28,6 +28,8 @@ It draws inspiration from:
 
 You will get more value from this tool if you have read the GTD book, the PARA method, and have followed the Sunsama journey.
 
+Because this tool is intended to support an opinionated methodology for handling a busy life effectively, have a read of [doc/methodology.md](doc/methodology.md) to get a feel for how the tool is intended to be used, though of course being open source software you can pretty much do whatever you like, and I'd love to hear what you use it for and how it's going.
+
 It's all held together by:
 
 - ✍️ Plain Markdown files
