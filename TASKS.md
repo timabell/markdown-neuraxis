@@ -1,11 +1,8 @@
 # Development Tasks
 
 ## In Progress
-- 
 
 ## Tech tasks
-- use a better rust test framework for better error info and output
-- clippy errors
 
 ## Core MVP Features (Functional Outliner)
 - Fix outline parsing hierarchy - children aren't properly nested in current implementation
