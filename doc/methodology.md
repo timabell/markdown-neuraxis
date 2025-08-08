@@ -13,6 +13,7 @@ Based on GTD principles, all tasks flow through explicit states to ensure nothin
 - **DOING** - Currently active work (limit WIP for focus)
 - **WAITING** - Blocked on external dependency; tracked with context
 - **SOMEDAY** - Deferred but potentially valuable; reviewed periodically
+- **SCHEDULED** - In the calendar on a specific day (as per GTD method)
 - **DONE** - Completed work; archived for reference
 - **ABANDONED** - Explicitly discarded; useful for learning patterns - i.e. I had planned to do this, I might even have started, and now I'm not going to do it any more.
 
