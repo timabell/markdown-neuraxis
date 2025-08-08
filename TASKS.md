@@ -1,51 +1,45 @@
 # Development Tasks
 
 ## In Progress
-- [ ] Create development task tracking system
+- 
 
-## Pending - Core MVP Features (Functional Outliner)
-- [ ] Fix outline parsing hierarchy - children aren't properly nested in current implementation
-- [ ] Not currently showing markdown content that isn't under a top level bullet
-- [ ] Replace debug outline display with actual rendered markdown
-- [ ] Add collapsible bullets with +/- indicators for outline items
-- [ ] Implement proper indentation handling (tabs vs spaces)
-- [ ] Add keyboard shortcuts for outline navigation (expand/collapse)
+## Core MVP Features (Functional Outliner)
+- clippy errors
+- Fix outline parsing hierarchy - children aren't properly nested in current implementation
+- Not currently showing markdown content that isn't under a top level bullet
+- Replace debug outline display with actual rendered markdown
+- Add collapsible bullets with +/- indicators for outline items
+- Implement proper indentation handling (tabs vs spaces)
+- Add keyboard shortcuts for outline navigation (expand/collapse)
 
-## Pending - Wiki Features  
-- [ ] Implement [[wiki-links]] parsing and rendering
-- [ ] Add backlink index - scan files for inbound links
-- [ ] Add link autocomplete when typing [[
-- [ ] Basic file-to-file navigation
+## Wiki Features  
+- Implement [[wiki-links]] parsing and rendering
+- Add backlink index - scan files for inbound links
+- Add link autocomplete when typing [[
+- Basic file-to-file navigation
 
-## Pending - Task Management
-- [ ] Parse metadata properties (status:: DOING, due:: date, etc.)
-- [ ] Implement task state parsing (ACTION, DOING, WAITING, DONE, etc.)
-- [ ] Add inbox integration - scan for INBOX prefixed bullets
-- [ ] Simple query system (query:: status:: DOING)
+## Task Management
+- Parse metadata properties (status:: DOING, due:: date, etc.)
+- Implement task state parsing (ACTION, DOING, WAITING, DONE, etc.)
+- Add inbox integration - scan for INBOX prefixed bullets
+- Simple query system (query:: status:: DOING)
 
-## Pending - Daily Workflow
-- [ ] Journal file integration (journal/ folder support)
-- [ ] PARA folder structure awareness
-- [ ] Timeline view for journal entries
+## Daily Workflow
+- Journal file integration (journal/ folder support)
+- PARA folder structure awareness
+- Timeline view for journal entries
 
-## Pending - Polish
-- [ ] Instant write (no save button needed)
-- [ ] Filesystem watch for external changes
-- [ ] Dark/light theme switching
-- [ ] Better error handling and user feedback
-
-## Completed
-- [x] Set up basic Dioxus desktop app structure
-- [x] Add markdown file scanning from pages/ folder
-- [x] Basic outline parsing with pulldown-cmark
-- [x] File selection and content display
-- [x] Solarized light theme implementation
+## Polish
+- Instant write (no save button needed)
+- Filesystem watch for external changes
+- Dark/light theme switching
+- Better error handling and user feedback
 
 ## Architecture Improvements Needed
-- [ ] Outline hierarchy building is flawed - needs rewrite
-- [ ] Add proper error handling throughout
-- [ ] Consider state management approach for larger feature set
-- [ ] Add comprehensive test coverage
+- Outline hierarchy building is flawed - needs rewrite
+- Add proper error handling throughout
+- Consider state management approach for larger feature set
+- Add comprehensive test coverage
 
 ## Notes
 - Focus on Functional Outliner first - get the core working well
