@@ -3,8 +3,11 @@
 ## In Progress
 - 
 
-## Core MVP Features (Functional Outliner)
+## Tech tasks
+- use a better rust test framework for better error info and output
 - clippy errors
+
+## Core MVP Features (Functional Outliner)
 - Fix outline parsing hierarchy - children aren't properly nested in current implementation
 - Not currently showing markdown content that isn't under a top level bullet
 - Replace debug outline display with actual rendered markdown
