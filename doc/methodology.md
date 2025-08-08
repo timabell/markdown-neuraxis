@@ -7,20 +7,22 @@ This document captures the evolving methodology behind `markdown-neuraxis`, comb
 Based on GTD principles, all tasks flow through explicit states to ensure nothing falls through cracks:
 
 ### State Values
+
 - **INBOX** - Unprocessed capture; requires triage to determine next action
 - **ACTION** - Actionable, bite-sized work that has been fully considered (replaces meaningless "TODO")
 - **DOING** - Currently active work (limit WIP for focus)
 - **WAITING** - Blocked on external dependency; tracked with context
 - **SOMEDAY** - Deferred but potentially valuable; reviewed periodically
 - **DONE** - Completed work; archived for reference
-- **ABANDONED** - Explicitly discarded; useful for learning patterns
+- **ABANDONED** - Explicitly discarded; useful for learning patterns - i.e. I had planned to do this, I might even have started, and now I'm not going to do it any more.
 
 ### Flow Rules
-- **TODO is banned** - it's a synonym for unprocessed INBOX and has become meaningless
+
+- **TODO is banned** - it's a synonym for unprocessed INBOX and has become meaningless, nay toxic - it's become a synonym for "I know I need to do something with this but I'll put off all proper thinking about it till later, and mix it up with things I've thought really hard about", and as David Allen rightly points out, that's a sure fire way to descend into chaos and overwhelm. The move to INBOX/PROJECT/ACTION categorization is a key feature of GTD that must be absorbed to be effective.
 - **ACTION** signifies this is explicitly actionable, not a project with subtasks
 - Items must be fully considered before becoming ACTION (what exactly will I do?)
-- WAITING items require context (waiting for what/who?)
-- Regular review moves SOMEDAY back to INBOX for reconsideration
+- **WAITING** items require context (waiting for what/who?)
+- Regular manual review can be used to move **SOMEDAY** back to **INBOX** for reconsideration or **ABANDONED**
 
 ## 🗓 Daily Journaling
 
@@ -78,7 +80,7 @@ e.g.
 
 ## 📂 PARA Folder Default
 
-- Folder layout uses a modified PARA structure:
+- Folder layout uses a PARA structure:
   ```
   0_Inbox/
   1_Projects/
@@ -88,6 +90,8 @@ e.g.
   ```
 - Notes and folders naturally evolve toward PARA.
 - Resources may be linked into projects/goals without duplication.
+
+Note that the author of PARA references the work of GTD, so it's no surprise to see an "inbox" in PARA that mimics the inbox of GTD - they are the same thing, the temporary holding pen for unprocessed inboud "stuff" and self-generated ideas and todos.
 
 ## 🏷 Tagging for Focus
 
