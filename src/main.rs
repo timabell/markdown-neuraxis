@@ -28,7 +28,7 @@ fn App() -> Element {
     }
     let markdown_files = use_signal(|| scan_markdown_files(&notes_path));
     let mut selected_file = use_signal(|| None::<PathBuf>);
-    let mut markdown_content = use_signal(|| String::new());
+    let mut markdown_content = use_signal(String::new);
 
     rsx! {
         style { {SOLARIZED_LIGHT_CSS} }
@@ -52,7 +52,7 @@ fn App() -> Element {
                                         *selected_file.write() = Some(file_path);
                                     }
                                     Err(e) => {
-                                        eprintln!("Error reading file {:?}: {}", file_path, e);
+                                        eprintln!("Error reading file {file_path:?}: {e}");
                                     }
                                 }
                             }
