@@ -19,5 +19,8 @@ sudo apt install -y \
     libwebkit2gtk-4.1-dev \
     libxdo-dev
 
+echo "Installing Rust development tools..."
+cargo install cargo-insta
+
 echo "Development dependencies installed successfully!"
 echo "You can now run 'cargo build' to build the application."

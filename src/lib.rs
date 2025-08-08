@@ -93,9 +93,25 @@ fn build_hierarchy(items: Vec<OutlineItem>) -> Vec<OutlineItem> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use insta::assert_yaml_snapshot;
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("- First item\n- Second item\n- Third item", "simple_bullet_list")]
+    #[case(
+        "- Parent item\n  - Child item\n  - Another child\n- Second parent",
+        "nested_bullet_list"
+    )]
+    #[case("- Single item", "single_item")]
+    #[case("", "empty_markdown")]
+    fn test_outline_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
+        let doc = parse_markdown_outline(markdown);
+        assert_yaml_snapshot!(name, doc.outline);
+    }
 
     #[test]
-    fn test_parse_simple_bullet_list() {
+    fn test_simple_bullet_list_properties() {
         let markdown = "- First item\n- Second item\n- Third item";
         let doc = parse_markdown_outline(markdown);
 
@@ -107,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_nested_bullet_list() {
+    fn test_nested_bullet_list_properties() {
         let markdown = "- Parent item\n  - Child item\n  - Another child\n- Second parent";
         let doc = parse_markdown_outline(markdown);
 

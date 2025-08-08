@@ -1,0 +1,13 @@
+---
+source: src/lib.rs
+expression: doc.outline
+---
+- content: First item
+  level: 0
+  children: []
+- content: Second item
+  level: 0
+  children: []
+- content: Third item
+  level: 0
+  children: []

@@ -1,0 +1,7 @@
+---
+source: src/lib.rs
+expression: doc.outline
+---
+- content: Single item
+  level: 0
+  children: []
