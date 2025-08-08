@@ -2,11 +2,31 @@
 
 This document captures the evolving methodology behind `markdown-neuraxis`, combining the most effective practices from GTD, PARA, Sunsama, Logseq, and Kanban into a cohesive, markdown-first life and work management system.
 
+## 📥 Task States & Flow
+
+Based on GTD principles, all tasks flow through explicit states to ensure nothing falls through cracks:
+
+### State Values
+- **INBOX** - Unprocessed capture; requires triage to determine next action
+- **ACTION** - Actionable, bite-sized work that has been fully considered (replaces meaningless "TODO")
+- **DOING** - Currently active work (limit WIP for focus)
+- **WAITING** - Blocked on external dependency; tracked with context
+- **SOMEDAY** - Deferred but potentially valuable; reviewed periodically
+- **DONE** - Completed work; archived for reference
+- **ABANDONED** - Explicitly discarded; useful for learning patterns
+
+### Flow Rules
+- **TODO is banned** - it's a synonym for unprocessed INBOX and has become meaningless
+- **ACTION** signifies this is explicitly actionable, not a project with subtasks
+- Items must be fully considered before becoming ACTION (what exactly will I do?)
+- WAITING items require context (waiting for what/who?)
+- Regular review moves SOMEDAY back to INBOX for reconsideration
+
 ## 🗓 Daily Journaling
 
 - Inspired by *The Unicorn Project*, Logseq, and engineering team habits.
 - Each day opens a fresh `journal/YYYY_MM_DD.md` file.
-- Items may be immediately marked with `INBOX`, `TODO`, `WAITING`, etc.
+- Items may be immediately marked with `INBOX`, `ACTION`, `WAITING`, etc.
 - Structure is flat, quick to capture — encourages flow.
 - Plugins can automatically collect and index inbox-type entries from journals.
 
@@ -41,11 +61,11 @@ e.g.
 
 - meditated (not really, kids up first)
 - made coffee
-- TODAY check email
+- ACTION check email
 - INBOX bob called, call him back
 - DOING watch ai coding course
   goal::((68951faf-4df2-4851-9c38-12474ce9806a)) <-- magic cross-link to above goal bullet in different file
-- TODO reflect & journal
+- ACTION reflect & journal
 ```
 
 
@@ -79,7 +99,7 @@ e.g.
 ## 🧱 Kanban & WIP Visualisation
 
 - Core plugin or external service can render Kanban boards:
-  - Statuses (TODO/DOING/DONE/WIP)
+  - Statuses (INBOX/ACTION/DOING/WAITING/DONE)
   - Stages (e.g. GTD stages, marketing pipelines, delivery flows)
 - Inspired by *The Toyota Way*, *The Goal*, and Trello’s visual simplicity.
 - The visual kanban allows you to easily see when you've planned too much, or where your bottleneck is.
