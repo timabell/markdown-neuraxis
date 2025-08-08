@@ -66,7 +66,32 @@ notes/
 
 - `journal/` — one file per day, for daily logs/tasks, engineering notebook
 - `pages/` — user-created notes, wiki-style
-- `assets/` — optional embedded files/images for md files in root 
+- `assets/` — optional embedded files/images for md files in root
+
+### Parent Pages in Hierarchies
+
+To allow parent pages in a hierarchy/namespace to also be pages themselves, there are two common approaches:
+
+1. **Index files**: Have an `index.md` in each folder (common in wiki and web systems)
+2. **Same-name files**: Create a markdown file with the same name as the folder
+
+**Decision: Using approach #2 (same-name files)**
+
+This allows you to create either the folder or the file first and add the other later seamlessly, whereas index files would require a page to be moved to `page/index.md` when it becomes part of a hierarchy later.
+
+Example structure:
+```
+.
+├── foo.md          ← Parent page
+├── foo/            ← Folder with same name
+│   ├── bar.md      ← Parent page  
+│   └── bar/        ← Folder with same name
+│       └── baz/
+│           └── wibble.md
+└── other.md
+```
+
+This approach provides maximum flexibility for organic growth of content hierarchies. 
 
 ## ⚙️ Application Stack (Proposed)
 
