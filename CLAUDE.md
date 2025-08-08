@@ -23,6 +23,7 @@ The project has evolved from documentation-only to a basic working implementatio
 - **Basic functionality**: File browser, markdown parsing, outline display
 - **Build system**: Rust with Dioxus desktop framework
 - **Current branch**: `main` (Dioxus implementation merged)
+- Task list lives in `TASKS.md`
 
 ## File Structure & Methodology
 
