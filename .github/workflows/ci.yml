@@ -25,9 +25,14 @@ jobs:
           libwebkit2gtk-4.1-dev \
           libxdo-dev
     
+    - name: Get Rust version from .tool-versions
+      id: rust-version
+      run: echo "version=$(grep rust .tool-versions | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
+        toolchain: ${{ steps.rust-version.outputs.version }}
         components: rustfmt, clippy
     
     - name: Cache cargo registry
