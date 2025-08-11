@@ -4,6 +4,9 @@
 
 ## Tech tasks
 
+## Bugs
+- Main window keeps starting as always-on-top on Linux Mint
+
 ## Core MVP Features (Functional Outliner)
 - Fix outline parsing hierarchy - children aren't properly nested in current implementation
 - Not currently showing markdown content that isn't under a top level bullet
