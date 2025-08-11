@@ -5,7 +5,7 @@
 ## Tech tasks
 
 ## Bugs
-- Main window keeps starting as always-on-top on Linux Mint
+- Main window keeps starting as always-on-top on Linux Mint - https://github.com/DioxusLabs/dioxus/discussions/2269
 
 ## Core MVP Features (Functional Outliner)
 - Fix outline parsing hierarchy - children aren't properly nested in current implementation
