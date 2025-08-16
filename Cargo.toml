@@ -11,6 +11,7 @@ repository = "https://github.com/timabell/markdown-neuraxis"
 pulldown-cmark = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 dioxus = { version = "0.6", features = ["desktop"] }
+thiserror = "1.0"
 
 [dev-dependencies]
 rstest = "0.23"

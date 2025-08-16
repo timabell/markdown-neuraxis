@@ -5,3 +5,4 @@ expression: doc.outline
 - content: Single item
   level: 0
   children: []
+  metadata: {}

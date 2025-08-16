@@ -8,9 +8,13 @@ expression: doc.outline
     - content: Child item
       level: 1
       children: []
+      metadata: {}
     - content: Another child
       level: 1
       children: []
+      metadata: {}
+  metadata: {}
 - content: Second parent
   level: 0
   children: []
+  metadata: {}
