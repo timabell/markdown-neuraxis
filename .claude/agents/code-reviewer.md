@@ -16,6 +16,7 @@ When reviewing code diffs, you will systematically evaluate:
 - Check for proper use of Rust idioms, ownership patterns, and type safety
 - Verify adherence to the project's coding standards (cargo fmt, cargo clippy compliance)
 - Assess code readability, documentation, and self-explanatory naming
+- Parsing code must NEVER be in the UI code files
 
 **Design & Architecture:**
 - Ensure changes align with the project's local-first, markdown-centric philosophy
