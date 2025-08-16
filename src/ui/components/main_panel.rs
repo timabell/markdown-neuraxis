@@ -1,4 +1,4 @@
-use crate::domain::models::Document;
+use crate::models::Document;
 use dioxus::prelude::*;
 use std::path::PathBuf;
 

@@ -1,4 +1,4 @@
-use crate::domain::models::OutlineItem;
+use crate::models::OutlineItem;
 use dioxus::prelude::*;
 
 #[component]

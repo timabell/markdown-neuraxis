@@ -1,17 +1,15 @@
 use dioxus::prelude::*;
-use markdown_neuraxis::app::ApplicationServices;
-use markdown_neuraxis::presentation::App;
+use markdown_neuraxis::{io, ui::App};
 use std::env;
 use std::path::PathBuf;
 
-// Simple main app that creates services directly in the component
 fn main() {
     dioxus::LaunchBuilder::desktop()
         .with_cfg(make_window_config())
-        .launch(AppRoot);
+        .launch(app_root);
 }
 
-fn AppRoot() -> Element {
+fn app_root() -> Element {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         return rsx! {
@@ -34,10 +32,8 @@ fn AppRoot() -> Element {
         };
     }
 
-    let services = ApplicationServices::new();
-
     // Validate notes structure
-    if let Err(e) = services.document_service.validate_notes_structure(&notes_path) {
+    if let Err(e) = io::validate_notes_dir(&notes_path) {
         return rsx! {
             div {
                 style: "padding: 20px; font-family: monospace;",
@@ -46,12 +42,9 @@ fn AppRoot() -> Element {
             }
         };
     }
-    
+
     rsx! {
-        App {
-            services: services,
-            notes_path: notes_path,
-        }
+        App { notes_path: notes_path }
     }
 }
 

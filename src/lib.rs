@@ -1,22 +1,22 @@
-pub mod app;
-pub mod domain;
-pub mod infrastructure;
-pub mod presentation;
+pub mod io;
+pub mod models;
+pub mod parsing;
+pub mod ui;
 
-// Re-export commonly used types for backwards compatibility
-pub use domain::models::{Document, OutlineItem};
-pub use domain::parsing::PulldownMarkdownParser;
+#[cfg(test)]
+pub mod tests;
+
+// Re-export commonly used types
+pub use models::{Document, OutlineItem};
 
 // Legacy function for backwards compatibility with existing tests
 pub fn parse_markdown_outline(markdown: &str) -> Document {
     use std::path::PathBuf;
-    use domain::parsing::MarkdownParser;
-    let parser = PulldownMarkdownParser::new();
-    parser.parse(markdown, PathBuf::from("test.md"))
+    parsing::parse_markdown(markdown, PathBuf::from("test.md"))
 }
 
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use super::*;
     use insta::assert_yaml_snapshot;
     use pretty_assertions::assert_eq;
