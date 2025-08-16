@@ -9,7 +9,8 @@
       "Bash(cargo clippy:*)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:docs.rs)",
-      "Bash(cargo insta:*)"
+      "Bash(cargo insta:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }
