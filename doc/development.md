@@ -63,27 +63,9 @@ cargo test
 cargo run <path-to-notes-folder>
 ```
 
-## Project Structure
-
-Currently the repository contains only documentation:
-- `README.md` - Project overview
-- `design.md` - Technical design document
-- `development.md` - This file
-- `LICENSE` - AGPL v3 license
-
-Future structure will follow the planned architecture in `design.md`.
-
-## Development Workflow
-
-*To be documented once implementation begins*
-
 ## Testing
 
 Following the outside-in testing approach outlined in `design.md`:
 - Integration tests for all user-facing features
 - Unit tests for internal modules and functions
 - No feature delivery without passing tests
-
-## Contributing
-
-*To be documented once the project reaches a more mature state*
