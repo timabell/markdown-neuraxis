@@ -61,10 +61,44 @@ notes/
 
 ### Technology Stack
 - **Language**: Rust (for fast, native performance)
-- **GUI Framework**: Dioxus desktop (switched from egui, see ADR-0001)
-- **Markdown Parsing**: `pulldown-cmark` (already implemented)
+- **GUI Framework**: Dioxus desktop 0.6 (switched from egui, see ADR-0001)
+- **Markdown Parsing**: `pulldown-cmark` 0.11 with hierarchical outline processing
 - **File System**: Direct OS filesystem access, cross-platform
-- **State Management**: In-memory + indexed local cache for links and metadata
+- **State Management**: In-memory signals for UI state, file scanning on startup
+- **Testing**: `rstest` for parameterized tests, `insta` for snapshot testing, `pretty_assertions`
+
+### Code Organization
+```
+src/
+├── main.rs              # Entry point, CLI argument handling, window config
+├── lib.rs               # Module exports and core unit tests
+├── models/              # Core data structures
+│   ├── document.rs      # Document and OutlineItem structs
+│   └── mod.rs
+├── parsing/             # Markdown processing
+│   └── mod.rs           # pulldown-cmark integration, hierarchy building
+├── io/                  # File system operations
+│   └── mod.rs           # File scanning, validation, reading
+├── ui/                  # Dioxus components
+│   ├── app.rs           # Main App component with sidebar/content layout
+│   └── components/      # Reusable UI components
+│       ├── file_item.rs # Individual file list items
+│       ├── main_panel.rs # Content display panel
+│       ├── outline.rs   # Hierarchical outline renderer
+│       └── mod.rs
+├── assets/              # Static resources
+│   └── solarized-light.css # Theme styling
+└── tests/               # Integration tests
+    ├── integration.rs
+    └── mod.rs
+```
+
+### Data Flow Architecture
+1. **Startup**: CLI validates notes directory structure via `io::validate_notes_dir()`
+2. **File Discovery**: `io::scan_markdown_files()` recursively finds `.md` files in `pages/` folder
+3. **File Selection**: User clicks file → `io::read_file()` → `parsing::parse_markdown()` 
+4. **Rendering**: Parsed `Document` with hierarchical `OutlineItem`s rendered via Dioxus components
+5. **State Management**: Dioxus signals track selected file and current document
 
 ### Plugin Architecture (ADR-0002)
 - **Current**: Static internal plugins via traits (compile-time)
@@ -72,17 +106,18 @@ notes/
 - **Examples**: Inbox aggregation, goal tracing, PARA dashboards, file importers
 
 ### UI Design Principles (from doc/design.md)
-- **Split views, not tabs** - Avoid hidden state and cognitive load
+- **Split views, not tabs** - Sidebar file browser + main content panel
 - **Keyboard-first** - Fast navigation and editing  
 - **Local-first** - No cloud dependencies in MVP
 - **Plain text primacy** - Markdown files remain readable outside the app
 
-### Current Implementation
-- Basic Dioxus desktop app with file browser
-- Markdown outline parsing and display
-- Solarized light theme
-- File selection and content viewing
-- Works with folder structure as specified
+### Current Implementation Status
+- ✅ **CLI Interface**: Single argument for notes folder path
+- ✅ **File Browser**: Recursive markdown file discovery and selection
+- ✅ **Markdown Parsing**: Hierarchical bullet point outline extraction
+- ✅ **UI Layout**: Sidebar + main content with Solarized Light theme
+- ✅ **Error Handling**: Graceful validation and error display
+- ✅ **Testing**: Snapshot tests for outline parsing, unit tests for core logic
 
 ## Development Notes
 
