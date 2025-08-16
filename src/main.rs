@@ -6,7 +6,19 @@ use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
-    dioxus::launch(App);
+    dioxus::LaunchBuilder::desktop()
+        .with_cfg(make_window_config())
+        .launch(App);
+}
+
+fn make_window_config() -> dioxus::desktop::Config {
+    use dioxus::desktop::{Config, WindowBuilder};
+
+    let window = WindowBuilder::new()
+        .with_title("markdown-neuraxis")
+        .with_always_on_top(false);
+
+    Config::default().with_window(window)
 }
 
 #[component]
