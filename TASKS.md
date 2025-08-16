@@ -1,5 +1,5 @@
-- Not currently showing markdown content that isn't under a top level bullet
 - Replace debug outline display with actual rendered markdown
+- Not currently showing markdown content that isn't under a top level bullet
 - Add collapsible bullets with +/- indicators for outline items
 - Implement proper indentation handling (tabs vs spaces)
 - Add keyboard shortcuts for outline navigation (expand/collapse)
