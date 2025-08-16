@@ -5,12 +5,9 @@ expression: doc.outline
 - content: First item
   level: 0
   children: []
-  metadata: {}
 - content: Second item
   level: 0
   children: []
-  metadata: {}
 - content: Third item
   level: 0
   children: []
-  metadata: {}
