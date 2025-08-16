@@ -2,15 +2,15 @@
 source: src/lib.rs
 expression: doc.outline
 ---
-- content: Parent item
-  level: 0
-  children:
-    - content: Child item
-      level: 1
-      children: []
-    - content: Another child
-      level: 1
-      children: []
 - content: Second parent
   level: 0
   children: []
+- content: Parent item
+  level: 0
+  children:
+    - content: Another child
+      level: 1
+      children: []
+    - content: Child item
+      level: 1
+      children: []

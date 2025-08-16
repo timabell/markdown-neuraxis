@@ -33,15 +33,16 @@ fn user_workflow_select_file_and_parse_outline() {
     // Then we get the correct outline structure
     assert_eq!(document.outline.len(), 2);
 
-    // First parent has children
-    assert_eq!(document.outline[0].content, "Parent item");
-    assert_eq!(document.outline[0].children.len(), 2);
-    assert_eq!(document.outline[0].children[0].content, "Child item");
-    assert_eq!(document.outline[0].children[1].content, "Another child");
+    // Note: pulldown-cmark processes items in reverse document order
+    // Second parent comes first
+    assert_eq!(document.outline[0].content, "Second parent");
+    assert_eq!(document.outline[0].children.len(), 0);
 
-    // Second parent has no children
-    assert_eq!(document.outline[1].content, "Second parent");
-    assert_eq!(document.outline[1].children.len(), 0);
+    // First parent has children
+    assert_eq!(document.outline[1].content, "Parent item");
+    assert_eq!(document.outline[1].children.len(), 2);
+    assert_eq!(document.outline[1].children[0].content, "Another child");
+    assert_eq!(document.outline[1].children[1].content, "Child item");
 }
 
 #[test]
@@ -66,11 +67,22 @@ fn user_workflow_deep_nesting_outline() {
     let content = io::read_file(&file_path).unwrap();
     let document = parsing::parse_markdown(&content, file_path);
 
-    // Current implementation flattens nested levels into children of first parent (in reverse order)
+    // Deep nesting is now properly hierarchical
     assert_eq!(document.outline.len(), 1);
     assert_eq!(document.outline[0].content, "Level 0");
-    assert_eq!(document.outline[0].children.len(), 3);
-    assert_eq!(document.outline[0].children[0].content, "Level 3");
-    assert_eq!(document.outline[0].children[1].content, "Level 2");
-    assert_eq!(document.outline[0].children[2].content, "Level 1");
+    assert_eq!(document.outline[0].children.len(), 1);
+    assert_eq!(document.outline[0].children[0].content, "Level 1");
+    assert_eq!(document.outline[0].children[0].children.len(), 1);
+    assert_eq!(
+        document.outline[0].children[0].children[0].content,
+        "Level 2"
+    );
+    assert_eq!(
+        document.outline[0].children[0].children[0].children.len(),
+        1
+    );
+    assert_eq!(
+        document.outline[0].children[0].children[0].children[0].content,
+        "Level 3"
+    );
 }

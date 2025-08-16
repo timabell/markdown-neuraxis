@@ -1,4 +1,3 @@
-- Fix outline parsing hierarchy - children aren't properly nested in current implementation
 - Not currently showing markdown content that isn't under a top level bullet
 - Replace debug outline display with actual rendered markdown
 - Add collapsible bullets with +/- indicators for outline items

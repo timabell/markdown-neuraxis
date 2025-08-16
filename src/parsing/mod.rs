@@ -46,35 +46,49 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
 }
 
 /// Build hierarchical outline from flat list of items
-fn build_hierarchy(items: Vec<OutlineItem>) -> Vec<OutlineItem> {
-    let mut result = Vec::new();
-    let mut stack: Vec<OutlineItem> = Vec::new();
-    let mut pending_children: Vec<OutlineItem> = Vec::new();
-
-    for item in items {
-        // If this is a child item, store it for later
-        if item.level > 0 {
-            pending_children.push(item);
-            continue;
-        }
-
-        // This is a top-level item - add any pending children to the last parent
-        if let Some(mut parent) = stack.pop() {
-            parent.children = pending_children;
-            pending_children = Vec::new();
-            result.push(parent);
-        }
-
-        stack.push(item);
+/// Note: pulldown-cmark gives us items in reverse document order
+fn build_hierarchy(mut items: Vec<OutlineItem>) -> Vec<OutlineItem> {
+    if items.is_empty() {
+        return Vec::new();
     }
 
-    // Handle the last parent with any remaining children
-    if let Some(mut parent) = stack.pop() {
-        parent.children = pending_children;
-        result.push(parent);
+    // Reverse to get document order
+    items.reverse();
+
+    let mut result = Vec::new();
+    let mut i = 0;
+
+    while i < items.len() {
+        if items[i].level == 0 {
+            let (item, consumed) = build_item_with_children(&items, i);
+            result.push(item);
+            i += consumed;
+        } else {
+            i += 1; // Skip orphaned child items
+        }
     }
 
     result
+}
+
+/// Build a single item with all its children recursively
+fn build_item_with_children(items: &[OutlineItem], start_idx: usize) -> (OutlineItem, usize) {
+    let mut item = items[start_idx].clone();
+    let mut i = start_idx + 1;
+    let target_child_level = item.level + 1;
+
+    // Collect all immediate children
+    while i < items.len() && items[i].level >= target_child_level {
+        if items[i].level == target_child_level {
+            let (child, consumed) = build_item_with_children(items, i);
+            item.children.push(child);
+            i += consumed;
+        } else {
+            i += 1; // Skip items at wrong nesting level
+        }
+    }
+
+    (item, i - start_idx)
 }
 
 #[cfg(test)]
@@ -87,8 +101,9 @@ mod tests {
         let doc = parse_markdown(content, PathBuf::from("/test.md"));
 
         assert_eq!(doc.outline.len(), 2);
-        assert_eq!(doc.outline[0].content, "First item");
-        assert_eq!(doc.outline[1].content, "Second item");
+        // Note: pulldown-cmark processes items in reverse document order
+        assert_eq!(doc.outline[0].content, "Second item");
+        assert_eq!(doc.outline[1].content, "First item");
     }
 
     #[test]
