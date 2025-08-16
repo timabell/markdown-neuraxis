@@ -9,12 +9,6 @@ pub mod tests;
 // Re-export commonly used types
 pub use models::{Document, OutlineItem};
 
-// Legacy function for backwards compatibility with existing tests
-pub fn parse_markdown_outline(markdown: &str) -> Document {
-    use std::path::PathBuf;
-    parsing::parse_markdown(markdown, PathBuf::from("test.md"))
-}
-
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -31,14 +25,16 @@ mod unit_tests {
     #[case("- Single item", "single_item")]
     #[case("", "empty_markdown")]
     fn test_outline_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
-        let doc = parse_markdown_outline(markdown);
+        use std::path::PathBuf;
+        let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
         assert_yaml_snapshot!(name, doc.outline);
     }
 
     #[test]
     fn test_simple_bullet_list_properties() {
+        use std::path::PathBuf;
         let markdown = "- First item\n- Second item\n- Third item";
-        let doc = parse_markdown_outline(markdown);
+        let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
 
         assert_eq!(doc.outline.len(), 3);
         assert_eq!(doc.outline[0].content, "First item");
@@ -49,8 +45,9 @@ mod unit_tests {
 
     #[test]
     fn test_nested_bullet_list_properties() {
+        use std::path::PathBuf;
         let markdown = "- Parent item\n  - Child item\n  - Another child\n- Second parent";
-        let doc = parse_markdown_outline(markdown);
+        let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
 
         assert_eq!(doc.outline.len(), 2);
         assert_eq!(doc.outline[0].content, "Parent item");
