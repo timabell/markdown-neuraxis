@@ -7,15 +7,20 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
     let parser = Parser::new(content);
     let mut blocks: Vec<ContentBlock> = Vec::new();
     let mut current_text = String::new();
-    let mut list_items: Vec<ListItem> = Vec::new();
-    let mut text_stack: Vec<String> = Vec::new();
-    let mut list_stack: Vec<usize> = Vec::new();
+
+    // Track text for the current item being built
+    let mut current_item_text = String::new();
     let mut in_item = false;
-    let mut _in_list = false;
-    let mut is_ordered_list = false;
+
+    // Track code block state
     let mut in_code_block = false;
     let mut code_language: Option<String> = None;
     let mut code_content = String::new();
+
+    // Use flat collection with post-processing approach
+    let mut flat_items: Vec<(String, usize)> = Vec::new(); // (content, depth)
+    let mut current_depth = 0;
+    let mut is_numbered = false;
 
     for event in parser {
         match event {
@@ -35,37 +40,36 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
             }
             Event::Start(Tag::List(first_item)) => {
                 flush_text(&mut current_text, &mut blocks);
-                list_stack.push(0);
-                _in_list = true;
-                is_ordered_list = first_item.is_some();
+                
+                if current_depth == 0 {
+                    is_numbered = first_item.is_some();
+                }
+                current_depth += 1;
             }
             Event::End(TagEnd::List(_)) => {
-                list_stack.pop();
-                if list_stack.is_empty() {
-                    _in_list = false;
-                    let hierarchy = build_hierarchy(list_items.clone());
+                current_depth -= 1;
+                
+                if current_depth == 0 {
+                    // Build hierarchy and add to blocks
+                    let hierarchy = build_hierarchy(&flat_items);
                     if !hierarchy.is_empty() {
-                        if is_ordered_list {
+                        if is_numbered {
                             blocks.push(ContentBlock::NumberedList { items: hierarchy });
                         } else {
                             blocks.push(ContentBlock::BulletList { items: hierarchy });
                         }
                     }
-                    list_items.clear();
+                    flat_items.clear();
                 }
             }
             Event::Start(Tag::Item) => {
-                text_stack.push(String::new());
+                current_item_text.clear();
                 in_item = true;
             }
             Event::End(TagEnd::Item) => {
                 in_item = false;
-                if let Some(text) = text_stack.pop() {
-                    if !text.trim().is_empty() {
-                        let level = list_stack.len().saturating_sub(1);
-                        let item = ListItem::new(text.trim().to_string(), level);
-                        list_items.push(item);
-                    }
+                if !current_item_text.trim().is_empty() {
+                    flat_items.push((current_item_text.trim().to_string(), current_depth - 1));
                 }
             }
             Event::Start(Tag::CodeBlock(kind)) => {
@@ -109,9 +113,7 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
                 if in_code_block {
                     code_content.push_str(&text);
                 } else if in_item {
-                    if let Some(current_item_text) = text_stack.last_mut() {
-                        current_item_text.push_str(&text);
-                    }
+                    current_item_text.push_str(&text);
                 } else {
                     current_text.push_str(&text);
                 }
@@ -120,14 +122,20 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
                 if in_code_block {
                     code_content.push('\n');
                 } else if in_item {
-                    if let Some(current_item_text) = text_stack.last_mut() {
-                        current_item_text.push('\n');
-                    }
+                    current_item_text.push('\n');
                 } else {
                     current_text.push('\n');
                 }
             }
             _ => {}
+        }
+    }
+
+    // Handle any remaining flat items
+    if !flat_items.is_empty() {
+        let hierarchy = build_hierarchy(&flat_items);
+        if !hierarchy.is_empty() {
+            blocks.push(ContentBlock::BulletList { items: hierarchy });
         }
     }
 
@@ -137,58 +145,96 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
     Document::with_content(path, blocks)
 }
 
+fn build_hierarchy(flat_items: &[(String, usize)]) -> Vec<ListItem> {
+    let mut result = Vec::new();
+    let mut stack: Vec<&mut ListItem> = Vec::new();
+
+    for (content, depth) in flat_items {
+        let item = ListItem::new(content.clone(), *depth);
+
+        // Adjust stack to current depth
+        while stack.len() > *depth {
+            stack.pop();
+        }
+
+        if *depth == 0 {
+            // Top-level item
+            result.push(item);
+            // We can't keep a mutable reference to the item we just moved
+            // Use a different approach: recursive building
+        } else {
+            // Need a completely different approach
+            // For now, return a simple working version
+        }
+    }
+
+    // Simple recursive approach that actually works
+    build_recursive(flat_items, 0).0
+}
+
+fn build_recursive(items: &[(String, usize)], start_idx: usize) -> (Vec<ListItem>, usize) {
+    let mut result = Vec::new();
+    let mut i = start_idx;
+    let expected_depth = if start_idx < items.len() { items[start_idx].1 } else { 0 };
+
+    while i < items.len() {
+        let (content, depth) = &items[i];
+        
+        if *depth == expected_depth {
+            // This item belongs at the current level
+            let mut item = ListItem::new(content.clone(), *depth);
+            i += 1;
+
+            // Check if next items are children (deeper depth)
+            if i < items.len() && items[i].1 > *depth {
+                let (children, next_i) = build_recursive(items, i);
+                item.children = children;
+                i = next_i;
+            }
+
+            result.push(item);
+        } else if *depth < expected_depth {
+            // This item belongs to a parent level, return control
+            break;
+        } else {
+            // Deeper than expected, shouldn't happen
+            i += 1;
+        }
+    }
+
+    (result, i)
+}
+
+fn add_child_to_item(items: &mut Vec<ListItem>, path: &[usize], child: ListItem) {
+    if path.is_empty() {
+        return;
+    }
+
+    let mut current = &mut items[path[0]];
+    for &idx in &path[1..] {
+        current = &mut current.children[idx];
+    }
+    current.children.push(child);
+}
+
+fn get_last_child_index(items: &[ListItem], path: &[usize]) -> usize {
+    if path.is_empty() {
+        return 0;
+    }
+
+    let mut current = &items[path[0]];
+    for &idx in &path[1..] {
+        current = &current.children[idx];
+    }
+    current.children.len().saturating_sub(1)
+}
+
 fn flush_text(current_text: &mut String, blocks: &mut Vec<ContentBlock>) {
     let text = current_text.trim().to_string();
     if !text.is_empty() {
         blocks.push(ContentBlock::Paragraph(text));
     }
     current_text.clear();
-}
-
-/// Build hierarchical outline from flat list of items
-/// Note: pulldown-cmark gives us items in reverse document order
-fn build_hierarchy(mut items: Vec<ListItem>) -> Vec<ListItem> {
-    if items.is_empty() {
-        return Vec::new();
-    }
-
-    // Reverse to get document order
-    items.reverse();
-
-    let mut result = Vec::new();
-    let mut i = 0;
-
-    while i < items.len() {
-        if items[i].level == 0 {
-            let (item, consumed) = build_item_with_children(&items, i);
-            result.push(item);
-            i += consumed;
-        } else {
-            i += 1; // Skip orphaned child items
-        }
-    }
-
-    result
-}
-
-/// Build a single item with all its children recursively
-fn build_item_with_children(items: &[ListItem], start_idx: usize) -> (ListItem, usize) {
-    let mut item = items[start_idx].clone();
-    let mut i = start_idx + 1;
-    let target_child_level = item.level + 1;
-
-    // Collect all immediate children
-    while i < items.len() && items[i].level >= target_child_level {
-        if items[i].level == target_child_level {
-            let (child, consumed) = build_item_with_children(items, i);
-            item.children.push(child);
-            i += consumed;
-        } else {
-            i += 1; // Skip items at wrong nesting level
-        }
-    }
-
-    (item, i - start_idx)
 }
 
 #[cfg(test)]
@@ -203,9 +249,8 @@ mod tests {
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 2);
-            // Note: pulldown-cmark processes items in reverse document order
-            assert_eq!(items[0].content, "Second item");
-            assert_eq!(items[1].content, "First item");
+            assert_eq!(items[0].content, "First item");
+            assert_eq!(items[1].content, "Second item");
         } else {
             panic!("Expected BulletList block");
         }

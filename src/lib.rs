@@ -24,6 +24,10 @@ mod unit_tests {
     )]
     #[case("- Single item", "single_item")]
     #[case("", "empty_markdown")]
+    #[case(
+        "- Level 0 Item A\n  - Level 1 Item A1\n    - Level 2 Item A1a\n      - Level 3 Item A1a1\n      - Level 3 Item A1a2\n    - Level 2 Item A1b\n  - Level 1 Item A2\n    - Level 2 Item A2a\n- Level 0 Item B\n  - Level 1 Item B1\n- Level 0 Item C",
+        "deep_nested_list"
+    )]
     fn test_document_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
         use std::path::PathBuf;
         let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
@@ -39,11 +43,10 @@ mod unit_tests {
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 3);
-            // Note: pulldown-cmark processes items in reverse document order
-            assert_eq!(items[0].content, "Third item");
+            assert_eq!(items[0].content, "First item");
             assert_eq!(items[0].level, 0);
             assert_eq!(items[1].content, "Second item");
-            assert_eq!(items[2].content, "First item");
+            assert_eq!(items[2].content, "Third item");
         } else {
             panic!("Expected BulletList block");
         }
@@ -58,19 +61,18 @@ mod unit_tests {
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 2);
-            // Note: pulldown-cmark processes items in reverse document order
-            // Second parent comes first
-            assert_eq!(items[0].content, "Second parent");
+            // First parent has children (in document order)
+            assert_eq!(items[0].content, "Parent item");
             assert_eq!(items[0].level, 0);
-            assert_eq!(items[0].children.len(), 0);
+            assert_eq!(items[0].children.len(), 2);
+            assert_eq!(items[0].children[0].content, "Child item");
+            assert_eq!(items[0].children[0].level, 1);
+            assert_eq!(items[0].children[1].content, "Another child");
 
-            // First parent has children
-            assert_eq!(items[1].content, "Parent item");
+            // Second parent has no children
+            assert_eq!(items[1].content, "Second parent");
             assert_eq!(items[1].level, 0);
-            assert_eq!(items[1].children.len(), 2);
-            assert_eq!(items[1].children[0].content, "Another child");
-            assert_eq!(items[1].children[0].level, 1);
-            assert_eq!(items[1].children[1].content, "Child item");
+            assert_eq!(items[1].children.len(), 0);
         } else {
             panic!("Expected BulletList block");
         }
