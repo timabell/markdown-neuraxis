@@ -6,6 +6,21 @@ This document outlines the standardized development process for markdown-neuraxi
 
 The workflow emphasizes iterative development with automated code review, human oversight, and clear documentation of the development process through commit history.
 
+## When to Use This Workflow
+
+### Use full workflow for:
+- New features requiring multiple files
+- Complex bug fixes
+- Architectural changes
+- Any change requiring careful design consideration
+
+### Skip agent workflow for:
+- Simple typo fixes
+- Single-line changes
+- Documentation updates
+- Trivial formatting fixes
+- Changes that don't require code review
+
 ## Step-by-Step Process
 
 ### 1. Feature/Bug Discussion & Documentation
@@ -16,7 +31,9 @@ The workflow emphasizes iterative development with automated code review, human 
 ### 2. Initiate Development
 - Tell Claude to build the feature/fix
 - Claude creates a new branch for the change
+  - Branch naming: `feature/description`, `fix/description`, `refactor/description`
 - Each feature/bug gets its own branch
+- Claude uses TodoWrite tool to track implementation tasks
 
 ### 3. Code Implementation
 - Claude delegates to the **feature-implementor agent** to write the code
@@ -44,10 +61,17 @@ The workflow emphasizes iterative development with automated code review, human 
 - Multiple iterations are acceptable and expected
 - Each iteration should show measurable improvement
 
-### 7. Commit & Documentation
+### 7. Pre-commit Checks
+- Run `cargo fmt` to format code
+- Run `cargo clippy` to check for linting issues
+- Ensure all tests pass with `cargo test`
+- Address any issues before proceeding
+
+### 8. Commit & Documentation
 - Claude runs `git add` and `git commit` with clear, descriptive commit message
 - Commit message follows project conventions (see CLAUDE.md)
 - Includes list of prompts used and co-authorship attribution
+- Commits to local git repository (no PR/push unless requested)
 
 ## Key Principles
 
@@ -55,6 +79,15 @@ The workflow emphasizes iterative development with automated code review, human 
 - **One branch per feature/bug**: Each change gets its own branch
 - **Atomic commits**: Each commit represents a coherent, logical change
 - **Multiple commits OK**: Show the development process including attempts, reviews, and iterations
+- **Local only**: All work in local git, no automatic pushes/PRs
+
+### Success Criteria (Ready to Commit)
+- ✅ All tests passing (`cargo test`)
+- ✅ Code formatted (`cargo fmt`)
+- ✅ Clippy warnings addressed (`cargo clippy`)
+- ✅ Code review feedback addressed
+- ✅ Human approval received
+- ✅ TodoWrite tasks completed
 
 ### Commit Standards
 - Clear, descriptive commit messages
@@ -71,6 +104,12 @@ The workflow emphasizes iterative development with automated code review, human 
 - ADRs for architectural decisions
 - KISS principle - keep documentation simple and focused
 - Process documentation in commit messages
+- Todo tracking throughout implementation
+
+### Error Handling
+- **If something goes wrong**: Stop and ask human for guidance
+- **Rollback**: Human decides whether to continue, rollback, or start over
+- **Communication**: Claude clearly explains any issues encountered
 
 ## Example Workflow
 
