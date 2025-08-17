@@ -17,13 +17,32 @@ mod unit_tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case("- First item\n- Second item\n- Third item", "simple_bullet_list")]
+    #[case(r#"- First item
+- Second item
+- Third item"#, "simple_bullet_list")]
     #[case(
-        "- Parent item\n  - Child item\n  - Another child\n- Second parent",
+        r#"- Parent item
+  - Child item
+  - Another child
+- Second parent"#,
         "nested_bullet_list"
     )]
     #[case("- Single item", "single_item")]
     #[case("", "empty_markdown")]
+    #[case(
+        r#"- Item 1
+  - Item 1.1
+    - Item 1.1.1
+      - Item 1.1.1.1
+      - Item 1.1.1.2
+    - Item 1.1.2
+  - Item 1.2
+    - Item 1.2.1
+- Item 2
+  - Item 2.1
+- Item 3"#,
+        "deep_nested_list"
+    )]
     fn test_document_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
         use std::path::PathBuf;
         let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
