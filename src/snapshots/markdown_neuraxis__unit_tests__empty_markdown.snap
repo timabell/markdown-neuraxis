@@ -1,5 +1,5 @@
 ---
 source: src/lib.rs
-expression: doc.outline
+expression: doc.content
 ---
 []
