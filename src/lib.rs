@@ -7,7 +7,7 @@ pub mod ui;
 pub mod tests;
 
 // Re-export commonly used types
-pub use models::{Document, OutlineItem};
+pub use models::{ContentBlock, Document, ListItem};
 
 #[cfg(test)]
 mod unit_tests {
@@ -24,10 +24,10 @@ mod unit_tests {
     )]
     #[case("- Single item", "single_item")]
     #[case("", "empty_markdown")]
-    fn test_outline_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
+    fn test_document_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
         use std::path::PathBuf;
         let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
-        assert_yaml_snapshot!(name, doc.outline);
+        assert_yaml_snapshot!(name, doc.content);
     }
 
     #[test]
@@ -36,12 +36,17 @@ mod unit_tests {
         let markdown = "- First item\n- Second item\n- Third item";
         let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
 
-        assert_eq!(doc.outline.len(), 3);
-        // Note: pulldown-cmark processes items in reverse document order
-        assert_eq!(doc.outline[0].content, "Third item");
-        assert_eq!(doc.outline[0].level, 0);
-        assert_eq!(doc.outline[1].content, "Second item");
-        assert_eq!(doc.outline[2].content, "First item");
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 3);
+            // Note: pulldown-cmark processes items in reverse document order
+            assert_eq!(items[0].content, "Third item");
+            assert_eq!(items[0].level, 0);
+            assert_eq!(items[1].content, "Second item");
+            assert_eq!(items[2].content, "First item");
+        } else {
+            panic!("Expected BulletList block");
+        }
     }
 
     #[test]
@@ -50,15 +55,24 @@ mod unit_tests {
         let markdown = "- Parent item\n  - Child item\n  - Another child\n- Second parent";
         let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));
 
-        assert_eq!(doc.outline.len(), 2);
-        // Note: pulldown-cmark processes items in reverse document order
-        assert_eq!(doc.outline[0].content, "Second parent");
-        assert_eq!(doc.outline[0].level, 0);
-        assert_eq!(doc.outline[1].content, "Parent item");
-        assert_eq!(doc.outline[1].children.len(), 2);
-        assert_eq!(doc.outline[1].children[0].content, "Another child");
-        assert_eq!(doc.outline[1].children[0].level, 1);
-        assert_eq!(doc.outline[1].children[1].content, "Child item");
-        assert_eq!(doc.outline[1].level, 0);
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 2);
+            // Note: pulldown-cmark processes items in reverse document order
+            // Second parent comes first
+            assert_eq!(items[0].content, "Second parent");
+            assert_eq!(items[0].level, 0);
+            assert_eq!(items[0].children.len(), 0);
+
+            // First parent has children
+            assert_eq!(items[1].content, "Parent item");
+            assert_eq!(items[1].level, 0);
+            assert_eq!(items[1].children.len(), 2);
+            assert_eq!(items[1].children[0].content, "Another child");
+            assert_eq!(items[1].children[0].level, 1);
+            assert_eq!(items[1].children[1].content, "Child item");
+        } else {
+            panic!("Expected BulletList block");
+        }
     }
 }

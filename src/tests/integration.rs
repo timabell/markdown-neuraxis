@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::ContentBlock;
 
 #[test]
 fn user_workflow_scan_and_load_files() {
@@ -30,19 +31,24 @@ fn user_workflow_select_file_and_parse_outline() {
     let content = io::read_file(&file_path).unwrap();
     let document = parsing::parse_markdown(&content, file_path);
 
-    // Then we get the correct outline structure
-    assert_eq!(document.outline.len(), 2);
+    // Then we get the correct document structure
+    assert_eq!(document.content.len(), 1);
+    if let ContentBlock::BulletList { items } = &document.content[0] {
+        assert_eq!(items.len(), 2);
 
-    // Note: pulldown-cmark processes items in reverse document order
-    // Second parent comes first
-    assert_eq!(document.outline[0].content, "Second parent");
-    assert_eq!(document.outline[0].children.len(), 0);
+        // Note: pulldown-cmark processes items in reverse document order
+        // Second parent comes first
+        assert_eq!(items[0].content, "Second parent");
+        assert_eq!(items[0].children.len(), 0);
 
-    // First parent has children
-    assert_eq!(document.outline[1].content, "Parent item");
-    assert_eq!(document.outline[1].children.len(), 2);
-    assert_eq!(document.outline[1].children[0].content, "Another child");
-    assert_eq!(document.outline[1].children[1].content, "Child item");
+        // First parent has children
+        assert_eq!(items[1].content, "Parent item");
+        assert_eq!(items[1].children.len(), 2);
+        assert_eq!(items[1].children[0].content, "Another child");
+        assert_eq!(items[1].children[1].content, "Child item");
+    } else {
+        panic!("Expected BulletList block");
+    }
 }
 
 #[test]
@@ -68,21 +74,20 @@ fn user_workflow_deep_nesting_outline() {
     let document = parsing::parse_markdown(&content, file_path);
 
     // Deep nesting is now properly hierarchical
-    assert_eq!(document.outline.len(), 1);
-    assert_eq!(document.outline[0].content, "Level 0");
-    assert_eq!(document.outline[0].children.len(), 1);
-    assert_eq!(document.outline[0].children[0].content, "Level 1");
-    assert_eq!(document.outline[0].children[0].children.len(), 1);
-    assert_eq!(
-        document.outline[0].children[0].children[0].content,
-        "Level 2"
-    );
-    assert_eq!(
-        document.outline[0].children[0].children[0].children.len(),
-        1
-    );
-    assert_eq!(
-        document.outline[0].children[0].children[0].children[0].content,
-        "Level 3"
-    );
+    assert_eq!(document.content.len(), 1);
+    if let ContentBlock::BulletList { items } = &document.content[0] {
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].content, "Level 0");
+        assert_eq!(items[0].children.len(), 1);
+        assert_eq!(items[0].children[0].content, "Level 1");
+        assert_eq!(items[0].children[0].children.len(), 1);
+        assert_eq!(items[0].children[0].children[0].content, "Level 2");
+        assert_eq!(items[0].children[0].children[0].children.len(), 1);
+        assert_eq!(
+            items[0].children[0].children[0].children[0].content,
+            "Level 3"
+        );
+    } else {
+        panic!("Expected BulletList block");
+    }
 }

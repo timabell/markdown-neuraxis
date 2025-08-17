@@ -1,8 +1,8 @@
-use crate::models::OutlineItem;
+use crate::models::ListItem;
 use dioxus::prelude::*;
 
 #[component]
-pub fn OutlineItemComponent(item: OutlineItem, indent: usize) -> Element {
+pub fn OutlineItemComponent(item: ListItem, indent: usize) -> Element {
     rsx! {
         div {
             class: "outline-item",

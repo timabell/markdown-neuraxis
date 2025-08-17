@@ -2,13 +2,34 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OutlineItem {
-    pub content: String,
-    pub level: usize,
-    pub children: Vec<OutlineItem>,
+pub enum ContentBlock {
+    Heading {
+        level: u8,
+        text: String,
+    },
+    Paragraph(String),
+    BulletList {
+        items: Vec<ListItem>,
+    },
+    NumberedList {
+        items: Vec<ListItem>,
+    },
+    CodeBlock {
+        language: Option<String>,
+        code: String,
+    },
+    Quote(String),
+    Rule,
 }
 
-impl OutlineItem {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ListItem {
+    pub content: String,
+    pub level: usize,
+    pub children: Vec<ListItem>,
+}
+
+impl ListItem {
     pub fn new(content: String, level: usize) -> Self {
         Self {
             content,
@@ -21,18 +42,18 @@ impl OutlineItem {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Document {
     pub path: PathBuf,
-    pub outline: Vec<OutlineItem>,
+    pub content: Vec<ContentBlock>,
 }
 
 impl Document {
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
-            outline: Vec::new(),
+            content: Vec::new(),
         }
     }
 
-    pub fn with_outline(path: PathBuf, outline: Vec<OutlineItem>) -> Self {
-        Self { path, outline }
+    pub fn with_content(path: PathBuf, content: Vec<ContentBlock>) -> Self {
+        Self { path, content }
     }
 }

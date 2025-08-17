@@ -1,16 +1,18 @@
 ---
 source: src/lib.rs
-expression: doc.outline
+expression: doc.content
 ---
-- content: Second parent
-  level: 0
-  children: []
-- content: Parent item
-  level: 0
-  children:
-    - content: Another child
-      level: 1
-      children: []
-    - content: Child item
-      level: 1
-      children: []
+- BulletList:
+    items:
+      - content: Second parent
+        level: 0
+        children: []
+      - content: Parent item
+        level: 0
+        children:
+          - content: Another child
+            level: 1
+            children: []
+          - content: Child item
+            level: 1
+            children: []

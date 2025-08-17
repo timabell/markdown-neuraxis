@@ -1,13 +1,15 @@
 ---
 source: src/lib.rs
-expression: doc.outline
+expression: doc.content
 ---
-- content: Third item
-  level: 0
-  children: []
-- content: Second item
-  level: 0
-  children: []
-- content: First item
-  level: 0
-  children: []
+- BulletList:
+    items:
+      - content: Third item
+        level: 0
+        children: []
+      - content: Second item
+        level: 0
+        children: []
+      - content: First item
+        level: 0
+        children: []

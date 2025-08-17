@@ -1,7 +1,9 @@
 ---
 source: src/lib.rs
-expression: doc.outline
+expression: doc.content
 ---
-- content: Single item
-  level: 0
-  children: []
+- BulletList:
+    items:
+      - content: Single item
+        level: 0
+        children: []
