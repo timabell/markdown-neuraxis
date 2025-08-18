@@ -55,8 +55,13 @@ fn ContentBlockComponent(block: ContentBlock) -> Element {
             rsx! {
                 div {
                     class: "bullet-list",
-                    for item in &items {
-                        super::OutlineItemComponent { item: item.clone(), indent: 0 }
+                    for item in items {
+                        super::OutlineItemComponent {
+                            item: item.clone(),
+                            indent: 0,
+                            is_numbered: false,
+                            item_number: None
+                        }
                     }
                 }
             }
@@ -65,13 +70,24 @@ fn ContentBlockComponent(block: ContentBlock) -> Element {
             rsx! {
                 div {
                     class: "numbered-list",
-                    for item in &items {
-                        super::OutlineItemComponent { item: item.clone(), indent: 0 }
+                    for (idx, item) in items.iter().enumerate() {
+                        super::OutlineItemComponent {
+                            item: item.clone(),
+                            indent: 0,
+                            is_numbered: true,
+                            item_number: Some(idx + 1)
+                        }
                     }
                 }
             }
         }
         ContentBlock::CodeBlock { language, code } => {
+            let code_class = if let Some(ref lang) = language {
+                format!("language-{lang}")
+            } else {
+                "language-text".to_string()
+            };
+
             rsx! {
                 div {
                     class: "code-block",
@@ -79,7 +95,10 @@ fn ContentBlockComponent(block: ContentBlock) -> Element {
                         div { class: "code-language", "{lang}" }
                     }
                     pre {
-                        code { "{code}" }
+                        code {
+                            class: "{code_class}",
+                            "{code}"
+                        }
                     }
                 }
             }

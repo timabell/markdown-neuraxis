@@ -98,3 +98,161 @@ hr {
     border-top: 1px solid var(--base1);
     margin: 16px 0;
 }
+
+/* Document content styling */
+.document-content {
+    max-width: 800px;
+    line-height: 1.6;
+}
+
+.empty-document {
+    color: var(--base1);
+    font-style: italic;
+}
+
+/* Heading styles */
+.heading {
+    margin: 24px 0 16px 0;
+    color: var(--base02);
+    font-weight: 600;
+}
+
+.heading.level-1 {
+    font-size: 2.0em;
+    border-bottom: 2px solid var(--base1);
+    padding-bottom: 8px;
+}
+
+.heading.level-2 {
+    font-size: 1.6em;
+    color: var(--blue);
+}
+
+.heading.level-3 {
+    font-size: 1.3em;
+    color: var(--green);
+}
+
+.heading.level-4 {
+    font-size: 1.1em;
+    color: var(--violet);
+}
+
+.heading.level-5,
+.heading.level-6 {
+    font-size: 1.0em;
+    color: var(--base01);
+}
+
+/* Paragraph styles */
+.paragraph {
+    margin: 12px 0;
+    color: var(--base01);
+}
+
+/* List styles */
+.bullet-list,
+.numbered-list {
+    margin: 12px 0;
+}
+
+.list-item {
+    margin: 4px 0;
+}
+
+.list-item-content {
+    display: flex;
+    align-items: flex-start;
+}
+
+.list-marker {
+    margin-right: 8px;
+    flex-shrink: 0;
+    font-weight: 500;
+}
+
+.list-marker.bullet {
+    color: var(--blue);
+}
+
+.list-marker.numbered {
+    color: var(--green);
+}
+
+.list-text {
+    flex: 1;
+    color: var(--base01);
+}
+
+.nested-list {
+    margin-top: 4px;
+}
+
+/* Code block styles */
+.code-block {
+    margin: 16px 0;
+    background-color: var(--base2);
+    border: 1px solid var(--base1);
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.code-language {
+    background-color: var(--base1);
+    color: var(--base02);
+    padding: 4px 12px;
+    font-size: 0.85em;
+    font-weight: 500;
+    border-bottom: 1px solid var(--base0);
+}
+
+.code-block pre {
+    margin: 0;
+    padding: 12px;
+    background: transparent;
+    overflow-x: auto;
+}
+
+.code-block code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+    font-size: 0.9em;
+    line-height: 1.4;
+    color: var(--base02);
+}
+
+/* Quote styles */
+.quote {
+    margin: 16px 0;
+    padding: 12px 16px;
+    border-left: 4px solid var(--yellow);
+    background-color: var(--base2);
+    color: var(--base01);
+    font-style: italic;
+}
+
+/* Rule styles */
+.rule {
+    margin: 24px 0;
+    border: none;
+    border-top: 2px solid var(--base1);
+}
+
+/* Code block language-specific styling */
+.code-block code {
+    white-space: pre;
+    color: var(--base02);
+}
+
+.code-block .language-rust,
+.code-block .language-python,
+.code-block .language-javascript,
+.code-block .language-js,
+.code-block .language-typescript,
+.code-block .language-ts {
+    color: var(--base02);
+}
+
+/* Simple highlighting for common patterns - this is basic without full parser */
+.code-block code {
+    tab-size: 4;
+}
