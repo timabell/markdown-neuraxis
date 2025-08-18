@@ -1,4 +1,5 @@
 - [DONE] Fix broken bullet hierarchy parsing
+- [DONE] Improve list parsing documentation and encapsulation in src/parsing/mod.rs
 - Replace debug outline display with actual rendered markdown
 - Add collapsible bullets with +/- indicators for outline items
 - Implement proper indentation handling (tabs vs spaces)
