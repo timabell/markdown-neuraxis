@@ -64,6 +64,61 @@ body {
     color: var(--base3);
 }
 
+/* Tree view styles */
+.tree-view {
+    margin-top: 12px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 14px;
+}
+
+.tree-item {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px;
+    margin: 1px 0;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.tree-item:hover {
+    background-color: var(--base1);
+}
+
+.tree-item.folder {
+    color: var(--blue);
+    font-weight: 500;
+}
+
+.tree-item.file {
+    color: var(--base01);
+}
+
+.tree-item.file.selected {
+    background-color: var(--blue);
+    color: var(--base3);
+}
+
+.tree-toggle {
+    color: var(--base01);
+    font-weight: bold;
+    margin-right: 4px;
+    min-width: 16px;
+}
+
+.tree-file-marker {
+    margin-right: 4px;
+    min-width: 16px;
+}
+
+.tree-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .main-content {
     flex: 1;
     padding: 16px;

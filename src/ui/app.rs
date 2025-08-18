@@ -1,4 +1,4 @@
-use crate::models::Document;
+use crate::models::{Document, FileTree};
 use crate::{io, parsing};
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -7,12 +7,12 @@ const SOLARIZED_LIGHT_CSS: &str = include_str!("../assets/solarized-light.css");
 
 #[component]
 pub fn App(notes_path: PathBuf) -> Element {
-    // Scan for markdown files
-    let markdown_files = use_signal(|| match io::scan_markdown_files(&notes_path) {
-        Ok(files) => files,
+    // Build file tree
+    let mut file_tree = use_signal(|| match io::build_file_tree(&notes_path) {
+        Ok(tree) => tree,
         Err(e) => {
-            eprintln!("Error scanning files: {e}");
-            Vec::new()
+            eprintln!("Error building file tree: {e}");
+            FileTree::new(notes_path.join("pages"))
         }
     });
 
@@ -26,27 +26,23 @@ pub fn App(notes_path: PathBuf) -> Element {
             div {
                 class: "sidebar",
                 h2 { "Files" }
-                p { "Found {markdown_files.read().len()} markdown files:" }
-                div {
-                    class: "file-list",
-                    for file in markdown_files.read().iter() {
-                        super::components::FileItem {
-                            file: file.clone(),
-                            notes_path: notes_path.clone(),
-                            is_selected: selected_file.read().as_ref() == Some(file),
-                            on_select: move |file_path: PathBuf| {
-                                match io::read_file(&file_path) {
-                                    Ok(content) => {
-                                        let document = parsing::parse_markdown(&content, file_path.clone());
-                                        *current_document.write() = Some(document);
-                                        *selected_file.write() = Some(file_path);
-                                    }
-                                    Err(e) => {
-                                        eprintln!("Error reading file {file_path:?}: {e}");
-                                    }
-                                }
+                super::components::TreeView {
+                    tree: ReadOnlySignal::from(file_tree),
+                    selected_file: selected_file.read().clone(),
+                    on_file_select: move |file_path: PathBuf| {
+                        match io::read_file(&file_path) {
+                            Ok(content) => {
+                                let document = parsing::parse_markdown(&content, file_path.clone());
+                                *current_document.write() = Some(document);
+                                *selected_file.write() = Some(file_path);
+                            }
+                            Err(e) => {
+                                eprintln!("Error reading file {file_path:?}: {e}");
                             }
                         }
+                    },
+                    on_folder_toggle: move |folder_path: PathBuf| {
+                        file_tree.write().toggle_folder(&folder_path);
                     }
                 }
             }

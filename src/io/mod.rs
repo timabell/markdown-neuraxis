@@ -1,3 +1,4 @@
+use crate::models::FileTree;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -37,6 +38,19 @@ pub fn scan_markdown_files(notes_root: &Path) -> Result<Vec<PathBuf>, IoError> {
     scan_directory_recursive(&pages_dir, &mut files)?;
     files.sort();
     Ok(files)
+}
+
+/// Build a file tree from markdown files in the notes directory
+pub fn build_file_tree(notes_root: &Path) -> Result<FileTree, IoError> {
+    let pages_dir = notes_root.join("pages");
+    if !pages_dir.exists() {
+        return Err(IoError::InvalidNotesDir(
+            "pages directory not found".to_string(),
+        ));
+    }
+
+    let files = scan_markdown_files(notes_root)?;
+    Ok(FileTree::build_from_files(pages_dir, &files))
 }
 
 fn scan_directory_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), IoError> {
