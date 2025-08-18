@@ -1,10 +1,14 @@
+- tree view for folders
 - Add collapsible bullets with +/- indicators for outline items
-- Implement proper indentation handling (tabs vs spaces)
-- Add keyboard shortcuts for outline navigation (expand/collapse)
 - Implement [[wiki-links]] parsing and rendering
 - Add backlink index - scan files for inbound links
+- Add keyboard shortcuts for outline navigation (expand/collapse)
+- rudimentary search for files
 - Add link autocomplete when typing [[
 - Basic file-to-file navigation
+- Dark/light theme switching
+- custom user theme css
+- editing of files
 - Parse metadata properties (status:: DOING, due:: date, etc.)
 - Implement task state parsing (ACTION, DOING, WAITING, DONE, etc.)
 - Add inbox integration - scan for INBOX prefixed bullets
@@ -14,7 +18,6 @@
 - Timeline view for journal entries
 - Instant write (no save button needed)
 - Filesystem watch for external changes
-- Dark/light theme switching
 - Better error handling and user feedback
 - [DONE] Outline hierarchy building is flawed - needs rewrite
 - Add proper error handling throughout
