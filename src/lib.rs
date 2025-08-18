@@ -13,7 +13,6 @@ pub use models::{ContentBlock, Document, ListItem};
 mod unit_tests {
     use super::*;
     use insta::assert_yaml_snapshot;
-    use pretty_assertions::assert_eq;
     use rstest::rstest;
 
     #[rstest]
