@@ -14,8 +14,5 @@
       "WebFetch(domain:github.com)"
     ],
     "deny": []
-  },
-  "hooks": {
-    "pre-commit": "Use the code-reviewer agent to review all staged changes before committing."
   }
 }
