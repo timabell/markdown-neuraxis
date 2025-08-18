@@ -1,4 +1,3 @@
-- Replace debug outline display with actual rendered markdown
 - Add collapsible bullets with +/- indicators for outline items
 - Implement proper indentation handling (tabs vs spaces)
 - Add keyboard shortcuts for outline navigation (expand/collapse)
