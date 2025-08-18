@@ -13,6 +13,22 @@ pub fn TreeView(
     let items = use_memo(move || tree.read().get_items());
     let mut focused_index = use_signal(|| 0usize);
     let mut has_focus = use_signal(|| false);
+    let mut last_selected_file = use_signal(|| selected_file.clone());
+
+    // Sync focused index only when selected file changes (not during keyboard nav)
+    if selected_file != *last_selected_file.read() {
+        *last_selected_file.write() = selected_file.clone();
+
+        if let Some(selected_path) = &selected_file {
+            let items_list = items.read();
+            if let Some(index) = items_list
+                .iter()
+                .position(|item| &item.node.path == selected_path)
+            {
+                *focused_index.write() = index;
+            }
+        }
+    }
 
     // Handle focus events
     let handle_focus = move |_| {
