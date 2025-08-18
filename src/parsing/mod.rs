@@ -152,7 +152,10 @@ impl MarkdownProcessor {
                 self.list_parser.end_item();
             }
             Event::Start(Tag::CodeBlock(kind)) => {
-                self.flush_paragraph();
+                // Only flush paragraph if this is a top-level code block
+                if !self.list_parser.is_in_item() {
+                    self.flush_paragraph();
+                }
                 self.in_code_block = true;
                 self.code_language = match kind {
                     pulldown_cmark::CodeBlockKind::Fenced(lang) => {
@@ -168,10 +171,18 @@ impl MarkdownProcessor {
             }
             Event::End(TagEnd::CodeBlock) => {
                 self.in_code_block = false;
-                self.blocks.push(ContentBlock::CodeBlock {
+                let code_block = ContentBlock::CodeBlock {
                     language: self.code_language.take(),
                     code: self.code_content.clone(),
-                });
+                };
+
+                if self.list_parser.is_in_item() {
+                    // This code block is inside a list item, add it to the current item
+                    self.list_parser.add_nested_content(code_block);
+                } else {
+                    // This is a top-level code block
+                    self.blocks.push(code_block);
+                }
                 self.code_content.clear();
             }
             Event::Start(Tag::BlockQuote(_)) => {
@@ -195,6 +206,15 @@ impl MarkdownProcessor {
                     self.list_parser.add_text(&text);
                 } else {
                     self.current_text.push_str(&text);
+                }
+            }
+            Event::Code(code) => {
+                // Handle inline code
+                let code_text = format!("`{code}`");
+                if self.list_parser.is_in_item() {
+                    self.list_parser.add_text(&code_text);
+                } else {
+                    self.current_text.push_str(&code_text);
                 }
             }
             Event::SoftBreak | Event::HardBreak => {
@@ -236,10 +256,11 @@ struct ListParser {
     /// - Stack depth indicates current nesting level (0 = top-level)
     list_stack: Vec<(Vec<ListItem>, bool)>,
 
-    /// Stack of (text, children) pairs for items being constructed
+    /// Stack of (text, children, nested_content) tuples for items being constructed
     /// - Text accumulates while parsing item content
     /// - Children collect nested lists that appear within the item
-    item_stack: Vec<(String, Vec<ListItem>)>,
+    /// - Nested content collects code blocks and other content that appear within the item
+    item_stack: Vec<(String, Vec<ListItem>, Vec<ContentBlock>)>,
 
     /// Whether we're currently parsing inside a list item
     in_item: bool,
@@ -288,7 +309,7 @@ impl ListParser {
                 }
             } else {
                 // This is a nested list, save it as children for the parent item
-                if let Some((_, children)) = self.item_stack.last_mut() {
+                if let Some((_, children, _)) = self.item_stack.last_mut() {
                     *children = items;
                 }
             }
@@ -298,7 +319,8 @@ impl ListParser {
 
     /// Start a new list item
     fn start_item(&mut self) {
-        self.item_stack.push((String::new(), Vec::new()));
+        self.item_stack
+            .push((String::new(), Vec::new(), Vec::new()));
         self.in_item = true;
     }
 
@@ -310,11 +332,12 @@ impl ListParser {
             "Item end without corresponding start"
         );
 
-        if let Some((text, children)) = self.item_stack.pop() {
+        if let Some((text, children, nested_content)) = self.item_stack.pop() {
             // Calculate nesting level: subtract 1 because list_stack includes the current list
             let level = self.list_stack.len().saturating_sub(1);
             let mut item = ListItem::new(text.trim().to_string(), level);
             item.children = children;
+            item.nested_content = nested_content;
 
             // Add this item to the current list
             if let Some((items, _)) = self.list_stack.last_mut() {
@@ -325,8 +348,15 @@ impl ListParser {
 
     /// Add text content to the current item
     fn add_text(&mut self, text: &str) {
-        if let Some((item_text, _)) = self.item_stack.last_mut() {
+        if let Some((item_text, _, _)) = self.item_stack.last_mut() {
             item_text.push_str(text);
+        }
+    }
+
+    /// Add nested content (like code blocks) to the current item
+    fn add_nested_content(&mut self, content: ContentBlock) {
+        if let Some((_, _, nested_content)) = self.item_stack.last_mut() {
+            nested_content.push(content);
         }
     }
 }
@@ -379,5 +409,161 @@ mod tests {
         assert!(matches!(doc.content[1], ContentBlock::Paragraph(_)));
         assert!(matches!(doc.content[2], ContentBlock::BulletList { .. }));
         assert!(matches!(doc.content[3], ContentBlock::CodeBlock { .. }));
+    }
+
+    #[test]
+    fn test_parse_inline_code_in_list() {
+        let content = "- This is a bullet point with inline code: `let x = 5;`";
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 1);
+            assert_eq!(
+                items[0].content,
+                "This is a bullet point with inline code: `let x = 5;`"
+            );
+            assert!(
+                items[0].nested_content.is_empty(),
+                "Inline code should not create nested content"
+            );
+        } else {
+            panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_parse_fenced_code_block_in_list() {
+        let content = r#"- This bullet has a fenced code block:
+  ```rust
+  fn example() {
+      println!("Hello");
+  }
+  ```"#;
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].content, "This bullet has a fenced code block:");
+            assert_eq!(items[0].nested_content.len(), 1);
+
+            if let ContentBlock::CodeBlock { language, code } = &items[0].nested_content[0] {
+                assert_eq!(language.as_ref().unwrap(), "rust");
+                assert!(code.contains("fn example()"));
+                assert!(code.contains("println!"));
+            } else {
+                panic!("Expected CodeBlock in nested_content");
+            }
+        } else {
+            panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_code_blocks_in_list() {
+        let content = r#"- First item with code:
+  ```rust
+  fn first() { }
+  ```
+- Second item with inline: `x = 1`
+- Third item with multiple blocks:
+  ```python
+  def hello():
+      pass
+  ```
+  ```javascript
+  console.log("test");
+  ```"#;
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 3);
+
+            // First item - one code block
+            assert_eq!(items[0].content, "First item with code:");
+            assert_eq!(items[0].nested_content.len(), 1);
+
+            // Second item - inline code only
+            assert_eq!(items[1].content, "Second item with inline: `x = 1`");
+            assert_eq!(items[1].nested_content.len(), 0);
+
+            // Third item - two code blocks
+            assert_eq!(items[2].content, "Third item with multiple blocks:");
+            assert_eq!(items[2].nested_content.len(), 2);
+
+            if let ContentBlock::CodeBlock { language, .. } = &items[2].nested_content[0] {
+                assert_eq!(language.as_ref().unwrap(), "python");
+            } else {
+                panic!("Expected first CodeBlock to be Python");
+            }
+
+            if let ContentBlock::CodeBlock { language, .. } = &items[2].nested_content[1] {
+                assert_eq!(language.as_ref().unwrap(), "javascript");
+            } else {
+                panic!("Expected second CodeBlock to be JavaScript");
+            }
+        } else {
+            panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_parse_nested_lists_with_code_blocks() {
+        let content = r#"- Parent item
+  - Nested item with code:
+    ```rust
+    fn nested() { }
+    ```
+  - Another nested item"#;
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].content, "Parent item");
+            assert_eq!(items[0].children.len(), 2);
+
+            // First nested item should have code block
+            assert_eq!(items[0].children[0].content, "Nested item with code:");
+            assert_eq!(items[0].children[0].nested_content.len(), 1);
+
+            // Second nested item should not have code block
+            assert_eq!(items[0].children[1].content, "Another nested item");
+            assert_eq!(items[0].children[1].nested_content.len(), 0);
+        } else {
+            panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_standalone_code_blocks_still_work() {
+        let content = r#"# Title
+
+Paragraph text.
+
+```rust
+fn standalone() {
+    println!("This should not be in a list");
+}
+```
+
+- List item after code block"#;
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        assert_eq!(doc.content.len(), 4);
+        assert!(matches!(doc.content[0], ContentBlock::Heading { .. }));
+        assert!(matches!(doc.content[1], ContentBlock::Paragraph(_)));
+        assert!(matches!(doc.content[2], ContentBlock::CodeBlock { .. }));
+        assert!(matches!(doc.content[3], ContentBlock::BulletList { .. }));
+
+        // Verify the standalone code block
+        if let ContentBlock::CodeBlock { language, code } = &doc.content[2] {
+            assert_eq!(language.as_ref().unwrap(), "rust");
+            assert!(code.contains("standalone"));
+        } else {
+            panic!("Expected standalone CodeBlock");
+        }
     }
 }

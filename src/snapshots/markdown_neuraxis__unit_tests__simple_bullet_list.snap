@@ -7,9 +7,12 @@ expression: doc.content
       - content: First item
         level: 0
         children: []
+        nested_content: []
       - content: Second item
         level: 0
         children: []
+        nested_content: []
       - content: Third item
         level: 0
         children: []
+        nested_content: []

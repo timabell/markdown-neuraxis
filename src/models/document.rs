@@ -27,6 +27,7 @@ pub struct ListItem {
     pub content: String,
     pub level: usize,
     pub children: Vec<ListItem>,
+    pub nested_content: Vec<ContentBlock>,
 }
 
 impl ListItem {
@@ -35,6 +36,7 @@ impl ListItem {
             content,
             level,
             children: Vec::new(),
+            nested_content: Vec::new(),
         }
     }
 }

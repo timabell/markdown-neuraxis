@@ -10,9 +10,13 @@ expression: doc.content
           - content: Child item
             level: 1
             children: []
+            nested_content: []
           - content: Another child
             level: 1
             children: []
+            nested_content: []
+        nested_content: []
       - content: Second parent
         level: 0
         children: []
+        nested_content: []

@@ -16,24 +16,35 @@ expression: doc.content
                   - content: Item 1.1.1.1
                     level: 3
                     children: []
+                    nested_content: []
                   - content: Item 1.1.1.2
                     level: 3
                     children: []
+                    nested_content: []
+                nested_content: []
               - content: Item 1.1.2
                 level: 2
                 children: []
+                nested_content: []
+            nested_content: []
           - content: Item 1.2
             level: 1
             children:
               - content: Item 1.2.1
                 level: 2
                 children: []
+                nested_content: []
+            nested_content: []
+        nested_content: []
       - content: Item 2
         level: 0
         children:
           - content: Item 2.1
             level: 1
             children: []
+            nested_content: []
+        nested_content: []
       - content: Item 3
         level: 0
         children: []
+        nested_content: []

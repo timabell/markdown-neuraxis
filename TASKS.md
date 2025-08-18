@@ -1,4 +1,3 @@
-- bug: code blocks are not being rendered within the bullet they are part of
 - Add collapsible bullets with +/- indicators for outline items
 - Implement [[wiki-links]] parsing and rendering
 - Add backlink index - scan files for inbound links
