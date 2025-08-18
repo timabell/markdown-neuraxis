@@ -1,4 +1,4 @@
-- Fix broken bullet hierarchy parsing
+- [DONE] Fix broken bullet hierarchy parsing
 - Replace debug outline display with actual rendered markdown
 - Add collapsible bullets with +/- indicators for outline items
 - Implement proper indentation handling (tabs vs spaces)
@@ -18,7 +18,7 @@
 - Filesystem watch for external changes
 - Dark/light theme switching
 - Better error handling and user feedback
-- Outline hierarchy building is flawed - needs rewrite
+- [DONE] Outline hierarchy building is flawed - needs rewrite
 - Add proper error handling throughout
 - Consider state management approach for larger feature set
 - Add comprehensive test coverage

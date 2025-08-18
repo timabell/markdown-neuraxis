@@ -36,16 +36,15 @@ fn user_workflow_select_file_and_parse_outline() {
     if let ContentBlock::BulletList { items } = &document.content[0] {
         assert_eq!(items.len(), 2);
 
-        // Note: pulldown-cmark processes items in reverse document order
-        // Second parent comes first
-        assert_eq!(items[0].content, "Second parent");
-        assert_eq!(items[0].children.len(), 0);
-
         // First parent has children
-        assert_eq!(items[1].content, "Parent item");
-        assert_eq!(items[1].children.len(), 2);
-        assert_eq!(items[1].children[0].content, "Another child");
-        assert_eq!(items[1].children[1].content, "Child item");
+        assert_eq!(items[0].content, "Parent item");
+        assert_eq!(items[0].children.len(), 2);
+        assert_eq!(items[0].children[0].content, "Child item");
+        assert_eq!(items[0].children[1].content, "Another child");
+
+        // Second parent comes after
+        assert_eq!(items[1].content, "Second parent");
+        assert_eq!(items[1].children.len(), 0);
     } else {
         panic!("Expected BulletList block");
     }

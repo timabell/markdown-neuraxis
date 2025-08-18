@@ -4,12 +4,12 @@ expression: doc.content
 ---
 - BulletList:
     items:
-      - content: Third item
+      - content: First item
         level: 0
         children: []
       - content: Second item
         level: 0
         children: []
-      - content: First item
+      - content: Third item
         level: 0
         children: []
