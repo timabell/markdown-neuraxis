@@ -11,7 +11,8 @@
       "Bash(cargo insta:*)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:docs.rs)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(find:*)"
     ],
     "deny": []
   }
