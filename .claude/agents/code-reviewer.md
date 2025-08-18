@@ -36,7 +36,7 @@ When reviewing code diffs, you will systematically evaluate:
 
 **Project-Specific Concerns:**
 - Ensure markdown parsing changes maintain compatibility with pulldown-cmark
-- Verify file organization respects the journal/, pages/, assets/ structure
+- Verify file organization works with flexible folder structures (journal/, assets/ are optional)
 - Check that cross-linking and UUID systems remain intact
 - Validate performance implications for large markdown file collections
 

@@ -43,7 +43,7 @@ Based on GTD principles, all tasks flow through explicit states to ensure nothin
 e.g.
 
 ```md
-# pages/goals.md
+# goals.md
 
 - finance
   - work

@@ -37,20 +37,19 @@ notes/
 │   ├── 2025_08_02.md
 │   ├── assets/
 │   │   ├── image1.png
-├── pages/
-│   ├── index.md
-│   ├── something.md
-│   ├── anything-else.md
-│   ├── 0_Inbox/
-│   │   ├── 19991231-232359-foo.md
-│   │   ├── 19991231-232359-bar.png
-│   │   ├── 19991231-232359-baz.eml
-│   ├── 1_Projects/
-│   │   ├── BigProj1/
-│   │   │   ├── index.md
-│   │   │   ├── something.md
-│   │   ├── BigProj2/
-│   │   │   ├── something.md
+├── index.md
+├── something.md
+├── anything-else.md
+├── 0_Inbox/
+│   ├── 19991231-232359-foo.md
+│   ├── 19991231-232359-bar.png
+│   ├── 19991231-232359-baz.eml
+├── 1_Projects/
+│   ├── BigProj1/
+│   │   ├── index.md
+│   │   ├── something.md
+│   ├── BigProj2/
+│   │   ├── something.md
 │   ├── 2_Areas/
 │   │   ├── Family/
 │   ├── 3_Resources/
@@ -64,9 +63,9 @@ notes/
 │   │   ├── image1.png
 ```
 
-- `journal/` — one file per day, for daily logs/tasks, engineering notebook
-- `pages/` — user-created notes, wiki-style
-- `assets/` — optional embedded files/images for md files in root
+- `journal/` — optional subfolder for one file per day, daily logs/tasks, engineering notebook
+- `assets/` — optional subfolder for embedded files/images
+- User-created notes can be organized anywhere in the root directory with complete flexibility
 
 ### Parent Pages in Hierarchies
 
@@ -212,7 +211,7 @@ If you want tabs for more complex tasks, you can still use VSCode with your note
 ## 🏁 Initial goals
 
 - Daily journaling with timestamped bullets
-- Organizing project work across `pages/` with para method folders
+- Organizing project work with flexible PARA method folders
 - Linking context between client/project/goals
 - Copy-paste rich bullet lists to Docs/Writer
 - Seeing backlinks and forward context in a glance

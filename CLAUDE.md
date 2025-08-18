@@ -38,16 +38,17 @@ Based on `doc/methodology.md`, the system supports:
 
 ### File Organization (PARA-based)
 ```
-notes/
-├── journal/          # Daily journal files (YYYY_MM_DD.md)
-├── pages/           # User-created notes, wiki-style
-│   ├── 0_Inbox/     # Universal capture folder
-│   ├── 1_Projects/  # Active projects
-│   ├── 2_Areas/     # Ongoing responsibilities
-│   ├── 3_Resources/ # Reference materials
-│   ├── 4_Archive/   # Completed/inactive items
-│   └── assets/      # Images and other media
+notes/               # Markdown files can be anywhere in root
+├── journal/         # Optional subfolder for journals
+├── assets/          # Optional subfolder for assets
+├── 0_Inbox/         # Universal capture folder
+├── 1_Projects/      # Active projects
+├── 2_Areas/         # Ongoing responsibilities
+├── 3_Resources/     # Reference materials
+├── 4_Archive/       # Completed/inactive items
+└── any-folders/     # Complete flexibility
 ```
+
 
 ### Core Features (Current/Planned)
 - **Markdown parsing**: Headings, bullets, code blocks, metadata (`property:: value`)
@@ -97,7 +98,7 @@ src/
 
 ### Data Flow Architecture
 1. **Startup**: CLI validates notes directory structure via `io::validate_notes_dir()`
-2. **File Discovery**: `io::scan_markdown_files()` recursively finds `.md` files in `pages/` folder
+2. **File Discovery**: `io::scan_markdown_files()` recursively finds `.md` files in notes root directory
 3. **File Selection**: User clicks file → `io::read_file()` → `parsing::parse_markdown()` 
 4. **Rendering**: Parsed `Document` with hierarchical `OutlineItem`s rendered via Dioxus components
 5. **State Management**: Dioxus signals track selected file and current document
@@ -151,6 +152,6 @@ Current usage:
 1. Install system dependencies (see `doc/development.md`)
 2. Clone the repository 
 3. Run: `cargo run <path-to-notes-folder>`
-4. The app will open showing markdown files from `<path>/pages/` folder
+4. The app will open showing markdown files from the notes root directory
 
-The executable takes a single argument - path to the root notes folder containing the expected structure (journal/, pages/, etc.).
+The executable takes a single argument - path to the root notes folder. Markdown files can be organized anywhere within this directory using any folder structure you prefer.

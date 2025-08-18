@@ -12,7 +12,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         Ok(tree) => tree,
         Err(e) => {
             eprintln!("Error building file tree: {e}");
-            FileTree::new(notes_path.join("pages"))
+            FileTree::new(notes_path.clone())
         }
     });
 

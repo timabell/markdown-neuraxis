@@ -52,12 +52,12 @@ fn user_workflow_select_file_and_parse_outline() {
 
 #[test]
 fn user_workflow_handle_invalid_notes_directory() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    // Don't create pages directory
+    use std::path::PathBuf;
+    let nonexistent_path = PathBuf::from("/this/path/does/not/exist");
 
-    let result = io::scan_markdown_files(temp_dir.path());
+    let result = io::scan_markdown_files(&nonexistent_path);
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("pages directory"));
+    assert!(result.unwrap_err().to_string().contains("notes directory"));
 }
 
 #[test]

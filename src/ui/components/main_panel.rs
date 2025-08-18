@@ -4,8 +4,7 @@ use std::path::PathBuf;
 
 #[component]
 pub fn MainPanel(file: PathBuf, notes_path: PathBuf, document: Document) -> Element {
-    let pages_path = notes_path.join("pages");
-    let display_name = if let Ok(relative) = file.strip_prefix(&pages_path) {
+    let display_name = if let Ok(relative) = file.strip_prefix(&notes_path) {
         relative.to_string_lossy().to_string()
     } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
         name.to_string()
