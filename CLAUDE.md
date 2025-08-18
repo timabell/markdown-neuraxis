@@ -73,10 +73,11 @@ src/
 ├── main.rs              # Entry point, CLI argument handling, window config
 ├── lib.rs               # Module exports and core unit tests
 ├── models/              # Core data structures
-│   ├── document.rs      # Document and OutlineItem structs
+│   ├── document.rs      # Document with ContentBlock enum (headings, lists, etc.)
 │   └── mod.rs
 ├── parsing/             # Markdown processing
-│   └── mod.rs           # pulldown-cmark integration, hierarchy building
+│   ├── mod.rs           # pulldown-cmark integration, hierarchy building
+│   └── README.md        # Explains tree building challenges and solutions
 ├── io/                  # File system operations
 │   └── mod.rs           # File scanning, validation, reading
 ├── ui/                  # Dioxus components
@@ -88,9 +89,10 @@ src/
 │       └── mod.rs
 ├── assets/              # Static resources
 │   └── solarized-light.css # Theme styling
-└── tests/               # Integration tests
-    ├── integration.rs
-    └── mod.rs
+├── tests/               # Integration tests
+│   ├── integration.rs
+│   └── mod.rs
+└── snapshots/           # Insta snapshot test files
 ```
 
 ### Data Flow Architecture
@@ -120,6 +122,12 @@ src/
 - ✅ **Testing**: Snapshot tests for outline parsing, unit tests for core logic
 
 ## Development Notes
+
+### Development Process
+- **Follow the standardized workflow**: See `doc/claude-workflow.md` for the complete development process
+- Uses specialized agents (feature-implementor, code-reviewer) for complex changes
+- Simple changes (typos, single-line fixes) can skip the full workflow
+- All commits must have passing tests, be formatted, and include prompt history
 
 ### Build Requirements
 - System dependencies for Dioxus desktop (WebKit, GTK, etc.)
