@@ -1,3 +1,4 @@
+- Add keyboard shortcuts for file-tree navigation: up/down to move up/down the list (immediatly opening selected file), left/right to expand/collapse folders
 - Add collapsible bullets with +/- indicators for outline items
 - Implement [[wiki-links]] parsing and rendering
 - Add backlink index - scan files for inbound links
