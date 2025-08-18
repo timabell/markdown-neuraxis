@@ -69,6 +69,12 @@ body {
     margin-top: 12px;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 14px;
+    outline: none;
+}
+
+.tree-view:focus {
+    box-shadow: inset 0 0 0 2px var(--blue);
+    border-radius: 4px;
 }
 
 .tree-item {
@@ -99,6 +105,29 @@ body {
 .tree-item.file.selected {
     background-color: var(--blue);
     color: var(--base3);
+}
+
+.tree-item.focused {
+    background-color: var(--base1);
+    color: var(--base02);
+}
+
+.tree-item.folder.focused {
+    background-color: var(--base1);
+    color: var(--blue);
+    font-weight: 600;
+}
+
+.tree-item.file.focused {
+    background-color: var(--base1);
+    color: var(--base02);
+}
+
+.tree-item.file.selected.focused {
+    background-color: var(--blue);
+    color: var(--base3);
+    outline: 2px solid var(--yellow);
+    outline-offset: -2px;
 }
 
 .tree-toggle {
