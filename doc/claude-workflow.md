@@ -37,6 +37,7 @@ The workflow emphasizes iterative development with automated code review, human 
 
 ### 3. Code Implementation
 - Claude delegates to the **feature-implementor agent** to write the code
+  - Full list of prompt(s) needs to be passed to the implementor so it can put an accurate record in the commit
 - Agent implements the feature with proper tests
 - Agent follows existing code conventions and patterns
 
