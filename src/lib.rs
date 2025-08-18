@@ -17,9 +17,12 @@ mod unit_tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case(r#"- First item
+    #[case(
+        r#"- First item
 - Second item
-- Third item"#, "simple_bullet_list")]
+- Third item"#,
+        "simple_bullet_list"
+    )]
     #[case(
         r#"- Parent item
   - Child item
