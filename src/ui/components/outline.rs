@@ -1,5 +1,28 @@
-use crate::models::{ContentBlock, ListItem};
+use crate::models::{ContentBlock, ListItem, TextSegment};
 use dioxus::prelude::*;
+use std::path::{Path, PathBuf};
+
+/// Resolve a wiki-link target to an actual file path
+fn resolve_wiki_link(target: &str, notes_path: &Path) -> Option<PathBuf> {
+    // Handle different wiki-link formats:
+    // 1. Simple page name: "Getting-Started" -> Getting-Started.md
+    // 2. Path with folders: "1_Projects/Project-Alpha" -> 1_Projects/Project-Alpha.md
+    // 3. Path ending with .md: "some/page.md" -> some/page.md
+    // 4. Journal entries: "journal/2024-01-15" -> journal/2024-01-15.md
+
+    let target_path = if target.ends_with(".md") {
+        notes_path.join(target)
+    } else {
+        notes_path.join(format!("{target}.md"))
+    };
+
+    // Check if the file exists
+    if target_path.exists() && target_path.is_file() {
+        Some(target_path)
+    } else {
+        None
+    }
+}
 
 #[component]
 pub fn OutlineItemComponent(
@@ -7,6 +30,8 @@ pub fn OutlineItemComponent(
     indent: usize,
     is_numbered: bool,
     item_number: Option<usize>,
+    notes_path: PathBuf,
+    on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     rsx! {
         div {
@@ -23,7 +48,16 @@ pub fn OutlineItemComponent(
                 } else {
                     span { class: "list-marker bullet", "• " }
                 }
-                span { class: "list-text", "{item.content}" }
+                span {
+                    class: "list-text",
+                    if let Some(ref segments) = item.segments {
+                        for segment in segments {
+                            TextSegmentComponent { segment: segment.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                        }
+                    } else {
+                        "{item.content}"
+                    }
+                }
             }
             // Render nested content (like code blocks)
             if !item.nested_content.is_empty() {
@@ -31,7 +65,7 @@ pub fn OutlineItemComponent(
                     class: "nested-content",
                     style: "margin-left: {(indent + 1) * 24}px;",
                     for content in &item.nested_content {
-                        NestedContentComponent { content: content.clone() }
+                        NestedContentComponent { content: content.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
                     }
                 }
             }
@@ -44,7 +78,9 @@ pub fn OutlineItemComponent(
                         item: child.clone(),
                         indent: indent + 1,
                         is_numbered: is_numbered,
-                        item_number: if is_numbered { Some(idx + 1) } else { None }
+                        item_number: if is_numbered { Some(idx + 1) } else { None },
+                        notes_path: notes_path.clone(),
+                        on_file_select: on_file_select
                     }
                 }
             }
@@ -53,7 +89,11 @@ pub fn OutlineItemComponent(
 }
 
 #[component]
-fn NestedContentComponent(content: ContentBlock) -> Element {
+fn NestedContentComponent(
+    content: ContentBlock,
+    notes_path: PathBuf,
+    on_file_select: Option<Callback<PathBuf>>,
+) -> Element {
     match content {
         ContentBlock::CodeBlock { language, code } => {
             let code_class = if let Some(ref lang) = language {
@@ -77,9 +117,14 @@ fn NestedContentComponent(content: ContentBlock) -> Element {
                 }
             }
         }
-        ContentBlock::Paragraph(text) => {
+        ContentBlock::Paragraph { segments } => {
             rsx! {
-                p { class: "paragraph nested", "{text}" }
+                p {
+                    class: "paragraph nested",
+                    for segment in segments {
+                        TextSegmentComponent { segment: segment.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                    }
+                }
             }
         }
         ContentBlock::Quote(text) => {
@@ -97,5 +142,36 @@ fn NestedContentComponent(content: ContentBlock) -> Element {
         _ => rsx! {
             div { class: "unsupported-nested-content", "Unsupported nested content" }
         },
+    }
+}
+
+#[component]
+pub fn TextSegmentComponent(
+    segment: TextSegment,
+    notes_path: PathBuf,
+    on_file_select: Option<Callback<PathBuf>>,
+) -> Element {
+    match segment {
+        TextSegment::Text(text) => rsx! { "{text}" },
+        TextSegment::WikiLink { target } => {
+            rsx! {
+                a {
+                    href: "#",
+                    class: "wiki-link",
+                    "data-target": "{target}",
+                    onclick: move |evt| {
+                        evt.prevent_default();
+                        if let Some(callback) = on_file_select {
+                            if let Some(file_path) = resolve_wiki_link(&target, &notes_path) {
+                                callback.call(file_path);
+                            } else {
+                                println!("Could not resolve wiki-link: {target}");
+                            }
+                        }
+                    },
+                    "{target}"
+                }
+            }
+        }
     }
 }

@@ -3,9 +3,54 @@
 //! This module handles the transformation of raw markdown content into a hierarchical
 //! document structure that can be rendered and manipulated by the application.
 
-use crate::models::{ContentBlock, Document, ListItem};
+use crate::models::{ContentBlock, Document, ListItem, TextSegment};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use std::path::PathBuf;
+
+/// Parse text content and extract wiki-links, returning segments
+fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
+    let mut segments = Vec::new();
+    let mut current_pos = 0;
+
+    // Find all [[...]] patterns
+    while let Some(start) = text[current_pos..].find("[[") {
+        let absolute_start = current_pos + start;
+
+        // Add any text before the wiki-link
+        if start > 0 {
+            let text_segment = text[current_pos..absolute_start].to_string();
+            if !text_segment.is_empty() {
+                segments.push(TextSegment::Text(text_segment));
+            }
+        }
+
+        // Find the end of the wiki-link
+        if let Some(end) = text[absolute_start + 2..].find("]]") {
+            let absolute_end = absolute_start + 2 + end;
+            let link_content = &text[absolute_start + 2..absolute_end];
+
+            // Parse link content
+            let target = link_content.trim().to_string();
+
+            segments.push(TextSegment::WikiLink { target });
+            current_pos = absolute_end + 2;
+        } else {
+            // No closing ]], treat [[ as regular text
+            segments.push(TextSegment::Text("[[".to_string()));
+            current_pos = absolute_start + 2;
+        }
+    }
+
+    // Add any remaining text
+    if current_pos < text.len() {
+        let remaining = text[current_pos..].to_string();
+        if !remaining.is_empty() {
+            segments.push(TextSegment::Text(remaining));
+        }
+    }
+
+    segments
+}
 
 /// Parse markdown content into a complete Document structure.
 ///
@@ -234,7 +279,8 @@ impl MarkdownProcessor {
     fn flush_paragraph(&mut self) {
         let text = self.current_text.trim().to_string();
         if !text.is_empty() {
-            self.blocks.push(ContentBlock::Paragraph(text));
+            let segments = parse_wiki_links(&text);
+            self.blocks.push(ContentBlock::Paragraph { segments });
         }
         self.current_text.clear();
     }
@@ -335,7 +381,18 @@ impl ListParser {
         if let Some((text, children, nested_content)) = self.item_stack.pop() {
             // Calculate nesting level: subtract 1 because list_stack includes the current list
             let level = self.list_stack.len().saturating_sub(1);
-            let mut item = ListItem::new(text.trim().to_string(), level);
+            let trimmed_text = text.trim().to_string();
+            let segments = parse_wiki_links(&trimmed_text);
+
+            let mut item = if segments
+                .iter()
+                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+            {
+                ListItem::with_segments(trimmed_text, segments, level)
+            } else {
+                ListItem::new(trimmed_text, level)
+            };
+
             item.children = children;
             item.nested_content = nested_content;
 
@@ -406,7 +463,7 @@ mod tests {
             doc.content[0],
             ContentBlock::Heading { level: 1, .. }
         ));
-        assert!(matches!(doc.content[1], ContentBlock::Paragraph(_)));
+        assert!(matches!(doc.content[1], ContentBlock::Paragraph { .. }));
         assert!(matches!(doc.content[2], ContentBlock::BulletList { .. }));
         assert!(matches!(doc.content[3], ContentBlock::CodeBlock { .. }));
     }
@@ -538,6 +595,70 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_wiki_links() {
+        let content = "This is a paragraph with [[Simple-Link]] and [[Complex-Link]].";
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::Paragraph { segments } = &doc.content[0] {
+            assert_eq!(segments.len(), 5);
+
+            // Check the segments
+            assert_eq!(
+                segments[0],
+                TextSegment::Text("This is a paragraph with ".to_string())
+            );
+            assert_eq!(
+                segments[1],
+                TextSegment::WikiLink {
+                    target: "Simple-Link".to_string(),
+                }
+            );
+            assert_eq!(segments[2], TextSegment::Text(" and ".to_string()));
+            assert_eq!(
+                segments[3],
+                TextSegment::WikiLink {
+                    target: "Complex-Link".to_string(),
+                }
+            );
+            assert_eq!(segments[4], TextSegment::Text(".".to_string()));
+        } else {
+            panic!("Expected Paragraph block");
+        }
+    }
+
+    #[test]
+    fn test_parse_wiki_links_in_list() {
+        let content = "- List item with [[Page-Link]] reference";
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 1);
+
+            // Check that the item has segments
+            if let Some(ref segments) = items[0].segments {
+                assert_eq!(segments.len(), 3);
+                assert_eq!(
+                    segments[0],
+                    TextSegment::Text("List item with ".to_string())
+                );
+                assert_eq!(
+                    segments[1],
+                    TextSegment::WikiLink {
+                        target: "Page-Link".to_string(),
+                    }
+                );
+                assert_eq!(segments[2], TextSegment::Text(" reference".to_string()));
+            } else {
+                panic!("Expected list item to have segments");
+            }
+        } else {
+            panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
     fn test_standalone_code_blocks_still_work() {
         let content = r#"# Title
 
@@ -554,7 +675,7 @@ fn standalone() {
 
         assert_eq!(doc.content.len(), 4);
         assert!(matches!(doc.content[0], ContentBlock::Heading { .. }));
-        assert!(matches!(doc.content[1], ContentBlock::Paragraph(_)));
+        assert!(matches!(doc.content[1], ContentBlock::Paragraph { .. }));
         assert!(matches!(doc.content[2], ContentBlock::CodeBlock { .. }));
         assert!(matches!(doc.content[3], ContentBlock::BulletList { .. }));
 

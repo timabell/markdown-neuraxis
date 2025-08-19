@@ -1,0 +1,13 @@
+---
+source: src/lib.rs
+expression: doc.content
+---
+- Paragraph:
+    segments:
+      - Text: "This paragraph has "
+      - WikiLink:
+          target: Simple-Link
+      - Text: " and "
+      - WikiLink:
+          target: Folder/Page
+      - Text: " references."

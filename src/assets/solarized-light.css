@@ -340,3 +340,17 @@ hr {
 .code-block code {
     tab-size: 4;
 }
+
+/* Wiki-link styling */
+.wiki-link {
+    color: var(--blue);
+    text-decoration: none;
+    cursor: pointer;
+    border-bottom: 1px dotted var(--blue);
+}
+
+.wiki-link:hover {
+    color: var(--cyan);
+    border-bottom: 1px solid var(--cyan);
+    background-color: var(--base3);
+}

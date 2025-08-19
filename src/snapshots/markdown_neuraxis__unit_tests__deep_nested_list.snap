@@ -5,46 +5,57 @@ expression: doc.content
 - BulletList:
     items:
       - content: Item 1
+        segments: ~
         level: 0
         children:
           - content: Item 1.1
+            segments: ~
             level: 1
             children:
               - content: Item 1.1.1
+                segments: ~
                 level: 2
                 children:
                   - content: Item 1.1.1.1
+                    segments: ~
                     level: 3
                     children: []
                     nested_content: []
                   - content: Item 1.1.1.2
+                    segments: ~
                     level: 3
                     children: []
                     nested_content: []
                 nested_content: []
               - content: Item 1.1.2
+                segments: ~
                 level: 2
                 children: []
                 nested_content: []
             nested_content: []
           - content: Item 1.2
+            segments: ~
             level: 1
             children:
               - content: Item 1.2.1
+                segments: ~
                 level: 2
                 children: []
                 nested_content: []
             nested_content: []
         nested_content: []
       - content: Item 2
+        segments: ~
         level: 0
         children:
           - content: Item 2.1
+            segments: ~
             level: 1
             children: []
             nested_content: []
         nested_content: []
       - content: Item 3
+        segments: ~
         level: 0
         children: []
         nested_content: []

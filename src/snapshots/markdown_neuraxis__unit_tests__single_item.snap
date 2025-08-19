@@ -5,6 +5,7 @@ expression: doc.content
 - BulletList:
     items:
       - content: Single item
+        segments: ~
         level: 0
         children: []
         nested_content: []

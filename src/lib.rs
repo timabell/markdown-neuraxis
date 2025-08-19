@@ -45,6 +45,19 @@ mod unit_tests {
 - Item 3"#,
         "deep_nested_list"
     )]
+    #[case(
+        "This paragraph has [[Simple-Link]] and [[Folder/Page]] references.",
+        "wiki_links_paragraph"
+    )]
+    #[case(
+        r#"# Heading
+
+Paragraph with [[Getting-Started]] link.
+
+- List item with [[journal/2024-01-15]] reference
+- Another item with [[1_Projects/Website]] link"#,
+        "wiki_links_mixed"
+    )]
     fn test_document_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
         use std::path::PathBuf;
         let doc = parsing::parse_markdown(markdown, PathBuf::from("test.md"));

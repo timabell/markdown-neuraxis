@@ -5,18 +5,22 @@ expression: doc.content
 - BulletList:
     items:
       - content: Parent item
+        segments: ~
         level: 0
         children:
           - content: Child item
+            segments: ~
             level: 1
             children: []
             nested_content: []
           - content: Another child
+            segments: ~
             level: 1
             children: []
             nested_content: []
         nested_content: []
       - content: Second parent
+        segments: ~
         level: 0
         children: []
         nested_content: []

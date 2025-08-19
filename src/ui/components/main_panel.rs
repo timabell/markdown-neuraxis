@@ -3,7 +3,12 @@ use dioxus::prelude::*;
 use std::path::PathBuf;
 
 #[component]
-pub fn MainPanel(file: PathBuf, notes_path: PathBuf, document: Document) -> Element {
+pub fn MainPanel(
+    file: PathBuf,
+    notes_path: PathBuf,
+    document: Document,
+    on_file_select: Option<Callback<PathBuf>>,
+) -> Element {
     let display_name = if let Ok(relative) = file.strip_prefix(&notes_path) {
         relative.to_string_lossy().to_string()
     } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
@@ -19,7 +24,7 @@ pub fn MainPanel(file: PathBuf, notes_path: PathBuf, document: Document) -> Elem
             div {
                 class: "document-content",
                 for block in &document.content {
-                    ContentBlockComponent { block: block.clone() }
+                    ContentBlockComponent { block: block.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
                 }
             }
         } else {
@@ -32,7 +37,11 @@ pub fn MainPanel(file: PathBuf, notes_path: PathBuf, document: Document) -> Elem
 }
 
 #[component]
-fn ContentBlockComponent(block: ContentBlock) -> Element {
+fn ContentBlockComponent(
+    block: ContentBlock,
+    notes_path: PathBuf,
+    on_file_select: Option<Callback<PathBuf>>,
+) -> Element {
     match block {
         ContentBlock::Heading { level, text } => {
             let class_name = format!("heading level-{level}");
@@ -45,9 +54,14 @@ fn ContentBlockComponent(block: ContentBlock) -> Element {
                 _ => rsx! { h6 { class: "{class_name}", "{text}" } },
             }
         }
-        ContentBlock::Paragraph(text) => {
+        ContentBlock::Paragraph { segments } => {
             rsx! {
-                p { class: "paragraph", "{text}" }
+                p {
+                    class: "paragraph",
+                    for segment in segments {
+                        super::TextSegmentComponent { segment: segment.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                    }
+                }
             }
         }
         ContentBlock::BulletList { items } => {
@@ -59,7 +73,9 @@ fn ContentBlockComponent(block: ContentBlock) -> Element {
                             item: item.clone(),
                             indent: 0,
                             is_numbered: false,
-                            item_number: None
+                            item_number: None,
+                            notes_path: notes_path.clone(),
+                            on_file_select: on_file_select
                         }
                     }
                 }
@@ -74,7 +90,9 @@ fn ContentBlockComponent(block: ContentBlock) -> Element {
                             item: item.clone(),
                             indent: 0,
                             is_numbered: true,
-                            item_number: Some(idx + 1)
+                            item_number: Some(idx + 1),
+                            notes_path: notes_path.clone(),
+                            on_file_select: on_file_select
                         }
                     }
                 }

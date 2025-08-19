@@ -7,7 +7,9 @@ pub enum ContentBlock {
         level: u8,
         text: String,
     },
-    Paragraph(String),
+    Paragraph {
+        segments: Vec<TextSegment>,
+    },
     BulletList {
         items: Vec<ListItem>,
     },
@@ -23,8 +25,15 @@ pub enum ContentBlock {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TextSegment {
+    Text(String),
+    WikiLink { target: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ListItem {
     pub content: String,
+    pub segments: Option<Vec<TextSegment>>,
     pub level: usize,
     pub children: Vec<ListItem>,
     pub nested_content: Vec<ContentBlock>,
@@ -34,6 +43,17 @@ impl ListItem {
     pub fn new(content: String, level: usize) -> Self {
         Self {
             content,
+            segments: None,
+            level,
+            children: Vec::new(),
+            nested_content: Vec::new(),
+        }
+    }
+
+    pub fn with_segments(content: String, segments: Vec<TextSegment>, level: usize) -> Self {
+        Self {
+            content,
+            segments: Some(segments),
             level,
             children: Vec::new(),
             nested_content: Vec::new(),

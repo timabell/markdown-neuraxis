@@ -52,7 +52,19 @@ pub fn App(notes_path: PathBuf) -> Element {
                     super::components::MainPanel {
                         file: file.to_path_buf(),
                         notes_path: notes_path.clone(),
-                        document: doc.clone()
+                        document: doc.clone(),
+                        on_file_select: Some(Callback::new(move |file_path: PathBuf| {
+                            match io::read_file(&file_path) {
+                                Ok(content) => {
+                                    let document = parsing::parse_markdown(&content, file_path.clone());
+                                    *current_document.write() = Some(document);
+                                    *selected_file.write() = Some(file_path);
+                                }
+                                Err(e) => {
+                                    eprintln!("Error reading file {file_path:?}: {e}");
+                                }
+                            }
+                        }))
                     }
                 } else {
                     div {
