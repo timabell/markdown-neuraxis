@@ -12,7 +12,8 @@
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:github.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": []
   }
