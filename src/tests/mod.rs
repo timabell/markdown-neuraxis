@@ -7,8 +7,7 @@ use tempfile::TempDir;
 
 /// Create a temporary notes directory with test files
 pub fn create_test_notes_dir() -> TempDir {
-    let temp_dir = tempfile::tempdir().unwrap();
-    temp_dir
+    tempfile::tempdir().unwrap()
 }
 
 /// Create a test markdown file with content
