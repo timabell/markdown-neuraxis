@@ -1,0 +1,6 @@
+Date,Account,Symbol,Shares,Price,Total,Notes
+2024-01-01,IRA,VTI,25,225.50,5637.50,Monthly contribution
+2024-01-01,IRA,VXUS,15,58.75,881.25,International exposure
+2024-01-01,Brokerage,AAPL,10,185.25,1852.50,Individual stock
+2024-01-15,IRA,VTI,2,228.10,456.20,Additional purchase
+2024-01-15,Brokerage,MSFT,5,375.80,1879.00,Tech allocation
