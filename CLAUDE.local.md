@@ -2,3 +2,4 @@
 - code-review must sign-off before every commit - ALWAYS show the review output
 - you will NEVER be allowed to create debug files with `cat`
 - you may not EVER create and use indivual .rs files and rustc for experiments. Use real TDD.
+- don't run `git add` if the files are already staged, check the status
