@@ -152,7 +152,25 @@ pub fn TextSegmentComponent(
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     match segment {
-        TextSegment::Text(text) => rsx! { "{text}" },
+        TextSegment::Text(text) => {
+            // Handle hard breaks (trailing spaces + newline from markdown)
+            if text.contains("  \n") {
+                // Split on the original pattern and render with <br> tags
+                let parts: Vec<&str> = text.split("  \n").collect();
+                rsx! {
+                    span {
+                        for (i, part) in parts.iter().enumerate() {
+                            "{part}"
+                            if i < parts.len() - 1 {
+                                br {}
+                            }
+                        }
+                    }
+                }
+            } else {
+                rsx! { "{text}" }
+            }
+        }
         TextSegment::WikiLink { target } => {
             rsx! {
                 a {

@@ -270,13 +270,24 @@ impl MarkdownProcessor {
                     self.current_text.push_str(&code_text);
                 }
             }
-            Event::SoftBreak | Event::HardBreak => {
+            Event::SoftBreak => {
+                // Soft breaks (regular newlines) are rendered as spaces in HTML
                 if self.in_code_block {
                     self.code_content.push('\n');
                 } else if self.list_parser.is_in_item() {
-                    self.list_parser.add_text("\n");
+                    self.list_parser.add_text(" ");
                 } else {
-                    self.current_text.push('\n');
+                    self.current_text.push(' ');
+                }
+            }
+            Event::HardBreak => {
+                // Hard breaks (trailing spaces + newline) - preserve the original pattern
+                if self.in_code_block {
+                    self.code_content.push('\n');
+                } else if self.list_parser.is_in_item() {
+                    self.list_parser.add_text("  \n");
+                } else {
+                    self.current_text.push_str("  \n");
                 }
             }
             _ => {}
@@ -663,6 +674,51 @@ mod tests {
             }
         } else {
             panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_soft_breaks_vs_hard_breaks() {
+        // Test soft break (regular newline without trailing spaces)
+        let soft_break_content = "First line\nSecond line in same paragraph";
+        let soft_doc = parse_markdown(soft_break_content, PathBuf::from("/test.md"));
+
+        // Test hard break (trailing spaces + newline)
+        let hard_break_content = "First line  \nSecond line in same paragraph";
+        let hard_doc = parse_markdown(hard_break_content, PathBuf::from("/test.md"));
+
+        // Both should produce 1 paragraph
+        assert_eq!(soft_doc.content.len(), 1);
+        assert_eq!(hard_doc.content.len(), 1);
+
+        // Check soft break behavior - should have space instead of newline
+        if let ContentBlock::Paragraph {
+            segments: soft_segments,
+        } = &soft_doc.content[0]
+        {
+            if let TextSegment::Text(soft_text) = &soft_segments[0] {
+                assert_eq!(soft_text, "First line Second line in same paragraph");
+                assert!(!soft_text.contains("  \n"));
+            } else {
+                panic!("Expected text segment for soft break");
+            }
+        } else {
+            panic!("Expected paragraph for soft break");
+        }
+
+        // Check hard break behavior - should have original pattern preserved
+        if let ContentBlock::Paragraph {
+            segments: hard_segments,
+        } = &hard_doc.content[0]
+        {
+            if let TextSegment::Text(hard_text) = &hard_segments[0] {
+                assert!(hard_text.contains("  \n"));
+                assert_eq!(hard_text, "First line  \nSecond line in same paragraph");
+            } else {
+                panic!("Expected text segment for hard break");
+            }
+        } else {
+            panic!("Expected paragraph for hard break");
         }
     }
 
