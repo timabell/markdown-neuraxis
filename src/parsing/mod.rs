@@ -723,6 +723,26 @@ mod tests {
     }
 
     #[test]
+    fn test_bullet_list_with_soft_breaks() {
+        // Test bullet list where items are separated by single newlines (soft breaks)
+        let content = "- bullet one\n- bullet two\n- bullet three";
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        // Should have 1 bullet list block
+        assert_eq!(doc.content.len(), 1);
+
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            // Should have 3 separate items, not combined
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "bullet one");
+            assert_eq!(items[1].content, "bullet two");
+            assert_eq!(items[2].content, "bullet three");
+        } else {
+            panic!("Expected bullet list block");
+        }
+    }
+
+    #[test]
     fn test_consecutive_paragraphs_are_separate_blocks() {
         let content = "First paragraph content here.\n\nSecond paragraph content here.\n\nThird paragraph content here.";
         let doc = parse_markdown(content, PathBuf::from("/test.md"));

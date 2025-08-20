@@ -113,18 +113,67 @@ impl ContentBlock {
 
         // Try to parse as list
         if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-            // For now, create a simple single-item bullet list
-            let content = trimmed[2..].trim().to_string();
-            let segments = crate::parsing::parse_wiki_links(&content);
-            let item = if segments
-                .iter()
-                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
-            {
-                ListItem::with_segments(content, segments, 0)
-            } else {
-                ListItem::new(content, 0)
-            };
-            return Ok(ContentBlock::BulletList { items: vec![item] });
+            // Parse multiple bullet points separated by newlines
+            let lines: Vec<&str> = trimmed.lines().collect();
+            let mut items = Vec::new();
+
+            for line in lines {
+                let line = line.trim();
+                if line.starts_with("- ") || line.starts_with("* ") {
+                    let content = line[2..].trim().to_string();
+                    let segments = crate::parsing::parse_wiki_links(&content);
+                    let item = if segments
+                        .iter()
+                        .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                    {
+                        ListItem::with_segments(content, segments, 0)
+                    } else {
+                        ListItem::new(content, 0)
+                    };
+                    items.push(item);
+                }
+            }
+
+            if !items.is_empty() {
+                return Ok(ContentBlock::BulletList { items });
+            }
+        }
+
+        // Try to parse as numbered list
+        if trimmed
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false)
+            && trimmed.contains(". ")
+        {
+            // Parse multiple numbered items separated by newlines
+            let lines: Vec<&str> = trimmed.lines().collect();
+            let mut items = Vec::new();
+
+            for line in lines {
+                let line = line.trim();
+                // Check if line starts with number followed by ". "
+                if let Some(dot_pos) = line.find(". ") {
+                    if line[..dot_pos].chars().all(|c| c.is_ascii_digit()) {
+                        let content = line[dot_pos + 2..].trim().to_string();
+                        let segments = crate::parsing::parse_wiki_links(&content);
+                        let item = if segments
+                            .iter()
+                            .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                        {
+                            ListItem::with_segments(content, segments, 0)
+                        } else {
+                            ListItem::new(content, 0)
+                        };
+                        items.push(item);
+                    }
+                }
+            }
+
+            if !items.is_empty() {
+                return Ok(ContentBlock::NumberedList { items });
+            }
         }
 
         // Default to paragraph
@@ -681,6 +730,48 @@ mod tests {
         assert_eq!(doc_state.blocks.len(), 2);
         assert_eq!(doc_state.blocks[0].1.to_markdown(), "Existing paragraph");
         assert_eq!(doc_state.blocks[1].1.to_markdown(), "New content here");
+    }
+
+    #[test]
+    fn test_numbered_list_parsing_from_editor() {
+        // Test parsing numbered list that would happen when user types in the editor
+        let markdown = "1. first item\n2. second item\n3. third item";
+
+        let result = ContentBlock::from_markdown(markdown).unwrap();
+
+        if let ContentBlock::NumberedList { items } = result {
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "first item");
+            assert_eq!(items[1].content, "second item");
+            assert_eq!(items[2].content, "third item");
+        } else {
+            panic!("Expected numbered list, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_bullet_list_parsing_from_editor() {
+        // Test parsing that would happen when user types a bullet list in the editor
+        let markdown = "- bullet one\n- bullet two\n- bullet three";
+
+        // This simulates what happens when ContentBlock::from_markdown is called
+        let result = ContentBlock::from_markdown(markdown).unwrap();
+
+        if let ContentBlock::BulletList { items } = result {
+            // Debug what we actually get
+            println!("Number of items: {}", items.len());
+            for (i, item) in items.iter().enumerate() {
+                println!("Item {}: '{}'", i, item.content);
+            }
+
+            // Should have 3 separate items
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "bullet one");
+            assert_eq!(items[1].content, "bullet two");
+            assert_eq!(items[2].content, "bullet three");
+        } else {
+            panic!("Expected bullet list, got: {:?}", result);
+        }
     }
 
     #[test]
