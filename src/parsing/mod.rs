@@ -165,6 +165,14 @@ impl MarkdownProcessor {
     /// Process a single markdown event
     fn process_event(&mut self, event: Event) {
         match event {
+            Event::Start(Tag::Paragraph) => {
+                // New paragraph - flush any existing one
+                self.flush_paragraph();
+            }
+            Event::End(TagEnd::Paragraph) => {
+                // End paragraph - flush it
+                self.flush_paragraph();
+            }
             Event::Start(Tag::Heading { level: _, .. }) => {
                 self.flush_paragraph();
             }
@@ -655,6 +663,51 @@ mod tests {
             }
         } else {
             panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_consecutive_paragraphs_are_separate_blocks() {
+        let content = "First paragraph content here.\n\nSecond paragraph content here.\n\nThird paragraph content here.";
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        // Should have 3 separate paragraph blocks
+        assert_eq!(doc.content.len(), 3);
+
+        // All should be paragraphs
+        assert!(matches!(doc.content[0], ContentBlock::Paragraph { .. }));
+        assert!(matches!(doc.content[1], ContentBlock::Paragraph { .. }));
+        assert!(matches!(doc.content[2], ContentBlock::Paragraph { .. }));
+
+        // Check content
+        if let ContentBlock::Paragraph { segments } = &doc.content[0] {
+            if let TextSegment::Text(text) = &segments[0] {
+                assert_eq!(text, "First paragraph content here.");
+            } else {
+                panic!("Expected first segment to be text");
+            }
+        } else {
+            panic!("Expected first block to be paragraph");
+        }
+
+        if let ContentBlock::Paragraph { segments } = &doc.content[1] {
+            if let TextSegment::Text(text) = &segments[0] {
+                assert_eq!(text, "Second paragraph content here.");
+            } else {
+                panic!("Expected first segment to be text");
+            }
+        } else {
+            panic!("Expected second block to be paragraph");
+        }
+
+        if let ContentBlock::Paragraph { segments } = &doc.content[2] {
+            if let TextSegment::Text(text) = &segments[0] {
+                assert_eq!(text, "Third paragraph content here.");
+            } else {
+                panic!("Expected first segment to be text");
+            }
+        } else {
+            panic!("Expected third block to be paragraph");
         }
     }
 
