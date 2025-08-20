@@ -1,5 +1,19 @@
 # Editor Design: Block-Based Interactive Editing
 
+We need some kind of visual model for moving between editing and viewing of markdown files.
+
+Possible options:
+
+- Full WYSIWIG 🤮
+- Flip to full raw text of document for editing
+    - kinda like how you'd edit in vscode or vim
+    - this fine for normal markdown docs, and people can still use other editors for this, but it's not really a great fit for a slick UX for an outliner / note-taker like this as the raw is likely much more verbose so it'll be jarring
+- raw for bullet being edited
+    - this is how logseq does it, flipping to show the raw for whatever you are editing, and I rather like this visual model, it feels more like a rich tool, but still lets you write and interact in raw markdown
+    - unlike logseq this tool supports items outside of bullet lists, so it remains to be seen how well this model translates beyond bullet lists, my instinct is that it should still work, as headings, paragraphs, code blocks and quotes can all be treated as blocks that are always rendered unless that block is in edit mode
+
+I'm going to attempt the model of having only the thing being edited show as raw markdown, leaving everything else rendered.
+
 ## Core Concept: Edit-in-Place with Block Granularity
 
 The key insight from Logseq's approach is that **only one block is ever in edit mode** while everything else remains rendered. This gives us:
