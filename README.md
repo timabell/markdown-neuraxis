@@ -64,6 +64,48 @@ The goal of the **first working MVP**:
 - Optional query syntax for dashboards (`lead-status:: contacted`, etc.)
 - Migration tool from Logseq (namespace → folder)
 
+## 📖 Usage
+
+### Running the Application
+```bash
+cargo run <path-to-notes-folder>
+```
+
+The application works with any folder containing markdown files. For optimal organization, we recommend this structure:
+```
+notes/
+├── journal/          # Daily journal files (YYYY_MM_DD.md)  
+├── 0_Inbox/         # Universal capture folder
+├── 1_Projects/      # Active projects
+├── 2_Areas/         # Ongoing responsibilities
+├── 3_Resources/     # Reference materials
+├── 4_Archive/       # Completed/inactive items
+└── assets/          # Images and other media
+```
+
+### Keyboard Shortcuts
+
+#### File Navigation
+- **↑ / ↓ / ← / →** - Navigate file tree (expand/collapse folders, select files)
+- **Enter** - Open selected file for editing
+
+#### Block Editing
+- **Click any block** - Start editing that block inline
+- **ESC** - Save changes and exit editing mode
+- **Click elsewhere** - Save changes and exit editing mode  
+
+#### Block Creation
+- **Double newlines (`\n\n`)** during editing - Split current block into multiple blocks
+- **+ button** at document end - Add new empty block and start editing
+
+### Block-Based Editing
+
+The editor uses a Logseq-style block-based editing system:
+- Only one block is editable at a time
+- All other blocks remain rendered for context
+- Changes are automatically saved to disk when editing completes
+- Supports all markdown block types: paragraphs, headings, lists, code blocks, quotes
+
 ## 🌱 Why This, Now?
 
 All existing tools either:

@@ -682,4 +682,34 @@ mod tests {
         assert_eq!(doc_state.blocks[0].1.to_markdown(), "Existing paragraph");
         assert_eq!(doc_state.blocks[1].1.to_markdown(), "New content here");
     }
+
+    #[test]
+    fn test_escape_key_saves_and_exits_editing() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Original content".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let block_id = doc_state.blocks[0].0;
+
+        // Start editing
+        doc_state.start_editing(block_id);
+        assert!(doc_state.is_editing(block_id).is_some());
+        assert_eq!(doc_state.is_editing(block_id).unwrap(), "Original content");
+
+        // Simulate escape key: save and exit (this is what the UI should do)
+        let _new_block_ids = doc_state.finish_editing(block_id, "Modified content".to_string());
+
+        // Should no longer be in editing mode
+        assert!(doc_state.editing_block.is_none());
+        assert!(doc_state.is_editing(block_id).is_none());
+
+        // Content should be saved
+        assert_eq!(doc_state.blocks[0].1.to_markdown(), "Modified content");
+    }
 }

@@ -52,21 +52,27 @@ pub fn EditableMainPanel(
             div {
                 class: "document-content",
                 for (block_id, block) in &document_state.blocks {
-                    super::EditableBlock {
-                        // Addition of the key forces component recreation when BlockId changes.
-                        // When blocks are split (1 -> N blocks), each gets a new UUID-based BlockId.
-                        // Without this key, Dioxus reuses components and editing signals retain stale content.
-                        // With this key, split blocks get fresh components with correct initial content.
-                        // NOTE: This is similar to React's key prop but Dioxus uses it for component identity,
-                        // ensuring use_signal() gets re-initialized with the correct block content.
-                        key: "{block_id:?}",
-                        block: block.clone(),
-                        block_id: *block_id,
-                        editing_raw: document_state.is_editing(*block_id).cloned(),
-                        on_edit: handle_edit,
-                        on_save: handle_save,
-                        notes_path: notes_path.clone(),
-                        on_file_select: on_file_select
+                    {
+                        let is_editing = document_state.is_editing(*block_id).is_some();
+                        rsx! {
+                            super::EditableBlock {
+                                // Addition of the key forces component recreation when BlockId changes.
+                                // When blocks are split (1 -> N blocks), each gets a new UUID-based BlockId.
+                                // Without this key, Dioxus reuses components and editing signals retain stale content.
+                                // With this key, split blocks get fresh components with correct initial content.
+                                // NOTE: This is similar to React's key prop but Dioxus uses it for component identity,
+                                // ensuring use_signal() gets re-initialized with the correct block content.
+                                // Also include editing state in key to force recreation when editing state changes.
+                                key: "{block_id:?}-{is_editing}",
+                                block: block.clone(),
+                                block_id: *block_id,
+                                editing_raw: document_state.is_editing(*block_id).cloned(),
+                                on_edit: handle_edit,
+                                on_save: handle_save,
+                                notes_path: notes_path.clone(),
+                                on_file_select: on_file_select
+                            }
+                        }
                     }
                 }
                 // Add block button at the end of the document
