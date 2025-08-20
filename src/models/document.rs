@@ -22,6 +22,7 @@ pub struct DocumentState {
     pub path: PathBuf,
     pub blocks: Vec<(BlockId, ContentBlock)>,
     pub editing_block: Option<(BlockId, String)>, // block_id and raw markdown
+    pub selected_block: Option<BlockId>,          // currently selected block for navigation
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -315,6 +316,7 @@ impl DocumentState {
             path: document.path,
             blocks,
             editing_block: None,
+            selected_block: None,
         }
     }
 
@@ -353,6 +355,12 @@ impl DocumentState {
                     .collect();
 
                 self.editing_block = None;
+
+                // Select the first new block (or the edited block if only one)
+                if let Some(first_block_id) = new_block_ids.first() {
+                    self.selected_block = Some(*first_block_id);
+                }
+
                 return new_block_ids;
             }
         }
@@ -414,6 +422,62 @@ impl DocumentState {
             Some(block_id)
         } else {
             None
+        }
+    }
+
+    /// Select a block for keyboard navigation
+    pub fn select_block(&mut self, block_id: BlockId) {
+        self.selected_block = Some(block_id);
+    }
+
+    /// Get the currently selected block
+    pub fn selected_block(&self) -> Option<BlockId> {
+        self.selected_block
+    }
+
+    /// Move selection to the next block (down)
+    pub fn select_next_block(&mut self) {
+        if self.blocks.is_empty() {
+            return;
+        }
+
+        if let Some(current_id) = self.selected_block {
+            if let Some(current_pos) = self.blocks.iter().position(|(id, _)| *id == current_id) {
+                if current_pos + 1 < self.blocks.len() {
+                    self.selected_block = Some(self.blocks[current_pos + 1].0);
+                }
+            }
+        } else {
+            // No selection, select first block
+            self.selected_block = self.blocks.first().map(|(id, _)| *id);
+        }
+    }
+
+    /// Move selection to the previous block (up)
+    pub fn select_previous_block(&mut self) {
+        if self.blocks.is_empty() {
+            return;
+        }
+
+        if let Some(current_id) = self.selected_block {
+            if let Some(current_pos) = self.blocks.iter().position(|(id, _)| *id == current_id) {
+                if current_pos > 0 {
+                    self.selected_block = Some(self.blocks[current_pos - 1].0);
+                }
+            }
+        } else {
+            // No selection, select last block
+            self.selected_block = self.blocks.last().map(|(id, _)| *id);
+        }
+    }
+
+    /// Start editing the currently selected block
+    pub fn start_editing_selected(&mut self) -> bool {
+        if let Some(selected_id) = self.selected_block {
+            self.start_editing(selected_id);
+            true
+        } else {
+            false
         }
     }
 }
@@ -802,6 +866,89 @@ mod tests {
 
         // Content should be saved
         assert_eq!(doc_state.blocks[0].1.to_markdown(), "Modified content");
+    }
+
+    #[test]
+    fn test_block_navigation() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![
+                ContentBlock::Paragraph {
+                    segments: vec![TextSegment::Text("First block".to_string())],
+                },
+                ContentBlock::Paragraph {
+                    segments: vec![TextSegment::Text("Second block".to_string())],
+                },
+                ContentBlock::Paragraph {
+                    segments: vec![TextSegment::Text("Third block".to_string())],
+                },
+            ],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let first_id = doc_state.blocks[0].0;
+        let second_id = doc_state.blocks[1].0;
+        let third_id = doc_state.blocks[2].0;
+
+        // Initially no selection
+        assert_eq!(doc_state.selected_block(), None);
+
+        // Select next block (should select first)
+        doc_state.select_next_block();
+        assert_eq!(doc_state.selected_block(), Some(first_id));
+
+        // Select next block (should select second)
+        doc_state.select_next_block();
+        assert_eq!(doc_state.selected_block(), Some(second_id));
+
+        // Select next block (should select third)
+        doc_state.select_next_block();
+        assert_eq!(doc_state.selected_block(), Some(third_id));
+
+        // Select next block (should stay on third - at end)
+        doc_state.select_next_block();
+        assert_eq!(doc_state.selected_block(), Some(third_id));
+
+        // Select previous block (should select second)
+        doc_state.select_previous_block();
+        assert_eq!(doc_state.selected_block(), Some(second_id));
+
+        // Select previous block (should select first)
+        doc_state.select_previous_block();
+        assert_eq!(doc_state.selected_block(), Some(first_id));
+
+        // Select previous block (should stay on first - at beginning)
+        doc_state.select_previous_block();
+        assert_eq!(doc_state.selected_block(), Some(first_id));
+    }
+
+    #[test]
+    fn test_start_editing_selected() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Test content".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let block_id = doc_state.blocks[0].0;
+
+        // No selection, should not start editing
+        assert!(!doc_state.start_editing_selected());
+        assert!(doc_state.editing_block.is_none());
+
+        // Select the block
+        doc_state.select_block(block_id);
+        assert_eq!(doc_state.selected_block(), Some(block_id));
+
+        // Start editing selected block
+        assert!(doc_state.start_editing_selected());
+        assert!(doc_state.is_editing(block_id).is_some());
     }
 
     #[test]

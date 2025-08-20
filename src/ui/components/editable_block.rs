@@ -7,8 +7,10 @@ pub fn EditableBlock(
     block: ContentBlock,
     block_id: BlockId,
     editing_raw: Option<String>, // Some(raw) if this block is being edited
+    is_selected: bool,           // Whether this block is selected for navigation
     on_edit: Callback<BlockId>,
     on_save: Callback<(BlockId, String)>,
+    on_editing_end: Option<Callback<()>>, // Called when editing ends to restore document focus
     notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
@@ -17,6 +19,10 @@ pub fn EditableBlock(
 
         let save_content = move || {
             on_save.call((block_id, content.read().clone()));
+            // Request document focus after editing ends
+            if let Some(focus_callback) = on_editing_end {
+                focus_callback.call(());
+            }
         };
 
         rsx! {
@@ -47,9 +53,15 @@ pub fn EditableBlock(
             }
         }
     } else {
+        let block_class = if is_selected {
+            "editable-block selected"
+        } else {
+            "editable-block"
+        };
+
         rsx! {
             div {
-                class: "editable-block",
+                class: "{block_class}",
                 onclick: move |_| on_edit.call(block_id),
                 // Render the block normally using existing components
                 super::ContentBlockComponent {

@@ -359,13 +359,29 @@ hr {
 .editable-block {
     cursor: pointer;
     border-radius: 4px;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
     padding: 4px;
     margin: 2px 0;
 }
 
 .editable-block:hover {
     background-color: var(--base2);
+}
+
+.editable-block.selected {
+    border: 2px solid var(--blue);
+    outline: none;
+}
+
+/* Document container styles for keyboard focus */
+.document-container {
+    outline: none;
+}
+
+.document-container:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
 .block-editor {

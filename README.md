@@ -89,6 +89,10 @@ notes/
 - **↑ / ↓ / ← / →** - Navigate file tree (expand/collapse folders, select files)
 - **Enter** - Open selected file for editing
 
+#### Document Navigation
+- **↑ / ↓** - Navigate between blocks (when document has focus)
+- **Enter** - Start editing selected block
+
 #### Block Editing
 - **Click any block** - Start editing that block inline
 - **ESC** - Save changes and exit editing mode
