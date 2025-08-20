@@ -1,6 +1,63 @@
-use crate::models::{ContentBlock, Document};
+use crate::models::{BlockId, ContentBlock, Document, DocumentState};
 use dioxus::prelude::*;
 use std::path::PathBuf;
+
+#[component]
+pub fn EditableMainPanel(
+    file: PathBuf,
+    notes_path: PathBuf,
+    document_state: DocumentState,
+    on_file_select: Option<Callback<PathBuf>>,
+    on_save: Callback<DocumentState>,
+) -> Element {
+    let display_name = if let Ok(relative) = file.strip_prefix(&notes_path) {
+        relative.to_string_lossy().to_string()
+    } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
+        name.to_string()
+    } else {
+        "Selected File".to_string()
+    };
+
+    let edit_state = document_state.clone();
+    let handle_edit = Callback::new(move |block_id: BlockId| {
+        let mut new_state = edit_state.clone();
+        new_state.start_editing(block_id);
+        on_save.call(new_state);
+    });
+
+    let save_state = document_state.clone();
+    let handle_save = Callback::new(move |(block_id, content): (BlockId, String)| {
+        let mut new_state = save_state.clone();
+        new_state.finish_editing(block_id, content);
+        on_save.call(new_state);
+    });
+
+    rsx! {
+        h1 { "📝 {display_name}" }
+        hr {}
+        if !document_state.blocks.is_empty() {
+            div {
+                class: "document-content",
+                for (block_id, block) in &document_state.blocks {
+                    super::EditableBlock {
+                        block: block.clone(),
+                        block_id: *block_id,
+                        editing_raw: document_state.is_editing(*block_id).cloned(),
+                        on_edit: handle_edit,
+                        on_save: handle_save,
+                        notes_path: notes_path.clone(),
+                        on_file_select: on_file_select
+                    }
+                }
+            }
+        } else {
+            div {
+                class: "empty-document",
+                p { "This document appears to be empty." }
+            }
+        }
+    }
+}
 
 #[component]
 pub fn MainPanel(
@@ -37,7 +94,7 @@ pub fn MainPanel(
 }
 
 #[component]
-fn ContentBlockComponent(
+pub fn ContentBlockComponent(
     block: ContentBlock,
     notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,

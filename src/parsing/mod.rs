@@ -8,7 +8,7 @@ use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use std::path::PathBuf;
 
 /// Parse text content and extract wiki-links, returning segments
-fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
+pub fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
     let mut segments = Vec::new();
     let mut current_pos = 0;
 

@@ -1,4 +1,4 @@
-use crate::models::{Document, FileTree};
+use crate::models::{DocumentState, FileTree};
 use crate::{io, parsing};
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ pub fn App(notes_path: PathBuf) -> Element {
     });
 
     let mut selected_file = use_signal(|| None::<PathBuf>);
-    let mut current_document = use_signal(|| None::<Document>);
+    let mut current_document_state = use_signal(|| None::<DocumentState>);
 
     rsx! {
         style { {SOLARIZED_LIGHT_CSS} }
@@ -33,7 +33,8 @@ pub fn App(notes_path: PathBuf) -> Element {
                         match io::read_file(&file_path) {
                             Ok(content) => {
                                 let document = parsing::parse_markdown(&content, file_path.clone());
-                                *current_document.write() = Some(document);
+                                let document_state = DocumentState::from_document(document);
+                                *current_document_state.write() = Some(document_state);
                                 *selected_file.write() = Some(file_path);
                             }
                             Err(e) => {
@@ -48,23 +49,39 @@ pub fn App(notes_path: PathBuf) -> Element {
             }
             div {
                 class: "main-content",
-                if let (Some(file), Some(doc)) = (selected_file.read().as_ref(), current_document.read().as_ref()) {
-                    super::components::MainPanel {
+                if let (Some(file), Some(doc_state)) = (selected_file.read().as_ref(), current_document_state.read().as_ref()) {
+                    super::components::EditableMainPanel {
                         file: file.to_path_buf(),
                         notes_path: notes_path.clone(),
-                        document: doc.clone(),
+                        document_state: doc_state.clone(),
                         on_file_select: Some(Callback::new(move |file_path: PathBuf| {
                             match io::read_file(&file_path) {
                                 Ok(content) => {
                                     let document = parsing::parse_markdown(&content, file_path.clone());
-                                    *current_document.write() = Some(document);
+                                    let document_state = DocumentState::from_document(document);
+                                    *current_document_state.write() = Some(document_state);
                                     *selected_file.write() = Some(file_path);
                                 }
                                 Err(e) => {
                                     eprintln!("Error reading file {file_path:?}: {e}");
                                 }
                             }
-                        }))
+                        })),
+                        on_save: move |new_doc_state: DocumentState| {
+                            // Save to file
+                            let document = new_doc_state.to_document();
+                            let content = document.content.iter()
+                                .map(|block| block.to_markdown())
+                                .collect::<Vec<_>>()
+                                .join("\n\n");
+
+                            if let Err(e) = std::fs::write(&new_doc_state.path, &content) {
+                                eprintln!("Error writing file {:?}: {e}", new_doc_state.path);
+                            }
+
+                            // Update the state
+                            *current_document_state.write() = Some(new_doc_state);
+                        }
                     }
                 } else {
                     div {

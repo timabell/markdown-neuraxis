@@ -354,3 +354,30 @@ hr {
     border-bottom: 1px solid var(--cyan);
     background-color: var(--base3);
 }
+
+/* Editable block styles */
+.editable-block {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    padding: 4px;
+    margin: 2px 0;
+}
+
+.editable-block:hover {
+    background-color: var(--base2);
+}
+
+.block-editor {
+    width: 100%;
+    border: 2px solid var(--blue);
+    border-radius: 4px;
+    padding: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: inherit;
+    line-height: 1.6;
+    background-color: var(--base3);
+    color: var(--base01);
+    resize: vertical;
+    outline: none;
+}

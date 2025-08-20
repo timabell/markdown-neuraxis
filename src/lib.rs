@@ -7,7 +7,7 @@ pub mod ui;
 pub mod tests;
 
 // Re-export commonly used types
-pub use models::{ContentBlock, Document, ListItem};
+pub use models::{BlockId, ContentBlock, Document, DocumentState, ListItem};
 
 #[cfg(test)]
 mod unit_tests {
