@@ -25,6 +25,12 @@ pub fn EditableBlock(
                 value: content.read().clone(),
                 autofocus: true,
                 rows: content.read().lines().count().max(3),
+                onmounted: move |evt| {
+                    // Force focus when textarea is mounted
+                    spawn(async move {
+                        let _ = evt.set_focus(true).await;
+                    });
+                },
                 oninput: move |evt| {
                     content.set(evt.value());
                 },
