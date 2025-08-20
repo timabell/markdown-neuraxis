@@ -92,6 +92,7 @@ notes/
 #### Block Editing
 - **Click any block** - Start editing that block inline
 - **ESC** - Save changes and exit editing mode
+- **Ctrl+Enter** - Save changes and exit editing mode
 - **Click elsewhere** - Save changes and exit editing mode  
 
 #### Block Creation
