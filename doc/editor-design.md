@@ -28,18 +28,9 @@ The key insight from Logseq's approach is that **only one block is ever in edit 
 ```rust
 pub struct BlockId(usize); // Simple index-based for now
 
-pub enum EditState {
-    Rendered,
-    Editing {
-        raw_markdown: String,
-        cursor_position: usize,
-    }
-}
-
 pub struct DocumentState {
     blocks: Vec<(BlockId, ContentBlock)>,
-    edit_states: HashMap<BlockId, EditState>,
-    focused_block: Option<BlockId>,
+    editing_block: Option<(BlockId, String)>, // block_id and raw markdown
 }
 ```
 
@@ -84,14 +75,14 @@ fn parse_single_block(raw: &str) -> ContentBlock {
 fn EditableBlock(
     block: ContentBlock,
     block_id: BlockId,
-    is_editing: bool,
+    editing_raw: Option<String>, // Some(raw) if this block is being edited
     on_edit: Callback<BlockId>,
     on_save: Callback<(BlockId, String)>,
 ) -> Element {
-    if is_editing {
+    if let Some(raw) = editing_raw {
         rsx! {
             textarea {
-                value: block.to_markdown(),
+                value: raw,
                 autofocus: true,
                 onblur: move |evt| {
                     on_save.call((block_id, evt.value));
