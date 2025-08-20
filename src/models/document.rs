@@ -1,8 +1,21 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct BlockId(pub usize);
+pub struct BlockId(pub Uuid);
+
+impl BlockId {
+    pub fn new() -> Self {
+        BlockId(Uuid::new_v4())
+    }
+}
+
+impl Default for BlockId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentState {
@@ -118,6 +131,37 @@ impl ContentBlock {
         let segments = crate::parsing::parse_wiki_links(trimmed);
         Ok(ContentBlock::Paragraph { segments })
     }
+
+    /// Parse markdown content that may contain multiple blocks separated by double newlines
+    pub fn parse_multiple_blocks(markdown: &str) -> Vec<ContentBlock> {
+        if markdown.trim().is_empty() {
+            return vec![];
+        }
+
+        // Split on double newlines (handles \n\n, \r\n\r\n, etc.)
+        let chunks: Vec<&str> = markdown
+            .split("\n\n")
+            .map(|chunk| chunk.trim())
+            .filter(|chunk| !chunk.is_empty())
+            .collect();
+
+        if chunks.is_empty() {
+            return vec![];
+        }
+
+        // If there's only one chunk, use the original single-block parsing
+        if chunks.len() == 1 {
+            if let Ok(block) = ContentBlock::from_markdown(chunks[0]) {
+                return vec![block];
+            }
+        }
+
+        // Parse each chunk as a separate block
+        chunks
+            .into_iter()
+            .filter_map(|chunk| ContentBlock::from_markdown(chunk).ok())
+            .collect()
+    }
 }
 
 fn segments_to_markdown(segments: &[TextSegment]) -> String {
@@ -215,8 +259,7 @@ impl DocumentState {
         let blocks = document
             .content
             .into_iter()
-            .enumerate()
-            .map(|(i, block)| (BlockId(i), block))
+            .map(|block| (BlockId::new(), block))
             .collect();
 
         Self {
@@ -241,13 +284,32 @@ impl DocumentState {
         }
     }
 
-    pub fn finish_editing(&mut self, block_id: BlockId, new_content: String) {
+    pub fn finish_editing(&mut self, block_id: BlockId, new_content: String) -> Vec<BlockId> {
         if let Some(pos) = self.blocks.iter().position(|(id, _)| *id == block_id) {
-            if let Ok(new_block) = ContentBlock::from_markdown(&new_content) {
-                self.blocks[pos].1 = new_block;
+            let new_blocks = ContentBlock::parse_multiple_blocks(&new_content);
+
+            if !new_blocks.is_empty() {
+                // Remove the original block
+                self.blocks.remove(pos);
+
+                // Insert new blocks at the same position
+                let new_block_ids: Vec<BlockId> = new_blocks
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, block)| {
+                        let new_id = BlockId::new();
+                        self.blocks.insert(pos + i, (new_id, block));
+                        new_id
+                    })
+                    .collect();
+
+                self.editing_block = None;
+                return new_block_ids;
             }
         }
+
         self.editing_block = None;
+        vec![] // Return empty if no blocks were created
     }
 
     pub fn is_editing(&self, block_id: BlockId) -> Option<&String> {
@@ -257,6 +319,50 @@ impl DocumentState {
             } else {
                 None
             }
+        } else {
+            None
+        }
+    }
+
+    /// Insert a new block at the end of the document
+    pub fn insert_block_at_end(&mut self, new_block: ContentBlock) -> BlockId {
+        let block_id = BlockId::new();
+        self.blocks.push((block_id, new_block));
+        block_id
+    }
+
+    /// Insert a new block at the start of the document  
+    pub fn insert_block_at_start(&mut self, new_block: ContentBlock) -> BlockId {
+        let block_id = BlockId::new();
+        self.blocks.insert(0, (block_id, new_block));
+        block_id
+    }
+
+    /// Insert a new block after the specified block
+    pub fn insert_block_after(
+        &mut self,
+        after_id: BlockId,
+        new_block: ContentBlock,
+    ) -> Option<BlockId> {
+        if let Some(pos) = self.blocks.iter().position(|(id, _)| *id == after_id) {
+            let block_id = BlockId::new();
+            self.blocks.insert(pos + 1, (block_id, new_block));
+            Some(block_id)
+        } else {
+            None
+        }
+    }
+
+    /// Insert a new block before the specified block
+    pub fn insert_block_before(
+        &mut self,
+        before_id: BlockId,
+        new_block: ContentBlock,
+    ) -> Option<BlockId> {
+        if let Some(pos) = self.blocks.iter().position(|(id, _)| *id == before_id) {
+            let block_id = BlockId::new();
+            self.blocks.insert(pos, (block_id, new_block));
+            Some(block_id)
         } else {
             None
         }
@@ -331,5 +437,213 @@ mod tests {
         let markdown = original.to_markdown();
         let converted = ContentBlock::from_markdown(&markdown).unwrap();
         assert_eq!(original, converted);
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_single_paragraph() {
+        let markdown = "This is a single paragraph.";
+        let blocks = ContentBlock::parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 1);
+        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_split_paragraphs() {
+        let markdown = "First paragraph.\n\nSecond paragraph.";
+        let blocks = ContentBlock::parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 2);
+        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
+        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_mixed_content() {
+        let markdown = "# Heading\n\nThis is a paragraph.\n\n- List item";
+        let blocks = ContentBlock::parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 3);
+        assert!(matches!(blocks[0], ContentBlock::Heading { level: 1, .. }));
+        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
+        assert!(matches!(blocks[2], ContentBlock::BulletList { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_empty_input() {
+        let blocks = ContentBlock::parse_multiple_blocks("");
+        assert_eq!(blocks.len(), 0);
+    }
+
+    #[test]
+    fn test_document_state_block_splitting() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Original paragraph".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let block_id = doc_state.blocks[0].0;
+
+        // Edit to split the block
+        let new_block_ids =
+            doc_state.finish_editing(block_id, "First paragraph\n\nSecond paragraph".to_string());
+
+        // Should have created 2 new blocks
+        assert_eq!(new_block_ids.len(), 2);
+        assert_eq!(doc_state.blocks.len(), 2);
+        assert!(matches!(
+            doc_state.blocks[0].1,
+            ContentBlock::Paragraph { .. }
+        ));
+        assert!(matches!(
+            doc_state.blocks[1].1,
+            ContentBlock::Paragraph { .. }
+        ));
+    }
+
+    #[test]
+    fn test_document_state_insert_operations() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Middle paragraph".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let middle_id = doc_state.blocks[0].0;
+
+        // Insert at start
+        let start_id = doc_state.insert_block_at_start(ContentBlock::Paragraph {
+            segments: vec![TextSegment::Text("First paragraph".to_string())],
+        });
+
+        // Insert at end
+        let end_id = doc_state.insert_block_at_end(ContentBlock::Paragraph {
+            segments: vec![TextSegment::Text("Last paragraph".to_string())],
+        });
+
+        // Should now have 3 blocks in correct order
+        assert_eq!(doc_state.blocks.len(), 3);
+        assert_eq!(doc_state.blocks[0].0, start_id);
+        assert_eq!(doc_state.blocks[1].0, middle_id);
+        assert_eq!(doc_state.blocks[2].0, end_id);
+    }
+
+    #[test]
+    fn test_block_id_uuid_uniqueness() {
+        let id1 = BlockId::new();
+        let id2 = BlockId::new();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_block_splitting_creates_correct_blocks() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Original paragraph".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let original_block_id = doc_state.blocks[0].0;
+
+        // Start editing
+        doc_state.start_editing(original_block_id);
+
+        // Split the block
+        let new_block_ids = doc_state.finish_editing(
+            original_block_id,
+            "First paragraph\n\nSecond paragraph".to_string(),
+        );
+
+        // Should have created 2 new blocks
+        assert_eq!(new_block_ids.len(), 2);
+        assert_eq!(doc_state.blocks.len(), 2);
+
+        // Editing state should be cleared after splitting
+        assert!(doc_state.editing_block.is_none());
+        assert!(doc_state.is_editing(new_block_ids[0]).is_none());
+        assert!(doc_state.is_editing(new_block_ids[1]).is_none());
+
+        // First block should contain only the first part
+        let first_block_markdown = doc_state.blocks[0].1.to_markdown();
+        assert_eq!(first_block_markdown, "First paragraph");
+
+        // Second block should contain only the second part
+        let second_block_markdown = doc_state.blocks[1].1.to_markdown();
+        assert_eq!(second_block_markdown, "Second paragraph");
+    }
+
+    #[test]
+    fn test_bug_reproduction_split_while_editing() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Hello".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let original_block_id = doc_state.blocks[0].0;
+
+        // Start editing "Hello"
+        doc_state.start_editing(original_block_id);
+        assert_eq!(doc_state.is_editing(original_block_id).unwrap(), "Hello");
+
+        // User types "Hello\n\nWorld" and saves
+        let new_block_ids =
+            doc_state.finish_editing(original_block_id, "Hello\n\nWorld".to_string());
+
+        // Now we have 2 blocks
+        assert_eq!(new_block_ids.len(), 2);
+
+        // BUG CHECK: If user clicks on first block to edit again,
+        // what content should be shown in the textarea?
+        let first_block_id = new_block_ids[0];
+        doc_state.start_editing(first_block_id);
+
+        // This should be "Hello", not "Hello\n\nWorld"
+        let editing_content = doc_state.is_editing(first_block_id).unwrap();
+        assert_eq!(editing_content, "Hello");
+    }
+
+    #[test]
+    fn test_no_splitting_clears_edit_state() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Original paragraph".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let original_block_id = doc_state.blocks[0].0;
+
+        // Start editing
+        doc_state.start_editing(original_block_id);
+
+        // Edit without splitting (no double newlines)
+        let new_block_ids =
+            doc_state.finish_editing(original_block_id, "Modified paragraph".to_string());
+
+        // Should have only one block
+        assert_eq!(new_block_ids.len(), 1);
+        assert_eq!(doc_state.blocks.len(), 1);
+
+        // Should not be in edit mode anymore
+        assert!(doc_state.editing_block.is_none());
+        assert!(doc_state.is_editing(new_block_ids[0]).is_none());
     }
 }

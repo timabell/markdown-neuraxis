@@ -28,7 +28,8 @@ pub fn EditableMainPanel(
     let save_state = document_state.clone();
     let handle_save = Callback::new(move |(block_id, content): (BlockId, String)| {
         let mut new_state = save_state.clone();
-        new_state.finish_editing(block_id, content);
+        let _new_block_ids = new_state.finish_editing(block_id, content);
+        // TODO: Handle focus management for newly created blocks
         on_save.call(new_state);
     });
 
@@ -40,6 +41,13 @@ pub fn EditableMainPanel(
                 class: "document-content",
                 for (block_id, block) in &document_state.blocks {
                     super::EditableBlock {
+                        // Addition of the key forces component recreation when BlockId changes.
+                        // When blocks are split (1 -> N blocks), each gets a new UUID-based BlockId.
+                        // Without this key, Dioxus reuses components and editing signals retain stale content.
+                        // With this key, split blocks get fresh components with correct initial content.
+                        // NOTE: This is similar to React's key prop but Dioxus uses it for component identity,
+                        // ensuring use_signal() gets re-initialized with the correct block content.
+                        key: "{block_id:?}",
                         block: block.clone(),
                         block_id: *block_id,
                         editing_raw: document_state.is_editing(*block_id).cloned(),
