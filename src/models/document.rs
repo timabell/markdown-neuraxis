@@ -646,4 +646,40 @@ mod tests {
         assert!(doc_state.editing_block.is_none());
         assert!(doc_state.is_editing(new_block_ids[0]).is_none());
     }
+
+    #[test]
+    fn test_insert_block_at_end_workflow() {
+        use std::path::PathBuf;
+
+        let document = Document::with_content(
+            PathBuf::from("test.md"),
+            vec![ContentBlock::Paragraph {
+                segments: vec![TextSegment::Text("Existing paragraph".to_string())],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        assert_eq!(doc_state.blocks.len(), 1);
+
+        // Simulate adding a new block at end (like clicking the + button)
+        let new_block = ContentBlock::Paragraph {
+            segments: vec![TextSegment::Text("".to_string())],
+        };
+        let new_block_id = doc_state.insert_block_at_end(new_block);
+
+        // Should now have 2 blocks
+        assert_eq!(doc_state.blocks.len(), 2);
+
+        // Start editing the new empty block
+        doc_state.start_editing(new_block_id);
+        assert_eq!(doc_state.is_editing(new_block_id).unwrap(), "");
+
+        // User types content in the new block
+        let _new_blocks = doc_state.finish_editing(new_block_id, "New content here".to_string());
+
+        // Should still have 2 blocks with correct content
+        assert_eq!(doc_state.blocks.len(), 2);
+        assert_eq!(doc_state.blocks[0].1.to_markdown(), "Existing paragraph");
+        assert_eq!(doc_state.blocks[1].1.to_markdown(), "New content here");
+    }
 }

@@ -33,6 +33,18 @@ pub fn EditableMainPanel(
         on_save.call(new_state);
     });
 
+    let add_block_state = document_state.clone();
+    let handle_add_block = Callback::new(move |_| {
+        let mut new_state = add_block_state.clone();
+        // Add an empty paragraph at the end and start editing it
+        let new_block = crate::models::ContentBlock::Paragraph {
+            segments: vec![crate::models::TextSegment::Text("".to_string())],
+        };
+        let new_block_id = new_state.insert_block_at_end(new_block);
+        new_state.start_editing(new_block_id);
+        on_save.call(new_state);
+    });
+
     rsx! {
         h1 { "📝 {display_name}" }
         hr {}
@@ -57,11 +69,25 @@ pub fn EditableMainPanel(
                         on_file_select: on_file_select
                     }
                 }
+                // Add block button at the end of the document
+                div {
+                    class: "add-block-container",
+                    button {
+                        class: "add-block-button",
+                        onclick: handle_add_block,
+                        "+"
+                    }
+                }
             }
         } else {
             div {
                 class: "empty-document",
                 p { "This document appears to be empty." }
+                button {
+                    class: "add-block-button",
+                    onclick: handle_add_block,
+                    "Add first block +"
+                }
             }
         }
     }
