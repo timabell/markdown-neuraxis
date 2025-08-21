@@ -70,148 +70,6 @@ impl ContentBlock {
             ContentBlock::Rule => "---".to_string(),
         }
     }
-
-    pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
-        let trimmed = markdown.trim();
-
-        // Try to parse as heading
-        if trimmed.starts_with('#') {
-            let level_end = trimmed.chars().take_while(|c| *c == '#').count();
-            if level_end > 0 && level_end <= 6 {
-                let text = trimmed[level_end..].trim().to_string();
-                return Ok(ContentBlock::Heading {
-                    level: level_end as u8,
-                    text,
-                });
-            }
-        }
-
-        // Try to parse as code block
-        if trimmed.starts_with("```") {
-            let lines: Vec<&str> = trimmed.lines().collect();
-            if lines.len() >= 2 && lines.last() == Some(&"```") {
-                let first_line = lines[0];
-                let language = if first_line.len() > 3 {
-                    Some(first_line[3..].to_string())
-                } else {
-                    None
-                };
-                let code = lines[1..lines.len() - 1].join("\n");
-                return Ok(ContentBlock::CodeBlock { language, code });
-            }
-        }
-
-        // Try to parse as quote
-        if let Some(stripped) = trimmed.strip_prefix('>') {
-            let text = stripped.trim().to_string();
-            return Ok(ContentBlock::Quote(text));
-        }
-
-        // Try to parse as rule
-        if trimmed == "---" || trimmed == "***" {
-            return Ok(ContentBlock::Rule);
-        }
-
-        // Try to parse as list
-        if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-            // Parse multiple bullet points separated by newlines
-            let lines: Vec<&str> = trimmed.lines().collect();
-            let mut items = Vec::new();
-
-            for line in lines {
-                let line = line.trim();
-                if line.starts_with("- ") || line.starts_with("* ") {
-                    let content = line[2..].trim().to_string();
-                    let segments = crate::parsing::parse_wiki_links(&content);
-                    let item = if segments
-                        .iter()
-                        .any(|s| matches!(s, TextSegment::WikiLink { .. }))
-                    {
-                        ListItem::with_segments(content, segments, 0)
-                    } else {
-                        ListItem::new(content, 0)
-                    };
-                    items.push(item);
-                }
-            }
-
-            if !items.is_empty() {
-                return Ok(ContentBlock::BulletList { items });
-            }
-        }
-
-        // Try to parse as numbered list
-        if trimmed
-            .chars()
-            .next()
-            .map(|c| c.is_ascii_digit())
-            .unwrap_or(false)
-            && trimmed.contains(". ")
-        {
-            // Parse multiple numbered items separated by newlines
-            let lines: Vec<&str> = trimmed.lines().collect();
-            let mut items = Vec::new();
-
-            for line in lines {
-                let line = line.trim();
-                // Check if line starts with number followed by ". "
-                if let Some(dot_pos) = line.find(". ") {
-                    if line[..dot_pos].chars().all(|c| c.is_ascii_digit()) {
-                        let content = line[dot_pos + 2..].trim().to_string();
-                        let segments = crate::parsing::parse_wiki_links(&content);
-                        let item = if segments
-                            .iter()
-                            .any(|s| matches!(s, TextSegment::WikiLink { .. }))
-                        {
-                            ListItem::with_segments(content, segments, 0)
-                        } else {
-                            ListItem::new(content, 0)
-                        };
-                        items.push(item);
-                    }
-                }
-            }
-
-            if !items.is_empty() {
-                return Ok(ContentBlock::NumberedList { items });
-            }
-        }
-
-        // Default to paragraph
-        let segments = crate::parsing::parse_wiki_links(trimmed);
-        Ok(ContentBlock::Paragraph { segments })
-    }
-
-    /// Parse markdown content that may contain multiple blocks separated by double newlines
-    pub fn parse_multiple_blocks(markdown: &str) -> Vec<ContentBlock> {
-        if markdown.trim().is_empty() {
-            return vec![];
-        }
-
-        // Split on double newlines (handles \n\n, \r\n\r\n, etc.)
-        let chunks: Vec<&str> = markdown
-            .split("\n\n")
-            .map(|chunk| chunk.trim())
-            .filter(|chunk| !chunk.is_empty())
-            .collect();
-
-        if chunks.is_empty() {
-            return vec![];
-        }
-
-        // If there's only one chunk, use the original single-block parsing
-        if chunks.len() == 1 {
-            if let Ok(block) = ContentBlock::from_markdown(chunks[0]) {
-                return vec![block];
-            }
-        }
-
-        // Parse each chunk as a separate block
-        chunks
-            .into_iter()
-            .filter_map(|chunk| ContentBlock::from_markdown(chunk).ok())
-            .collect()
-    }
 }
 
 fn segments_to_markdown(segments: &[TextSegment]) -> String {
@@ -337,7 +195,7 @@ impl DocumentState {
 
     pub fn finish_editing(&mut self, block_id: BlockId, new_content: String) -> Vec<BlockId> {
         if let Some(pos) = self.blocks.iter().position(|(id, _)| *id == block_id) {
-            let new_blocks = ContentBlock::parse_multiple_blocks(&new_content);
+            let new_blocks = crate::parsing::parse_multiple_blocks(&new_content);
 
             if !new_blocks.is_empty() {
                 // Remove the original block
@@ -513,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_heading_from_markdown() {
-        let result = ContentBlock::from_markdown("### Test Heading").unwrap();
+        let result = crate::parsing::from_markdown("### Test Heading").unwrap();
         assert_eq!(
             result,
             ContentBlock::Heading {
@@ -525,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_paragraph_from_markdown() {
-        let result = ContentBlock::from_markdown("This is a [[wiki-link]] test.").unwrap();
+        let result = crate::parsing::from_markdown("This is a [[wiki-link]] test.").unwrap();
         if let ContentBlock::Paragraph { segments } = result {
             assert_eq!(segments.len(), 3);
             assert_eq!(segments[0], TextSegment::Text("This is a ".to_string()));
@@ -548,14 +406,14 @@ mod tests {
             text: "Main Title".to_string(),
         };
         let markdown = original.to_markdown();
-        let converted = ContentBlock::from_markdown(&markdown).unwrap();
+        let converted = crate::parsing::from_markdown(&markdown).unwrap();
         assert_eq!(original, converted);
     }
 
     #[test]
     fn test_parse_multiple_blocks_single_paragraph() {
         let markdown = "This is a single paragraph.";
-        let blocks = ContentBlock::parse_multiple_blocks(markdown);
+        let blocks = crate::parsing::parse_multiple_blocks(markdown);
         assert_eq!(blocks.len(), 1);
         assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
     }
@@ -563,7 +421,7 @@ mod tests {
     #[test]
     fn test_parse_multiple_blocks_split_paragraphs() {
         let markdown = "First paragraph.\n\nSecond paragraph.";
-        let blocks = ContentBlock::parse_multiple_blocks(markdown);
+        let blocks = crate::parsing::parse_multiple_blocks(markdown);
         assert_eq!(blocks.len(), 2);
         assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
         assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
@@ -572,7 +430,7 @@ mod tests {
     #[test]
     fn test_parse_multiple_blocks_mixed_content() {
         let markdown = "# Heading\n\nThis is a paragraph.\n\n- List item";
-        let blocks = ContentBlock::parse_multiple_blocks(markdown);
+        let blocks = crate::parsing::parse_multiple_blocks(markdown);
         assert_eq!(blocks.len(), 3);
         assert!(matches!(blocks[0], ContentBlock::Heading { level: 1, .. }));
         assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
@@ -581,7 +439,7 @@ mod tests {
 
     #[test]
     fn test_parse_multiple_blocks_empty_input() {
-        let blocks = ContentBlock::parse_multiple_blocks("");
+        let blocks = crate::parsing::parse_multiple_blocks("");
         assert_eq!(blocks.len(), 0);
     }
 
@@ -801,7 +659,7 @@ mod tests {
         // Test parsing numbered list that would happen when user types in the editor
         let markdown = "1. first item\n2. second item\n3. third item";
 
-        let result = ContentBlock::from_markdown(markdown).unwrap();
+        let result = crate::parsing::from_markdown(markdown).unwrap();
 
         if let ContentBlock::NumberedList { items } = result {
             assert_eq!(items.len(), 3);
@@ -818,8 +676,8 @@ mod tests {
         // Test parsing that would happen when user types a bullet list in the editor
         let markdown = "- bullet one\n- bullet two\n- bullet three";
 
-        // This simulates what happens when ContentBlock::from_markdown is called
-        let result = ContentBlock::from_markdown(markdown).unwrap();
+        // This simulates what happens when from_markdown is called
+        let result = crate::parsing::from_markdown(markdown).unwrap();
 
         if let ContentBlock::BulletList { items } = result {
             // Debug what we actually get

@@ -44,9 +44,7 @@ pub fn EditableBlock(
                     save_content();
                 },
                 onkeydown: move |evt| {
-                    if evt.key() == Key::Escape {
-                        save_content();
-                    } else if evt.key() == Key::Enter && evt.data().modifiers().ctrl() {
+                    if evt.key() == Key::Escape || (evt.key() == Key::Enter && evt.data().modifiers().ctrl()) {
                         save_content();
                     }
                 }

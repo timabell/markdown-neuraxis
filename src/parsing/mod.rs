@@ -437,6 +437,167 @@ impl ListParser {
     }
 }
 
+/// Parse a single markdown block from text.
+///
+/// This function attempts to parse a single block of markdown content,
+/// determining its type based on content patterns (headings, lists, code blocks, etc.).
+///
+/// # Arguments
+/// * `markdown` - Raw markdown text representing a single block
+///
+/// # Returns
+/// A `Result` containing the parsed `ContentBlock` or an error message
+pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
+    let trimmed = markdown.trim();
+
+    // Try to parse as heading
+    if trimmed.starts_with('#') {
+        let level_end = trimmed.chars().take_while(|c| *c == '#').count();
+        if level_end > 0 && level_end <= 6 {
+            let text = trimmed[level_end..].trim().to_string();
+            return Ok(ContentBlock::Heading {
+                level: level_end as u8,
+                text,
+            });
+        }
+    }
+
+    // Try to parse as code block
+    if trimmed.starts_with("```") {
+        let lines: Vec<&str> = trimmed.lines().collect();
+        if lines.len() >= 2 && lines.last() == Some(&"```") {
+            let first_line = lines[0];
+            let language = if first_line.len() > 3 {
+                Some(first_line[3..].to_string())
+            } else {
+                None
+            };
+            let code = lines[1..lines.len() - 1].join("\n");
+            return Ok(ContentBlock::CodeBlock { language, code });
+        }
+    }
+
+    // Try to parse as quote
+    if let Some(stripped) = trimmed.strip_prefix('>') {
+        let text = stripped.trim().to_string();
+        return Ok(ContentBlock::Quote(text));
+    }
+
+    // Try to parse as rule
+    if trimmed == "---" || trimmed == "***" {
+        return Ok(ContentBlock::Rule);
+    }
+
+    // Try to parse as list
+    if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+        // Parse multiple bullet points separated by newlines
+        let lines: Vec<&str> = trimmed.lines().collect();
+        let mut items = Vec::new();
+
+        for line in lines {
+            let line = line.trim();
+            if line.starts_with("- ") || line.starts_with("* ") {
+                let content = line[2..].trim().to_string();
+                let segments = parse_wiki_links(&content);
+                let item = if segments
+                    .iter()
+                    .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                {
+                    ListItem::with_segments(content, segments, 0)
+                } else {
+                    ListItem::new(content, 0)
+                };
+                items.push(item);
+            }
+        }
+
+        if !items.is_empty() {
+            return Ok(ContentBlock::BulletList { items });
+        }
+    }
+
+    // Try to parse as numbered list
+    if trimmed
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+        && trimmed.contains(". ")
+    {
+        // Parse multiple numbered items separated by newlines
+        let lines: Vec<&str> = trimmed.lines().collect();
+        let mut items = Vec::new();
+
+        for line in lines {
+            let line = line.trim();
+            // Check if line starts with number followed by ". "
+            if let Some(dot_pos) = line.find(". ") {
+                if line[..dot_pos].chars().all(|c| c.is_ascii_digit()) {
+                    let content = line[dot_pos + 2..].trim().to_string();
+                    let segments = parse_wiki_links(&content);
+                    let item = if segments
+                        .iter()
+                        .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                    {
+                        ListItem::with_segments(content, segments, 0)
+                    } else {
+                        ListItem::new(content, 0)
+                    };
+                    items.push(item);
+                }
+            }
+        }
+
+        if !items.is_empty() {
+            return Ok(ContentBlock::NumberedList { items });
+        }
+    }
+
+    // Default to paragraph
+    let segments = parse_wiki_links(trimmed);
+    Ok(ContentBlock::Paragraph { segments })
+}
+
+/// Parse markdown content that may contain multiple blocks separated by double newlines.
+///
+/// This function splits markdown content on double newlines and parses each chunk
+/// as a separate block. Empty chunks are filtered out.
+///
+/// # Arguments
+/// * `markdown` - Raw markdown text potentially containing multiple blocks
+///
+/// # Returns
+/// A vector of parsed `ContentBlock`s
+pub fn parse_multiple_blocks(markdown: &str) -> Vec<ContentBlock> {
+    if markdown.trim().is_empty() {
+        return vec![];
+    }
+
+    // Split on double newlines (handles \n\n, \r\n\r\n, etc.)
+    let chunks: Vec<&str> = markdown
+        .split("\n\n")
+        .map(|chunk| chunk.trim())
+        .filter(|chunk| !chunk.is_empty())
+        .collect();
+
+    if chunks.is_empty() {
+        return vec![];
+    }
+
+    // If there's only one chunk, use the original single-block parsing
+    if chunks.len() == 1 {
+        if let Ok(block) = from_markdown(chunks[0]) {
+            return vec![block];
+        }
+    }
+
+    // Parse each chunk as a separate block
+    chunks
+        .into_iter()
+        .filter_map(|chunk| from_markdown(chunk).ok())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
