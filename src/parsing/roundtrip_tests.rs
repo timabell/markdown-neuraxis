@@ -22,7 +22,7 @@ fn test_roundtrip_heading_levels() {
     for level in 1..=6 {
         let original = ContentBlock::Heading {
             level,
-            text: format!("Heading Level {}", level),
+            text: format!("Heading Level {level}"),
         };
         let markdown = original.to_markdown();
         let converted = from_markdown(&markdown).unwrap();

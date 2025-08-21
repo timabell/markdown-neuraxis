@@ -155,7 +155,8 @@ impl FileTree {
     /// Add a new file to the tree
     pub fn add_file(&mut self, file_path: &Path) {
         if let Ok(relative_path) = file_path.strip_prefix(&self.root.path) {
-            self.root.insert_file(relative_path, file_path.to_path_buf());
+            self.root
+                .insert_file(relative_path, file_path.to_path_buf());
         }
     }
 

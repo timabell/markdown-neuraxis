@@ -93,7 +93,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                             if let Some(parent) = new_doc_state.path.parent() {
                                 if !parent.exists() {
                                     if let Err(e) = std::fs::create_dir_all(parent) {
-                                        eprintln!("Error creating directory {:?}: {e}", parent);
+                                        eprintln!("Error creating directory {parent:?}: {e}");
                                         return;
                                     }
                                 }

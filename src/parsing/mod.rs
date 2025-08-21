@@ -677,7 +677,7 @@ mod tests {
             assert_eq!(items[1].content, "second item");
             assert_eq!(items[2].content, "third item");
         } else {
-            panic!("Expected numbered list, got: {:?}", result);
+            panic!("Expected numbered list, got: {result:?}");
         }
     }
 
@@ -696,7 +696,7 @@ mod tests {
             assert_eq!(items[1].content, "bullet two");
             assert_eq!(items[2].content, "bullet three");
         } else {
-            panic!("Expected bullet list, got: {:?}", result);
+            panic!("Expected bullet list, got: {result:?}");
         }
     }
 
