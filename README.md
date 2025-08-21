@@ -51,21 +51,6 @@ In this project, your **Markdown files** form that core. They represent everythi
 - A digital nervous system you **actually trust** and control
 - A way to integrate daily action with lifelong purpose
 
-## 🚧 Current Status
-
-This is the **early groundwork** stage. Nothing promised, but something is happening.
-
-The goal of the **first working MVP**:
-- Daily journal files in Markdown
-- Flat Markdown files *or* bullet-outline wiki notes
-- Folder support and hierarchy
-- Backlinking + page linking (`[[like this]]`)
-- Keyboard-first UX
-- Speed and clarity
-- Tabbed window views
-- Optional query syntax for dashboards (`lead-status:: contacted`, etc.)
-- Migration tool from Logseq (namespace → folder)
-
 ## 📖 Usage
 
 ### Running the Application
@@ -73,7 +58,7 @@ The goal of the **first working MVP**:
 cargo run <path-to-notes-folder>
 ```
 
-The application works with any folder containing markdown files. For optimal organization, we recommend this structure:
+The application works with any folder containing markdown files. However it is encouraged to follow the following layout:
 ```
 notes/
 ├── journal/          # Daily journal files (YYYY_MM_DD.md)  
@@ -84,6 +69,8 @@ notes/
 ├── 4_Archive/       # Completed/inactive items
 └── assets/          # Images and other media
 ```
+
+The parent folder can be called anything you like, it doesn't have to be 'notes/'
 
 ### Keyboard Shortcuts
 
@@ -118,10 +105,10 @@ The editor uses a Logseq-style block-based editing system:
 All existing tools either:
 
 - Sacrifice local control (SaaS lock-in)
+- Are not FOSS
+- Do not treat the plain text markdown files as the primary source of truth
 - Slow down (Electron bloat)
 - Miss the glue between **task**, **note**, **project**, and **life purpose**
-
-Logseq is very good and incredibly complete, but moving to database-first and away from its roots as a markdown-first tool.
 
 ## Get involved, show your support
 
