@@ -1,4 +1,4 @@
-use crate::models::{DocumentState, FileTree};
+use crate::models::{ContentBlock, Document, DocumentState, FileTree};
 use crate::{io, parsing};
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -62,8 +62,19 @@ pub fn App(notes_path: PathBuf) -> Element {
                                     *current_document_state.write() = Some(document_state);
                                     *selected_file.write() = Some(file_path);
                                 }
-                                Err(e) => {
-                                    eprintln!("Error reading file {file_path:?}: {e}");
+                                Err(_) => {
+                                    // File doesn't exist - create a blank document with an empty paragraph
+                                    let mut document = Document::new(file_path.clone());
+                                    document.content.push(ContentBlock::Paragraph {
+                                        segments: vec![crate::models::TextSegment::Text("".to_string())]
+                                    });
+                                    let mut document_state = DocumentState::from_document(document);
+                                    // Automatically start editing the first block
+                                    if let Some((block_id, _)) = document_state.blocks.first() {
+                                        document_state.start_editing(*block_id);
+                                    }
+                                    *current_document_state.write() = Some(document_state);
+                                    *selected_file.write() = Some(file_path);
                                 }
                             }
                         })),
@@ -75,8 +86,24 @@ pub fn App(notes_path: PathBuf) -> Element {
                                 .collect::<Vec<_>>()
                                 .join("\n\n");
 
+                            // Check if this is a new file
+                            let is_new_file = !new_doc_state.path.exists();
+
+                            // Create parent directory if it doesn't exist
+                            if let Some(parent) = new_doc_state.path.parent() {
+                                if !parent.exists() {
+                                    if let Err(e) = std::fs::create_dir_all(parent) {
+                                        eprintln!("Error creating directory {:?}: {e}", parent);
+                                        return;
+                                    }
+                                }
+                            }
+
                             if let Err(e) = std::fs::write(&new_doc_state.path, &content) {
                                 eprintln!("Error writing file {:?}: {e}", new_doc_state.path);
+                            } else if is_new_file {
+                                // Add the new file to the file tree
+                                file_tree.write().add_file(&new_doc_state.path);
                             }
 
                             // Update the state

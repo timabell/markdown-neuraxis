@@ -152,6 +152,13 @@ impl FileTree {
         self.root.toggle_expanded(path);
     }
 
+    /// Add a new file to the tree
+    pub fn add_file(&mut self, file_path: &Path) {
+        if let Ok(relative_path) = file_path.strip_prefix(&self.root.path) {
+            self.root.insert_file(relative_path, file_path.to_path_buf());
+        }
+    }
+
     pub fn get_items(&self) -> Vec<FileTreeItem> {
         // Return only children of root, not the root itself
         let mut items = Vec::new();
