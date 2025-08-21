@@ -179,6 +179,7 @@ pub fn TextSegmentComponent(
                     "data-target": "{target}",
                     onclick: move |evt| {
                         evt.prevent_default();
+                        evt.stop_propagation(); // Stop the event from bubbling up to the editable block
                         if let Some(callback) = on_file_select {
                             if let Some(file_path) = resolve_wiki_link(&target, &notes_path) {
                                 callback.call(file_path);

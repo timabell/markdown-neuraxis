@@ -347,12 +347,17 @@ hr {
     text-decoration: none;
     cursor: pointer;
     border-bottom: 1px dotted var(--blue);
+    position: relative;
+    z-index: 10; /* Ensure wiki links are above the editable block click area */
 }
 
 .wiki-link:hover {
     color: var(--cyan);
     border-bottom: 1px solid var(--cyan);
     background-color: var(--base3);
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 2px;
 }
 
 /* Editable block styles */
