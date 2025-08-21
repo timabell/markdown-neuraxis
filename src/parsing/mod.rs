@@ -118,14 +118,6 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
 /// **Key insight**: Nested lists appear INSIDE their parent item, between the parent's
 /// text content and the parent's `End(Item)` event.
 ///
-/// ## Complex Nested Example
-/// ```markdown
-/// - Item 1
-///   - Item 1.1
-///     - Item 1.1.1
-///   - Item 1.2
-/// - Item 2
-/// ```
 /// The events follow the same pattern, with each nested list appearing inside its
 /// parent item. The processor uses two stacks to track this state:
 /// - `list_stack`: Tracks list contexts and their items
@@ -165,6 +157,14 @@ impl MarkdownProcessor {
     /// Process a single markdown event
     fn process_event(&mut self, event: Event) {
         match event {
+            Event::Start(Tag::Paragraph) => {
+                // New paragraph - flush any existing one
+                self.flush_paragraph();
+            }
+            Event::End(TagEnd::Paragraph) => {
+                // End paragraph - flush it
+                self.flush_paragraph();
+            }
             Event::Start(Tag::Heading { level: _, .. }) => {
                 self.flush_paragraph();
             }
@@ -262,13 +262,24 @@ impl MarkdownProcessor {
                     self.current_text.push_str(&code_text);
                 }
             }
-            Event::SoftBreak | Event::HardBreak => {
+            Event::SoftBreak => {
+                // Soft breaks (regular newlines) are rendered as spaces in HTML
                 if self.in_code_block {
                     self.code_content.push('\n');
                 } else if self.list_parser.is_in_item() {
-                    self.list_parser.add_text("\n");
+                    self.list_parser.add_text(" ");
                 } else {
-                    self.current_text.push('\n');
+                    self.current_text.push(' ');
+                }
+            }
+            Event::HardBreak => {
+                // Hard breaks (trailing spaces + newline) - preserve the original pattern
+                if self.in_code_block {
+                    self.code_content.push('\n');
+                } else if self.list_parser.is_in_item() {
+                    self.list_parser.add_text("  \n");
+                } else {
+                    self.current_text.push_str("  \n");
                 }
             }
             _ => {}
@@ -418,9 +429,276 @@ impl ListParser {
     }
 }
 
+/// Parse a single markdown block from text.
+///
+/// This function attempts to parse a single block of markdown content,
+/// determining its type based on content patterns (headings, lists, code blocks, etc.).
+///
+/// # Arguments
+/// * `markdown` - Raw markdown text representing a single block
+///
+/// # Returns
+/// A `Result` containing the parsed `ContentBlock` or an error message
+pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
+    let trimmed = markdown.trim();
+
+    // Try to parse as heading
+    if trimmed.starts_with('#') {
+        let level_end = trimmed.chars().take_while(|c| *c == '#').count();
+        if level_end > 0 && level_end <= 6 {
+            let text = trimmed[level_end..].trim().to_string();
+            return Ok(ContentBlock::Heading {
+                level: level_end as u8,
+                text,
+            });
+        }
+    }
+
+    // Try to parse as code block
+    if trimmed.starts_with("```") {
+        let lines: Vec<&str> = trimmed.lines().collect();
+        if lines.len() >= 2 && lines.last() == Some(&"```") {
+            let first_line = lines[0];
+            let language = if first_line.len() > 3 {
+                Some(first_line[3..].to_string())
+            } else {
+                None
+            };
+            let code = lines[1..lines.len() - 1].join("\n");
+            return Ok(ContentBlock::CodeBlock { language, code });
+        }
+    }
+
+    // Try to parse as quote
+    if let Some(stripped) = trimmed.strip_prefix('>') {
+        let text = stripped.trim().to_string();
+        return Ok(ContentBlock::Quote(text));
+    }
+
+    // Try to parse as rule
+    if trimmed == "---" || trimmed == "***" {
+        return Ok(ContentBlock::Rule);
+    }
+
+    // Try to parse as list
+    if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+        // Parse multiple bullet points separated by newlines
+        let lines: Vec<&str> = trimmed.lines().collect();
+        let mut items = Vec::new();
+
+        for line in lines {
+            let line = line.trim();
+            if line.starts_with("- ") || line.starts_with("* ") {
+                let content = line[2..].trim().to_string();
+                let segments = parse_wiki_links(&content);
+                let item = if segments
+                    .iter()
+                    .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                {
+                    ListItem::with_segments(content, segments, 0)
+                } else {
+                    ListItem::new(content, 0)
+                };
+                items.push(item);
+            }
+        }
+
+        if !items.is_empty() {
+            return Ok(ContentBlock::BulletList { items });
+        }
+    }
+
+    // Try to parse as numbered list
+    if trimmed
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+        && trimmed.contains(". ")
+    {
+        // Parse multiple numbered items separated by newlines
+        let lines: Vec<&str> = trimmed.lines().collect();
+        let mut items = Vec::new();
+
+        for line in lines {
+            let line = line.trim();
+            // Check if line starts with number followed by ". "
+            if let Some(dot_pos) = line.find(". ") {
+                if line[..dot_pos].chars().all(|c| c.is_ascii_digit()) {
+                    let content = line[dot_pos + 2..].trim().to_string();
+                    let segments = parse_wiki_links(&content);
+                    let item = if segments
+                        .iter()
+                        .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                    {
+                        ListItem::with_segments(content, segments, 0)
+                    } else {
+                        ListItem::new(content, 0)
+                    };
+                    items.push(item);
+                }
+            }
+        }
+
+        if !items.is_empty() {
+            return Ok(ContentBlock::NumberedList { items });
+        }
+    }
+
+    // Default to paragraph
+    let segments = parse_wiki_links(trimmed);
+    Ok(ContentBlock::Paragraph { segments })
+}
+
+/// Parse markdown content that may contain multiple blocks separated by double newlines.
+///
+/// This function splits markdown content on double newlines and parses each chunk
+/// as a separate block. Empty chunks are filtered out.
+///
+/// # Arguments
+/// * `markdown` - Raw markdown text potentially containing multiple blocks
+///
+/// # Returns
+/// A vector of parsed `ContentBlock`s
+pub fn parse_multiple_blocks(markdown: &str) -> Vec<ContentBlock> {
+    if markdown.trim().is_empty() {
+        return vec![];
+    }
+
+    // Split on double newlines (handles \n\n, \r\n\r\n, etc.)
+    let chunks: Vec<&str> = markdown
+        .split("\n\n")
+        .map(|chunk| chunk.trim())
+        .filter(|chunk| !chunk.is_empty())
+        .collect();
+
+    if chunks.is_empty() {
+        return vec![];
+    }
+
+    // If there's only one chunk, use the original single-block parsing
+    if chunks.len() == 1 {
+        if let Ok(block) = from_markdown(chunks[0]) {
+            return vec![block];
+        }
+    }
+
+    // Parse each chunk as a separate block
+    chunks
+        .into_iter()
+        .filter_map(|chunk| from_markdown(chunk).ok())
+        .collect()
+}
+
+#[cfg(test)]
+mod roundtrip_tests;
+
+#[cfg(test)]
+mod snapshot_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{ContentBlock, TextSegment};
+
+    #[test]
+    fn test_heading_from_markdown() {
+        let result = from_markdown("### Test Heading").unwrap();
+        assert_eq!(
+            result,
+            ContentBlock::Heading {
+                level: 3,
+                text: "Test Heading".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_paragraph_from_markdown() {
+        let result = from_markdown("This is a [[wiki-link]] test.").unwrap();
+        if let ContentBlock::Paragraph { segments } = result {
+            assert_eq!(segments.len(), 3);
+            assert_eq!(segments[0], TextSegment::Text("This is a ".to_string()));
+            assert_eq!(
+                segments[1],
+                TextSegment::WikiLink {
+                    target: "wiki-link".to_string(),
+                }
+            );
+            assert_eq!(segments[2], TextSegment::Text(" test.".to_string()));
+        } else {
+            panic!("Expected paragraph");
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_single_paragraph() {
+        let markdown = "This is a single paragraph.";
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 1);
+        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_split_paragraphs() {
+        let markdown = "First paragraph.\n\nSecond paragraph.";
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 2);
+        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
+        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_mixed_content() {
+        let markdown = "# Heading\n\nThis is a paragraph.\n\n- List item";
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 3);
+        assert!(matches!(blocks[0], ContentBlock::Heading { level: 1, .. }));
+        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
+        assert!(matches!(blocks[2], ContentBlock::BulletList { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_empty_input() {
+        let blocks = parse_multiple_blocks("");
+        assert_eq!(blocks.len(), 0);
+    }
+
+    #[test]
+    fn test_numbered_list_parsing_from_editor() {
+        // Test parsing numbered list that would happen when user types in the editor
+        let markdown = "1. first item\n2. second item\n3. third item";
+
+        let result = from_markdown(markdown).unwrap();
+
+        if let ContentBlock::NumberedList { items } = result {
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "first item");
+            assert_eq!(items[1].content, "second item");
+            assert_eq!(items[2].content, "third item");
+        } else {
+            panic!("Expected numbered list, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_bullet_list_parsing_from_editor() {
+        // Test parsing that would happen when user types a bullet list in the editor
+        let markdown = "- bullet one\n- bullet two\n- bullet three";
+
+        // This simulates what happens when from_markdown is called
+        let result = from_markdown(markdown).unwrap();
+
+        if let ContentBlock::BulletList { items } = result {
+            // Should have 3 separate items
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "bullet one");
+            assert_eq!(items[1].content, "bullet two");
+            assert_eq!(items[2].content, "bullet three");
+        } else {
+            panic!("Expected bullet list, got: {:?}", result);
+        }
+    }
 
     #[test]
     fn test_parse_simple_list() {
@@ -655,6 +933,116 @@ mod tests {
             }
         } else {
             panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_soft_breaks_vs_hard_breaks() {
+        // Test soft break (regular newline without trailing spaces)
+        let soft_break_content = "First line\nSecond line in same paragraph";
+        let soft_doc = parse_markdown(soft_break_content, PathBuf::from("/test.md"));
+
+        // Test hard break (trailing spaces + newline)
+        let hard_break_content = "First line  \nSecond line in same paragraph";
+        let hard_doc = parse_markdown(hard_break_content, PathBuf::from("/test.md"));
+
+        // Both should produce 1 paragraph
+        assert_eq!(soft_doc.content.len(), 1);
+        assert_eq!(hard_doc.content.len(), 1);
+
+        // Check soft break behavior - should have space instead of newline
+        if let ContentBlock::Paragraph {
+            segments: soft_segments,
+        } = &soft_doc.content[0]
+        {
+            if let TextSegment::Text(soft_text) = &soft_segments[0] {
+                assert_eq!(soft_text, "First line Second line in same paragraph");
+                assert!(!soft_text.contains("  \n"));
+            } else {
+                panic!("Expected text segment for soft break");
+            }
+        } else {
+            panic!("Expected paragraph for soft break");
+        }
+
+        // Check hard break behavior - should have original pattern preserved
+        if let ContentBlock::Paragraph {
+            segments: hard_segments,
+        } = &hard_doc.content[0]
+        {
+            if let TextSegment::Text(hard_text) = &hard_segments[0] {
+                assert!(hard_text.contains("  \n"));
+                assert_eq!(hard_text, "First line  \nSecond line in same paragraph");
+            } else {
+                panic!("Expected text segment for hard break");
+            }
+        } else {
+            panic!("Expected paragraph for hard break");
+        }
+    }
+
+    #[test]
+    fn test_bullet_list_with_soft_breaks() {
+        // Test bullet list where items are separated by single newlines (soft breaks)
+        let content = "- bullet one\n- bullet two\n- bullet three";
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        // Should have 1 bullet list block
+        assert_eq!(doc.content.len(), 1);
+
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            // Should have 3 separate items, not combined
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "bullet one");
+            assert_eq!(items[1].content, "bullet two");
+            assert_eq!(items[2].content, "bullet three");
+        } else {
+            panic!("Expected bullet list block");
+        }
+    }
+
+    #[test]
+    fn test_consecutive_paragraphs_are_separate_blocks() {
+        let content = "First paragraph content here.\n\nSecond paragraph content here.\n\nThird paragraph content here.";
+        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+
+        // Should have 3 separate paragraph blocks
+        assert_eq!(doc.content.len(), 3);
+
+        // All should be paragraphs
+        assert!(matches!(doc.content[0], ContentBlock::Paragraph { .. }));
+        assert!(matches!(doc.content[1], ContentBlock::Paragraph { .. }));
+        assert!(matches!(doc.content[2], ContentBlock::Paragraph { .. }));
+
+        // Check content
+        if let ContentBlock::Paragraph { segments } = &doc.content[0] {
+            if let TextSegment::Text(text) = &segments[0] {
+                assert_eq!(text, "First paragraph content here.");
+            } else {
+                panic!("Expected first segment to be text");
+            }
+        } else {
+            panic!("Expected first block to be paragraph");
+        }
+
+        if let ContentBlock::Paragraph { segments } = &doc.content[1] {
+            if let TextSegment::Text(text) = &segments[0] {
+                assert_eq!(text, "Second paragraph content here.");
+            } else {
+                panic!("Expected first segment to be text");
+            }
+        } else {
+            panic!("Expected second block to be paragraph");
+        }
+
+        if let ContentBlock::Paragraph { segments } = &doc.content[2] {
+            if let TextSegment::Text(text) = &segments[0] {
+                assert_eq!(text, "Third paragraph content here.");
+            } else {
+                panic!("Expected first segment to be text");
+            }
+        } else {
+            panic!("Expected third block to be paragraph");
         }
     }
 

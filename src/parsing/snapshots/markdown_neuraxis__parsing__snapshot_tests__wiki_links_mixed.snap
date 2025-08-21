@@ -1,5 +1,5 @@
 ---
-source: src/lib.rs
+source: src/parsing/snapshot_tests.rs
 expression: doc.content
 ---
 - Heading:

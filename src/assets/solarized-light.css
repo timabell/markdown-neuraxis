@@ -347,10 +347,94 @@ hr {
     text-decoration: none;
     cursor: pointer;
     border-bottom: 1px dotted var(--blue);
+    position: relative;
+    z-index: 10; /* Ensure wiki links are above the editable block click area */
 }
 
 .wiki-link:hover {
     color: var(--cyan);
     border-bottom: 1px solid var(--cyan);
     background-color: var(--base3);
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 2px;
+}
+
+/* Editable block styles */
+.editable-block {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    padding: 4px;
+    margin: 2px 0;
+}
+
+.editable-block:hover {
+    background-color: var(--base2);
+}
+
+.editable-block.selected {
+    border: 2px solid var(--blue);
+    outline: none;
+}
+
+/* Document container styles for keyboard focus */
+.document-container {
+    outline: none;
+}
+
+.document-container:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.block-editor {
+    width: 100%;
+    border: 2px solid var(--blue);
+    border-radius: 4px;
+    padding: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: inherit;
+    line-height: 1.6;
+    background-color: var(--base3);
+    color: var(--base01);
+    resize: vertical;
+    outline: none;
+}
+
+/* Add block button styling */
+.add-block-container {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.add-block-button {
+    background-color: var(--base2);
+    border: 2px dashed var(--base1);
+    border-radius: 8px;
+    padding: 12px 20px;
+    color: var(--base01);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 60px;
+}
+
+.add-block-button:hover {
+    background-color: var(--base3);
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+.add-block-button:active {
+    transform: translateY(1px);
+}
+
+.empty-document .add-block-button {
+    margin-top: 16px;
+    padding: 16px 24px;
+    font-size: 18px;
 }

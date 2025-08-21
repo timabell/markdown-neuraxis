@@ -70,7 +70,6 @@ fn scan_directory_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), 
     Ok(())
 }
 
-/// Validate that a directory has the expected notes structure
 pub fn validate_notes_dir(path: &Path) -> Result<(), IoError> {
     if !path.exists() || !path.is_dir() {
         return Err(IoError::InvalidNotesDir(
@@ -79,4 +78,102 @@ pub fn validate_notes_dir(path: &Path) -> Result<(), IoError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::{create_test_file, create_test_notes_dir};
+
+    #[test]
+    fn test_scan_and_load_files() {
+        // Given a notes directory with markdown files
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "test1.md", "- First item\n- Second item");
+        create_test_file(&notes_dir, "test2.md", "- Parent\n  - Child");
+
+        // When scanning for files
+        let files = scan_markdown_files(notes_dir.path()).unwrap();
+
+        // Then we find the expected files
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|f| f.file_name().unwrap() == "test1.md"));
+        assert!(files.iter().any(|f| f.file_name().unwrap() == "test2.md"));
+    }
+
+    #[test]
+    fn test_handle_invalid_notes_directory() {
+        let nonexistent_path = PathBuf::from("/this/path/does/not/exist");
+
+        let result = scan_markdown_files(&nonexistent_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("notes directory"));
+    }
+
+    #[test]
+    fn test_scan_nested_directories() {
+        // Given a notes directory with nested structure
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "root.md", "# Root file");
+
+        // Create nested directory structure
+        let sub_dir = notes_dir.path().join("subfolder");
+        std::fs::create_dir(&sub_dir).unwrap();
+        let nested_file = sub_dir.join("nested.md");
+        std::fs::write(&nested_file, "# Nested file").unwrap();
+
+        // When scanning for files
+        let files = scan_markdown_files(notes_dir.path()).unwrap();
+
+        // Then we find both root and nested files
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|f| f.file_name().unwrap() == "root.md"));
+        assert!(files.iter().any(|f| f.file_name().unwrap() == "nested.md"));
+    }
+
+    #[test]
+    fn test_ignore_non_markdown_files() {
+        // Given a notes directory with mixed file types
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "document.md", "# Markdown");
+        create_test_file(&notes_dir, "image.png", "fake image data");
+        create_test_file(&notes_dir, "config.json", "{}");
+
+        // When scanning for files
+        let files = scan_markdown_files(notes_dir.path()).unwrap();
+
+        // Then we only find markdown files
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].file_name().unwrap(), "document.md");
+    }
+
+    #[test]
+    fn test_validate_notes_dir_exists() {
+        let notes_dir = create_test_notes_dir();
+        let result = validate_notes_dir(notes_dir.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_notes_dir_not_exists() {
+        let result = validate_notes_dir(Path::new("/nonexistent/path"));
+        assert!(result.is_err());
+        assert!(matches!(result, Err(IoError::InvalidNotesDir(_))));
+    }
+
+    #[test]
+    fn test_read_file_success() {
+        let notes_dir = create_test_notes_dir();
+        let file_path = create_test_file(&notes_dir, "test.md", "# Test Content\n\nParagraph");
+
+        let content = read_file(&file_path).unwrap();
+        assert_eq!(content, "# Test Content\n\nParagraph");
+    }
+
+    #[test]
+    fn test_read_file_not_found() {
+        let result = read_file(Path::new("/nonexistent/file.md"));
+        assert!(result.is_err());
+        assert!(matches!(result, Err(IoError::NotFound(_))));
+    }
 }

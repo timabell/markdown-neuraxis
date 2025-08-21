@@ -2,25 +2,18 @@ use crate::models::{ContentBlock, ListItem, TextSegment};
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 
-/// Resolve a wiki-link target to an actual file path
-fn resolve_wiki_link(target: &str, notes_path: &Path) -> Option<PathBuf> {
+/// Resolve a wiki-link target to a file path (may or may not exist)
+fn resolve_wiki_link(target: &str, notes_path: &Path) -> PathBuf {
     // Handle different wiki-link formats:
     // 1. Simple page name: "Getting-Started" -> Getting-Started.md
     // 2. Path with folders: "1_Projects/Project-Alpha" -> 1_Projects/Project-Alpha.md
     // 3. Path ending with .md: "some/page.md" -> some/page.md
     // 4. Journal entries: "journal/2024-01-15" -> journal/2024-01-15.md
 
-    let target_path = if target.ends_with(".md") {
+    if target.ends_with(".md") {
         notes_path.join(target)
     } else {
         notes_path.join(format!("{target}.md"))
-    };
-
-    // Check if the file exists
-    if target_path.exists() && target_path.is_file() {
-        Some(target_path)
-    } else {
-        None
     }
 }
 
@@ -152,7 +145,25 @@ pub fn TextSegmentComponent(
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     match segment {
-        TextSegment::Text(text) => rsx! { "{text}" },
+        TextSegment::Text(text) => {
+            // Handle hard breaks (trailing spaces + newline from markdown)
+            if text.contains("  \n") {
+                // Split on the original pattern and render with <br> tags
+                let parts: Vec<&str> = text.split("  \n").collect();
+                rsx! {
+                    span {
+                        for (i, part) in parts.iter().enumerate() {
+                            "{part}"
+                            if i < parts.len() - 1 {
+                                br {}
+                            }
+                        }
+                    }
+                }
+            } else {
+                rsx! { "{text}" }
+            }
+        }
         TextSegment::WikiLink { target } => {
             rsx! {
                 a {
@@ -161,12 +172,10 @@ pub fn TextSegmentComponent(
                     "data-target": "{target}",
                     onclick: move |evt| {
                         evt.prevent_default();
+                        evt.stop_propagation(); // Stop the event from bubbling up to the editable block
                         if let Some(callback) = on_file_select {
-                            if let Some(file_path) = resolve_wiki_link(&target, &notes_path) {
-                                callback.call(file_path);
-                            } else {
-                                println!("Could not resolve wiki-link: {target}");
-                            }
+                            let file_path = resolve_wiki_link(&target, &notes_path);
+                            callback.call(file_path);
                         }
                     },
                     "{target}"
