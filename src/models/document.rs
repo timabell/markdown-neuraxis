@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
 
+// BlockId is an ephemeral unique identifier so that the UI can keep track of blocks in a markdown file as they move around during editing
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BlockId(pub Uuid);
 
@@ -25,6 +26,7 @@ pub struct DocumentState {
     pub selected_block: Option<BlockId>,          // currently selected block for navigation
 }
 
+// one piece of a longer markdown document, documents are divided up into blocks such as headings, lists, paragraphs etc to allow them to be selected and edited individually
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ContentBlock {
     Heading {
@@ -370,80 +372,6 @@ mod tests {
     }
 
     #[test]
-    fn test_heading_from_markdown() {
-        let result = crate::parsing::from_markdown("### Test Heading").unwrap();
-        assert_eq!(
-            result,
-            ContentBlock::Heading {
-                level: 3,
-                text: "Test Heading".to_string()
-            }
-        );
-    }
-
-    #[test]
-    fn test_paragraph_from_markdown() {
-        let result = crate::parsing::from_markdown("This is a [[wiki-link]] test.").unwrap();
-        if let ContentBlock::Paragraph { segments } = result {
-            assert_eq!(segments.len(), 3);
-            assert_eq!(segments[0], TextSegment::Text("This is a ".to_string()));
-            assert_eq!(
-                segments[1],
-                TextSegment::WikiLink {
-                    target: "wiki-link".to_string(),
-                }
-            );
-            assert_eq!(segments[2], TextSegment::Text(" test.".to_string()));
-        } else {
-            panic!("Expected paragraph");
-        }
-    }
-
-    #[test]
-    fn test_roundtrip_conversion() {
-        let original = ContentBlock::Heading {
-            level: 1,
-            text: "Main Title".to_string(),
-        };
-        let markdown = original.to_markdown();
-        let converted = crate::parsing::from_markdown(&markdown).unwrap();
-        assert_eq!(original, converted);
-    }
-
-    #[test]
-    fn test_parse_multiple_blocks_single_paragraph() {
-        let markdown = "This is a single paragraph.";
-        let blocks = crate::parsing::parse_multiple_blocks(markdown);
-        assert_eq!(blocks.len(), 1);
-        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
-    }
-
-    #[test]
-    fn test_parse_multiple_blocks_split_paragraphs() {
-        let markdown = "First paragraph.\n\nSecond paragraph.";
-        let blocks = crate::parsing::parse_multiple_blocks(markdown);
-        assert_eq!(blocks.len(), 2);
-        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
-        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
-    }
-
-    #[test]
-    fn test_parse_multiple_blocks_mixed_content() {
-        let markdown = "# Heading\n\nThis is a paragraph.\n\n- List item";
-        let blocks = crate::parsing::parse_multiple_blocks(markdown);
-        assert_eq!(blocks.len(), 3);
-        assert!(matches!(blocks[0], ContentBlock::Heading { level: 1, .. }));
-        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
-        assert!(matches!(blocks[2], ContentBlock::BulletList { .. }));
-    }
-
-    #[test]
-    fn test_parse_multiple_blocks_empty_input() {
-        let blocks = crate::parsing::parse_multiple_blocks("");
-        assert_eq!(blocks.len(), 0);
-    }
-
-    #[test]
     fn test_document_state_block_splitting() {
         use std::path::PathBuf;
 
@@ -655,78 +583,6 @@ mod tests {
     }
 
     #[test]
-    fn test_numbered_list_parsing_from_editor() {
-        // Test parsing numbered list that would happen when user types in the editor
-        let markdown = "1. first item\n2. second item\n3. third item";
-
-        let result = crate::parsing::from_markdown(markdown).unwrap();
-
-        if let ContentBlock::NumberedList { items } = result {
-            assert_eq!(items.len(), 3);
-            assert_eq!(items[0].content, "first item");
-            assert_eq!(items[1].content, "second item");
-            assert_eq!(items[2].content, "third item");
-        } else {
-            panic!("Expected numbered list, got: {:?}", result);
-        }
-    }
-
-    #[test]
-    fn test_bullet_list_parsing_from_editor() {
-        // Test parsing that would happen when user types a bullet list in the editor
-        let markdown = "- bullet one\n- bullet two\n- bullet three";
-
-        // This simulates what happens when from_markdown is called
-        let result = crate::parsing::from_markdown(markdown).unwrap();
-
-        if let ContentBlock::BulletList { items } = result {
-            // Debug what we actually get
-            println!("Number of items: {}", items.len());
-            for (i, item) in items.iter().enumerate() {
-                println!("Item {}: '{}'", i, item.content);
-            }
-
-            // Should have 3 separate items
-            assert_eq!(items.len(), 3);
-            assert_eq!(items[0].content, "bullet one");
-            assert_eq!(items[1].content, "bullet two");
-            assert_eq!(items[2].content, "bullet three");
-        } else {
-            panic!("Expected bullet list, got: {:?}", result);
-        }
-    }
-
-    #[test]
-    fn test_ctrl_enter_saves_and_exits_editing() {
-        use std::path::PathBuf;
-
-        let document = Document::with_content(
-            PathBuf::from("test.md"),
-            vec![ContentBlock::Paragraph {
-                segments: vec![TextSegment::Text("Original content".to_string())],
-            }],
-        );
-
-        let mut doc_state = DocumentState::from_document(document);
-        let block_id = doc_state.blocks[0].0;
-
-        // Start editing
-        doc_state.start_editing(block_id);
-        assert!(doc_state.is_editing(block_id).is_some());
-        assert_eq!(doc_state.is_editing(block_id).unwrap(), "Original content");
-
-        // Simulate Ctrl+Enter: save and exit (this is what the UI should do)
-        let _new_block_ids = doc_state.finish_editing(block_id, "Modified content".to_string());
-
-        // Should no longer be in editing mode
-        assert!(doc_state.editing_block.is_none());
-        assert!(doc_state.is_editing(block_id).is_none());
-
-        // Content should be saved
-        assert_eq!(doc_state.blocks[0].1.to_markdown(), "Modified content");
-    }
-
-    #[test]
     fn test_block_navigation() {
         use std::path::PathBuf;
 
@@ -807,35 +663,5 @@ mod tests {
         // Start editing selected block
         assert!(doc_state.start_editing_selected());
         assert!(doc_state.is_editing(block_id).is_some());
-    }
-
-    #[test]
-    fn test_escape_key_saves_and_exits_editing() {
-        use std::path::PathBuf;
-
-        let document = Document::with_content(
-            PathBuf::from("test.md"),
-            vec![ContentBlock::Paragraph {
-                segments: vec![TextSegment::Text("Original content".to_string())],
-            }],
-        );
-
-        let mut doc_state = DocumentState::from_document(document);
-        let block_id = doc_state.blocks[0].0;
-
-        // Start editing
-        doc_state.start_editing(block_id);
-        assert!(doc_state.is_editing(block_id).is_some());
-        assert_eq!(doc_state.is_editing(block_id).unwrap(), "Original content");
-
-        // Simulate escape key: save and exit (this is what the UI should do)
-        let _new_block_ids = doc_state.finish_editing(block_id, "Modified content".to_string());
-
-        // Should no longer be in editing mode
-        assert!(doc_state.editing_block.is_none());
-        assert!(doc_state.is_editing(block_id).is_none());
-
-        // Content should be saved
-        assert_eq!(doc_state.blocks[0].1.to_markdown(), "Modified content");
     }
 }

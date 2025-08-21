@@ -8,7 +8,7 @@ use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use std::path::PathBuf;
 
 /// Parse text content and extract wiki-links, returning segments
-pub fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
+fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
     let mut segments = Vec::new();
     let mut current_pos = 0;
 
@@ -118,14 +118,6 @@ pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
 /// **Key insight**: Nested lists appear INSIDE their parent item, between the parent's
 /// text content and the parent's `End(Item)` event.
 ///
-/// ## Complex Nested Example
-/// ```markdown
-/// - Item 1
-///   - Item 1.1
-///     - Item 1.1.1
-///   - Item 1.2
-/// - Item 2
-/// ```
 /// The events follow the same pattern, with each nested list appearing inside its
 /// parent item. The processor uses two stacks to track this state:
 /// - `list_stack`: Tracks list contexts and their items
@@ -599,8 +591,114 @@ pub fn parse_multiple_blocks(markdown: &str) -> Vec<ContentBlock> {
 }
 
 #[cfg(test)]
+mod roundtrip_tests;
+
+#[cfg(test)]
+mod snapshot_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{ContentBlock, TextSegment};
+
+    #[test]
+    fn test_heading_from_markdown() {
+        let result = from_markdown("### Test Heading").unwrap();
+        assert_eq!(
+            result,
+            ContentBlock::Heading {
+                level: 3,
+                text: "Test Heading".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_paragraph_from_markdown() {
+        let result = from_markdown("This is a [[wiki-link]] test.").unwrap();
+        if let ContentBlock::Paragraph { segments } = result {
+            assert_eq!(segments.len(), 3);
+            assert_eq!(segments[0], TextSegment::Text("This is a ".to_string()));
+            assert_eq!(
+                segments[1],
+                TextSegment::WikiLink {
+                    target: "wiki-link".to_string(),
+                }
+            );
+            assert_eq!(segments[2], TextSegment::Text(" test.".to_string()));
+        } else {
+            panic!("Expected paragraph");
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_single_paragraph() {
+        let markdown = "This is a single paragraph.";
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 1);
+        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_split_paragraphs() {
+        let markdown = "First paragraph.\n\nSecond paragraph.";
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 2);
+        assert!(matches!(blocks[0], ContentBlock::Paragraph { .. }));
+        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_mixed_content() {
+        let markdown = "# Heading\n\nThis is a paragraph.\n\n- List item";
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 3);
+        assert!(matches!(blocks[0], ContentBlock::Heading { level: 1, .. }));
+        assert!(matches!(blocks[1], ContentBlock::Paragraph { .. }));
+        assert!(matches!(blocks[2], ContentBlock::BulletList { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_blocks_empty_input() {
+        let blocks = parse_multiple_blocks("");
+        assert_eq!(blocks.len(), 0);
+    }
+
+    #[test]
+    fn test_numbered_list_parsing_from_editor() {
+        // Test parsing numbered list that would happen when user types in the editor
+        let markdown = "1. first item\n2. second item\n3. third item";
+
+        let result = from_markdown(markdown).unwrap();
+
+        if let ContentBlock::NumberedList { items } = result {
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "first item");
+            assert_eq!(items[1].content, "second item");
+            assert_eq!(items[2].content, "third item");
+        } else {
+            panic!("Expected numbered list, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_bullet_list_parsing_from_editor() {
+        // Test parsing that would happen when user types a bullet list in the editor
+        let markdown = "- bullet one\n- bullet two\n- bullet three";
+
+        // This simulates what happens when from_markdown is called
+        let result = from_markdown(markdown).unwrap();
+
+        if let ContentBlock::BulletList { items } = result {
+            // Should have 3 separate items
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0].content, "bullet one");
+            assert_eq!(items[1].content, "bullet two");
+            assert_eq!(items[2].content, "bullet three");
+        } else {
+            panic!("Expected bullet list, got: {:?}", result);
+        }
+    }
 
     #[test]
     fn test_parse_simple_list() {

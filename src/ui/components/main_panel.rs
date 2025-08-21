@@ -29,7 +29,8 @@ pub fn EditableMainPanel(
     let handle_save = Callback::new(move |(block_id, content): (BlockId, String)| {
         let mut new_state = save_state.clone();
         let _new_block_ids = new_state.finish_editing(block_id, content);
-        // TODO: Handle focus management for newly created blocks
+        // When blocks are created (e.g., from splitting), the first new block is automatically selected
+        // by finish_editing, so no additional focus management is needed here
         on_save.call(new_state);
     });
 

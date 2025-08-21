@@ -1,6 +1,3 @@
-pub mod integration;
-
-use crate::{io, parsing};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
