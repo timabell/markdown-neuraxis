@@ -1,9 +1,9 @@
 use crate::models::{ContentBlock, ListItem, TextSegment};
 use dioxus::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-/// Resolve a wiki-link target to a file path (may or may not exist)
-fn resolve_wiki_link(target: &str, notes_path: &Path) -> PathBuf {
+/// Resolve a wiki-link target to a relative file path (may or may not exist)
+fn resolve_wiki_link(target: &str) -> PathBuf {
     // Handle different wiki-link formats:
     // 1. Simple page name: "Getting-Started" -> Getting-Started.md
     // 2. Path with folders: "1_Projects/Project-Alpha" -> 1_Projects/Project-Alpha.md
@@ -11,9 +11,9 @@ fn resolve_wiki_link(target: &str, notes_path: &Path) -> PathBuf {
     // 4. Journal entries: "journal/2024-01-15" -> journal/2024-01-15.md
 
     if target.ends_with(".md") {
-        notes_path.join(target)
+        PathBuf::from(target)
     } else {
-        notes_path.join(format!("{target}.md"))
+        PathBuf::from(format!("{target}.md"))
     }
 }
 
@@ -23,7 +23,6 @@ pub fn OutlineItemComponent(
     indent: usize,
     is_numbered: bool,
     item_number: Option<usize>,
-    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     rsx! {
@@ -45,7 +44,7 @@ pub fn OutlineItemComponent(
                     class: "list-text",
                     if let Some(ref segments) = item.segments {
                         for segment in segments {
-                            TextSegmentComponent { segment: segment.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                            TextSegmentComponent { segment: segment.clone(), on_file_select: on_file_select }
                         }
                     } else {
                         "{item.content}"
@@ -58,7 +57,7 @@ pub fn OutlineItemComponent(
                     class: "nested-content",
                     style: "margin-left: {(indent + 1) * 24}px;",
                     for content in &item.nested_content {
-                        NestedContentComponent { content: content.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                        NestedContentComponent { content: content.clone(), on_file_select: on_file_select }
                     }
                 }
             }
@@ -72,8 +71,7 @@ pub fn OutlineItemComponent(
                         indent: indent + 1,
                         is_numbered: is_numbered,
                         item_number: if is_numbered { Some(idx + 1) } else { None },
-                        notes_path: notes_path.clone(),
-                        on_file_select: on_file_select
+                                                on_file_select: on_file_select
                     }
                 }
             }
@@ -84,7 +82,6 @@ pub fn OutlineItemComponent(
 #[component]
 fn NestedContentComponent(
     content: ContentBlock,
-    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     match content {
@@ -115,7 +112,7 @@ fn NestedContentComponent(
                 p {
                     class: "paragraph nested",
                     for segment in segments {
-                        TextSegmentComponent { segment: segment.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                        TextSegmentComponent { segment: segment.clone(), on_file_select: on_file_select }
                     }
                 }
             }
@@ -141,7 +138,6 @@ fn NestedContentComponent(
 #[component]
 pub fn TextSegmentComponent(
     segment: TextSegment,
-    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     match segment {
@@ -174,7 +170,7 @@ pub fn TextSegmentComponent(
                         evt.prevent_default();
                         evt.stop_propagation(); // Stop the event from bubbling up to the editable block
                         if let Some(callback) = on_file_select {
-                            let file_path = resolve_wiki_link(&target, &notes_path);
+                            let file_path = resolve_wiki_link(&target);
                             callback.call(file_path);
                         }
                     },

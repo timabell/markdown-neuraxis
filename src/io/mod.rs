@@ -1,4 +1,5 @@
 use crate::models::FileTree;
+use relative_path::RelativePath;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -13,16 +14,22 @@ pub enum IoError {
 }
 
 /// Read a markdown file and return its content
-pub fn read_file(path: &Path) -> Result<String, IoError> {
-    if !path.exists() {
-        return Err(IoError::NotFound(path.to_path_buf()));
+pub fn read_file(relative_path: &RelativePath, notes_root: &Path) -> Result<String, IoError> {
+    let absolute_path = relative_path.to_path(notes_root);
+    if !absolute_path.exists() {
+        return Err(IoError::NotFound(absolute_path));
     }
-    fs::read_to_string(path).map_err(IoError::Io)
+    fs::read_to_string(&absolute_path).map_err(IoError::Io)
 }
 
 /// Write content to a markdown file
-pub fn write_file(path: &Path, content: &str) -> Result<(), IoError> {
-    fs::write(path, content).map_err(IoError::Io)
+pub fn write_file(
+    relative_path: &RelativePath,
+    notes_root: &Path,
+    content: &str,
+) -> Result<(), IoError> {
+    let absolute_path = relative_path.to_path(notes_root);
+    fs::write(&absolute_path, content).map_err(IoError::Io)
 }
 
 /// Scan for markdown files in the notes directory
@@ -164,15 +171,18 @@ mod tests {
     #[test]
     fn test_read_file_success() {
         let notes_dir = create_test_notes_dir();
-        let file_path = create_test_file(&notes_dir, "test.md", "# Test Content\n\nParagraph");
+        let _file_path = create_test_file(&notes_dir, "test.md", "# Test Content\n\nParagraph");
 
-        let content = read_file(&file_path).unwrap();
+        let relative_path = RelativePath::new("test.md");
+        let content = read_file(relative_path, notes_dir.path()).unwrap();
         assert_eq!(content, "# Test Content\n\nParagraph");
     }
 
     #[test]
     fn test_read_file_not_found() {
-        let result = read_file(Path::new("/nonexistent/file.md"));
+        let notes_dir = create_test_notes_dir();
+        let relative_path = RelativePath::new("nonexistent.md");
+        let result = read_file(relative_path, notes_dir.path());
         assert!(result.is_err());
         assert!(matches!(result, Err(IoError::NotFound(_))));
     }

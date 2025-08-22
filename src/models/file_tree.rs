@@ -1,37 +1,43 @@
+use crate::models::MarkdownFile;
+use relative_path::{RelativePath, RelativePathBuf};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileTreeNode {
     pub name: String,
-    pub path: PathBuf,
+    pub relative_path: RelativePathBuf,
+    pub markdown_file: Option<MarkdownFile>, // Only Some for files, None for folders
     pub is_folder: bool,
     pub is_expanded: bool,
     pub children: BTreeMap<String, FileTreeNode>,
 }
 
 impl FileTreeNode {
-    pub fn new_folder(name: String, path: PathBuf) -> Self {
+    pub fn new_folder(name: String, relative_path: RelativePathBuf) -> Self {
         Self {
             name,
-            path,
+            relative_path,
+            markdown_file: None,
             is_folder: true,
             is_expanded: false,
             children: BTreeMap::new(),
         }
     }
 
-    pub fn new_file(name: String, path: PathBuf) -> Self {
+    pub fn new_file(_name: String, relative_path: RelativePathBuf) -> Self {
+        let markdown_file = MarkdownFile::new(relative_path.clone());
         Self {
-            name,
-            path,
+            name: markdown_file.display_name().to_string(),
+            relative_path,
+            markdown_file: Some(markdown_file),
             is_folder: false,
             is_expanded: false,
             children: BTreeMap::new(),
         }
     }
 
-    pub fn insert_file(&mut self, relative_path: &Path, full_path: PathBuf) {
+    pub fn insert_file(&mut self, relative_path: &Path) {
         let components: Vec<_> = relative_path.components().collect();
         if components.is_empty() {
             return;
@@ -41,30 +47,40 @@ impl FileTreeNode {
 
         if components.len() == 1 {
             // This is a file in the current directory
+            let file_relative_path = if self.relative_path.as_str().is_empty() {
+                RelativePathBuf::from(&first_component)
+            } else {
+                self.relative_path.join(&first_component)
+            };
+
             self.children.insert(
                 first_component.clone(),
-                FileTreeNode::new_file(first_component, full_path),
+                FileTreeNode::new_file(first_component, file_relative_path),
             );
         } else {
             // This is a folder, recurse
             let remaining_path = relative_path.iter().skip(1).collect::<PathBuf>();
-            let folder_path = self.path.join(&first_component);
+            let folder_relative_path = if self.relative_path.as_str().is_empty() {
+                RelativePathBuf::from(&first_component)
+            } else {
+                self.relative_path.join(&first_component)
+            };
 
             self.children
                 .entry(first_component.clone())
-                .or_insert_with(|| FileTreeNode::new_folder(first_component, folder_path))
-                .insert_file(&remaining_path, full_path);
+                .or_insert_with(|| FileTreeNode::new_folder(first_component, folder_relative_path))
+                .insert_file(&remaining_path);
         }
     }
 
-    pub fn toggle_expanded(&mut self, path: &Path) -> bool {
-        if self.path == path {
+    pub fn toggle_expanded(&mut self, relative_path: &RelativePath) -> bool {
+        if self.relative_path == relative_path {
             self.is_expanded = !self.is_expanded;
             return true;
         }
 
         for child in self.children.values_mut() {
-            if child.toggle_expanded(path) {
+            if child.toggle_expanded(relative_path) {
                 return true;
             }
         }
@@ -125,7 +141,7 @@ impl FileTree {
             .to_string();
 
         Self {
-            root: FileTreeNode::new_folder(root_name, root_path),
+            root: FileTreeNode::new_folder(root_name, RelativePathBuf::new()),
         }
     }
 
@@ -136,27 +152,26 @@ impl FileTree {
             .to_string_lossy()
             .to_string();
 
-        let mut root = FileTreeNode::new_folder(root_name, root_path.clone());
+        let mut root = FileTreeNode::new_folder(root_name, RelativePathBuf::new());
         root.is_expanded = true;
 
         for file in files {
             if let Ok(relative_path) = file.strip_prefix(&root_path) {
-                root.insert_file(relative_path, file.clone());
+                root.insert_file(relative_path);
             }
         }
 
         Self { root }
     }
 
-    pub fn toggle_folder(&mut self, path: &Path) {
-        self.root.toggle_expanded(path);
+    pub fn toggle_folder(&mut self, relative_path: &RelativePath) {
+        self.root.toggle_expanded(relative_path);
     }
 
     /// Add a new file to the tree
-    pub fn add_file(&mut self, file_path: &Path) {
-        if let Ok(relative_path) = file_path.strip_prefix(&self.root.path) {
-            self.root
-                .insert_file(relative_path, file_path.to_path_buf());
+    pub fn add_file(&mut self, file_path: &Path, notes_root: &Path) {
+        if let Ok(relative_path) = file_path.strip_prefix(notes_root) {
+            self.root.insert_file(relative_path);
         }
     }
 
@@ -233,18 +248,18 @@ mod tests {
         let files = vec![PathBuf::from("/test/notes/1_Projects/project1.md")];
 
         let mut tree = FileTree::build_from_files(root_path, &files);
-        let projects_path = PathBuf::from("/test/notes/1_Projects");
 
         // Initially expanded
         assert!(tree.root.is_expanded);
 
         // Toggle folder
-        tree.toggle_folder(&projects_path);
+        let relative_projects_path = RelativePathBuf::from("1_Projects");
+        tree.toggle_folder(&relative_projects_path);
         let projects_node = tree.root.children.get("1_Projects").unwrap();
         assert!(projects_node.is_expanded);
 
         // Toggle again
-        tree.toggle_folder(&projects_path);
+        tree.toggle_folder(&relative_projects_path);
         let projects_node = tree.root.children.get("1_Projects").unwrap();
         assert!(!projects_node.is_expanded);
     }
@@ -284,10 +299,10 @@ mod tests {
         assert_eq!(items[1].node.name, "z_folder");
         assert!(items[1].node.is_folder);
 
-        assert_eq!(items[2].node.name, "apple.md");
+        assert_eq!(items[2].node.name, "apple");
         assert!(!items[2].node.is_folder);
 
-        assert_eq!(items[3].node.name, "zebra.md");
+        assert_eq!(items[3].node.name, "zebra");
         assert!(!items[3].node.is_folder);
     }
 
@@ -331,11 +346,11 @@ mod tests {
         assert!(items[2].node.is_folder);
 
         // Files after folders, sorted case-insensitive
-        assert_eq!(items[3].node.name, "Delta.md");
+        assert_eq!(items[3].node.name, "Delta");
         assert!(!items[3].node.is_folder);
-        assert_eq!(items[4].node.name, "echo.md");
+        assert_eq!(items[4].node.name, "echo");
         assert!(!items[4].node.is_folder);
-        assert_eq!(items[5].node.name, "Foxtrot.md");
+        assert_eq!(items[5].node.name, "Foxtrot");
         assert!(!items[5].node.is_folder);
     }
 

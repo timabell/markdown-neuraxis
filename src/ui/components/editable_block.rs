@@ -11,7 +11,6 @@ pub fn EditableBlock(
     on_edit: Callback<BlockId>,
     on_save: Callback<(BlockId, String)>,
     on_editing_end: Option<Callback<()>>, // Called when editing ends to restore document focus
-    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     if let Some(raw) = editing_raw {
@@ -64,7 +63,6 @@ pub fn EditableBlock(
                 // Render the block normally using existing components
                 super::ContentBlockComponent {
                     block: block,
-                    notes_path: notes_path,
                     on_file_select: on_file_select
                 }
             }

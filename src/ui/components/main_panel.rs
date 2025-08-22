@@ -1,22 +1,15 @@
-use crate::models::{BlockId, ContentBlock, Document, DocumentState};
+use crate::models::{BlockId, ContentBlock, Document, DocumentState, MarkdownFile};
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
 #[component]
 pub fn EditableMainPanel(
-    file: PathBuf,
-    notes_path: PathBuf,
+    file: MarkdownFile,
     document_state: DocumentState,
     on_file_select: Option<Callback<PathBuf>>,
     on_save: Callback<DocumentState>,
 ) -> Element {
-    let display_name = if let Ok(relative) = file.strip_prefix(&notes_path) {
-        relative.to_string_lossy().to_string()
-    } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
-        name.to_string()
-    } else {
-        "Selected File".to_string()
-    };
+    let display_name = file.display_path();
 
     let edit_state = document_state.clone();
     let handle_edit = Callback::new(move |block_id: BlockId| {
@@ -128,7 +121,6 @@ pub fn EditableMainPanel(
                                     on_edit: handle_edit,
                                     on_save: handle_save,
                                     on_editing_end: Some(handle_focus_document),
-                                    notes_path: notes_path.clone(),
                                     on_file_select: on_file_select
                                 }
                             }
@@ -161,18 +153,11 @@ pub fn EditableMainPanel(
 
 #[component]
 pub fn MainPanel(
-    file: PathBuf,
-    notes_path: PathBuf,
+    file: MarkdownFile,
     document: Document,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
-    let display_name = if let Ok(relative) = file.strip_prefix(&notes_path) {
-        relative.to_string_lossy().to_string()
-    } else if let Some(name) = file.file_name().and_then(|n| n.to_str()) {
-        name.to_string()
-    } else {
-        "Selected File".to_string()
-    };
+    let display_name = file.display_path();
 
     rsx! {
         h1 { "📝 {display_name}" }
@@ -181,7 +166,7 @@ pub fn MainPanel(
             div {
                 class: "document-content",
                 for block in &document.content {
-                    ContentBlockComponent { block: block.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                    ContentBlockComponent { block: block.clone(), on_file_select: on_file_select }
                 }
             }
         } else {
@@ -196,7 +181,6 @@ pub fn MainPanel(
 #[component]
 pub fn ContentBlockComponent(
     block: ContentBlock,
-    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
     match block {
@@ -216,7 +200,7 @@ pub fn ContentBlockComponent(
                 p {
                     class: "paragraph",
                     for segment in segments {
-                        super::TextSegmentComponent { segment: segment.clone(), notes_path: notes_path.clone(), on_file_select: on_file_select }
+                        super::TextSegmentComponent { segment: segment.clone(), on_file_select: on_file_select }
                     }
                 }
             }
@@ -231,7 +215,6 @@ pub fn ContentBlockComponent(
                             indent: 0,
                             is_numbered: false,
                             item_number: None,
-                            notes_path: notes_path.clone(),
                             on_file_select: on_file_select
                         }
                     }
@@ -248,7 +231,6 @@ pub fn ContentBlockComponent(
                             indent: 0,
                             is_numbered: true,
                             item_number: Some(idx + 1),
-                            notes_path: notes_path.clone(),
                             on_file_select: on_file_select
                         }
                     }

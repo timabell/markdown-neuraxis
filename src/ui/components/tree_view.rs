@@ -1,14 +1,14 @@
-use crate::models::{FileTree, FileTreeItem};
+use crate::models::{FileTree, FileTreeItem, MarkdownFile};
 use dioxus::events::Key;
 use dioxus::prelude::*;
-use std::path::PathBuf;
+use relative_path::RelativePathBuf;
 
 #[component]
 pub fn TreeView(
     tree: ReadOnlySignal<FileTree>,
-    selected_file: Option<PathBuf>,
-    on_file_select: EventHandler<PathBuf>,
-    on_folder_toggle: EventHandler<PathBuf>,
+    selected_file: Option<MarkdownFile>,
+    on_file_select: EventHandler<MarkdownFile>,
+    on_folder_toggle: EventHandler<RelativePathBuf>,
 ) -> Element {
     let items = use_memo(move || tree.read().get_items());
     let mut focused_index = use_signal(|| 0usize);
@@ -19,12 +19,15 @@ pub fn TreeView(
     if selected_file != *last_selected_file.read() {
         *last_selected_file.write() = selected_file.clone();
 
-        if let Some(selected_path) = &selected_file {
+        if let Some(selected_file) = &selected_file {
             let items_list = items.read();
-            if let Some(index) = items_list
-                .iter()
-                .position(|item| &item.node.path == selected_path)
-            {
+            if let Some(index) = items_list.iter().position(|item| {
+                if let Some(ref item_markdown_file) = item.node.markdown_file {
+                    item_markdown_file.relative_path() == selected_file.relative_path()
+                } else {
+                    false
+                }
+            }) {
                 *focused_index.write() = index;
             }
         }
@@ -59,7 +62,9 @@ pub fn TreeView(
 
                 let item = &items_list[new_index];
                 if !item.node.is_folder {
-                    on_file_select.call(item.node.path.clone());
+                    if let Some(ref markdown_file) = item.node.markdown_file {
+                        on_file_select.call(markdown_file.clone());
+                    }
                 }
             }
             Key::ArrowUp => {
@@ -69,7 +74,9 @@ pub fn TreeView(
 
                 let item = &items_list[new_index];
                 if !item.node.is_folder {
-                    on_file_select.call(item.node.path.clone());
+                    if let Some(ref markdown_file) = item.node.markdown_file {
+                        on_file_select.call(markdown_file.clone());
+                    }
                 }
             }
             Key::ArrowRight => {
@@ -77,7 +84,7 @@ pub fn TreeView(
                 if current_index < items_list.len() {
                     let item = &items_list[current_index];
                     if item.node.is_folder && !item.node.is_expanded {
-                        on_folder_toggle.call(item.node.path.clone());
+                        on_folder_toggle.call(item.node.relative_path.clone());
                     }
                 }
             }
@@ -86,7 +93,7 @@ pub fn TreeView(
                 if current_index < items_list.len() {
                     let item = &items_list[current_index];
                     if item.node.is_folder && item.node.is_expanded {
-                        on_folder_toggle.call(item.node.path.clone());
+                        on_folder_toggle.call(item.node.relative_path.clone());
                     }
                 }
             }
@@ -103,9 +110,16 @@ pub fn TreeView(
             onblur: handle_blur,
             for (index, item) in items.read().iter().enumerate() {
                 TreeViewItem {
-                    key: "{item.node.path.display()}",
+                    key: "{item.node.relative_path}",
                     item: item.clone(),
-                    is_selected: selected_file.as_ref() == Some(&item.node.path),
+                    is_selected: {
+                        if let (Some(selected_file), Some(item_markdown_file)) =
+                            (selected_file.as_ref(), &item.node.markdown_file) {
+                            selected_file.relative_path() == item_markdown_file.relative_path()
+                        } else {
+                            false
+                        }
+                    },
                     is_focused: index == *focused_index.read() && *has_focus.read(),
                     on_file_select: on_file_select,
                     on_folder_toggle: on_folder_toggle,
@@ -120,8 +134,8 @@ pub fn TreeViewItem(
     item: FileTreeItem,
     is_selected: bool,
     is_focused: bool,
-    on_file_select: EventHandler<PathBuf>,
-    on_folder_toggle: EventHandler<PathBuf>,
+    on_file_select: EventHandler<MarkdownFile>,
+    on_folder_toggle: EventHandler<RelativePathBuf>,
 ) -> Element {
     let node = item.node.clone();
     let depth = item.depth;
@@ -149,9 +163,9 @@ pub fn TreeViewItem(
             style: "padding-left: {depth * 20}px;",
             onclick: move |_| {
                 if node.is_folder {
-                    on_folder_toggle.call(node.path.clone());
-                } else {
-                    on_file_select.call(node.path.clone());
+                    on_folder_toggle.call(node.relative_path.clone());
+                } else if let Some(ref markdown_file) = node.markdown_file {
+                    on_file_select.call(markdown_file.clone());
                 }
             },
 

@@ -5,7 +5,7 @@
 
 use crate::models::{ContentBlock, Document, ListItem, TextSegment};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
-use std::path::PathBuf;
+use relative_path::RelativePathBuf;
 
 /// Parse text content and extract wiki-links, returning segments
 fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
@@ -64,7 +64,7 @@ fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
 ///
 /// # Returns
 /// A `Document` containing structured content blocks
-pub fn parse_markdown(content: &str, path: PathBuf) -> Document {
+pub fn parse_markdown(content: &str, path: RelativePathBuf) -> Document {
     let parser = Parser::new(content);
     let mut processor = MarkdownProcessor::new();
 
@@ -703,7 +703,7 @@ mod tests {
     #[test]
     fn test_parse_simple_list() {
         let content = "- First item\n- Second item";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -718,7 +718,7 @@ mod tests {
     #[test]
     fn test_parse_nested_list() {
         let content = "- Parent\n  - Child";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -734,7 +734,7 @@ mod tests {
     #[test]
     fn test_parse_mixed_content() {
         let content = "# Title\n\nSome text\n\n- List item\n\n```rust\ncode\n```";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 4);
         assert!(matches!(
@@ -749,7 +749,7 @@ mod tests {
     #[test]
     fn test_parse_inline_code_in_list() {
         let content = "- This is a bullet point with inline code: `let x = 5;`";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -775,7 +775,7 @@ mod tests {
       println!("Hello");
   }
   ```"#;
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -810,7 +810,7 @@ mod tests {
   ```javascript
   console.log("test");
   ```"#;
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -852,7 +852,7 @@ mod tests {
     fn nested() { }
     ```
   - Another nested item"#;
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -875,7 +875,7 @@ mod tests {
     #[test]
     fn test_parse_wiki_links() {
         let content = "This is a paragraph with [[Simple-Link]] and [[Complex-Link]].";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::Paragraph { segments } = &doc.content[0] {
@@ -908,7 +908,7 @@ mod tests {
     #[test]
     fn test_parse_wiki_links_in_list() {
         let content = "- List item with [[Page-Link]] reference";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -940,11 +940,11 @@ mod tests {
     fn test_soft_breaks_vs_hard_breaks() {
         // Test soft break (regular newline without trailing spaces)
         let soft_break_content = "First line\nSecond line in same paragraph";
-        let soft_doc = parse_markdown(soft_break_content, PathBuf::from("/test.md"));
+        let soft_doc = parse_markdown(soft_break_content, RelativePathBuf::from("test.md"));
 
         // Test hard break (trailing spaces + newline)
         let hard_break_content = "First line  \nSecond line in same paragraph";
-        let hard_doc = parse_markdown(hard_break_content, PathBuf::from("/test.md"));
+        let hard_doc = parse_markdown(hard_break_content, RelativePathBuf::from("test.md"));
 
         // Both should produce 1 paragraph
         assert_eq!(soft_doc.content.len(), 1);
@@ -985,7 +985,7 @@ mod tests {
     fn test_bullet_list_with_soft_breaks() {
         // Test bullet list where items are separated by single newlines (soft breaks)
         let content = "- bullet one\n- bullet two\n- bullet three";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         // Should have 1 bullet list block
         assert_eq!(doc.content.len(), 1);
@@ -1004,7 +1004,7 @@ mod tests {
     #[test]
     fn test_consecutive_paragraphs_are_separate_blocks() {
         let content = "First paragraph content here.\n\nSecond paragraph content here.\n\nThird paragraph content here.";
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         // Should have 3 separate paragraph blocks
         assert_eq!(doc.content.len(), 3);
@@ -1059,7 +1059,7 @@ fn standalone() {
 ```
 
 - List item after code block"#;
-        let doc = parse_markdown(content, PathBuf::from("/test.md"));
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
 
         assert_eq!(doc.content.len(), 4);
         assert!(matches!(doc.content[0], ContentBlock::Heading { .. }));

@@ -2564,6 +2564,7 @@ dependencies = [
  "insta",
  "pretty_assertions",
  "pulldown-cmark",
+ "relative-path",
  "rstest",
  "serde",
  "tempfile",
@@ -3536,6 +3537,9 @@ name = "relative-path"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "reqwest"

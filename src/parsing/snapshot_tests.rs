@@ -5,8 +5,8 @@
 
 use super::parse_markdown;
 use insta::assert_yaml_snapshot;
+use relative_path::RelativePathBuf;
 use rstest::rstest;
-use std::path::PathBuf;
 
 #[rstest]
 #[case(
@@ -52,6 +52,6 @@ Paragraph with [[Getting-Started]] link.
     "wiki_links_mixed"
 )]
 fn test_document_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
-    let doc = parse_markdown(markdown, PathBuf::from("test.md"));
+    let doc = parse_markdown(markdown, RelativePathBuf::from("test.md"));
     assert_yaml_snapshot!(name, doc.content);
 }

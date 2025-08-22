@@ -1,5 +1,5 @@
+use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use uuid::Uuid;
 
 // BlockId is an ephemeral unique identifier so that the UI can keep track of blocks in a markdown file as they move around during editing
@@ -20,7 +20,7 @@ impl Default for BlockId {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentState {
-    pub path: PathBuf,
+    pub path: RelativePathBuf,
     pub blocks: Vec<(BlockId, ContentBlock)>,
     pub editing_block: Option<(BlockId, String)>, // block_id and raw markdown
     pub selected_block: Option<BlockId>,          // currently selected block for navigation
@@ -147,19 +147,19 @@ impl ListItem {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Document {
-    pub path: PathBuf,
+    pub path: RelativePathBuf,
     pub content: Vec<ContentBlock>,
 }
 
 impl Document {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: RelativePathBuf) -> Self {
         Self {
             path,
             content: Vec::new(),
         }
     }
 
-    pub fn with_content(path: PathBuf, content: Vec<ContentBlock>) -> Self {
+    pub fn with_content(path: RelativePathBuf, content: Vec<ContentBlock>) -> Self {
         Self { path, content }
     }
 }
@@ -373,10 +373,8 @@ mod tests {
 
     #[test]
     fn test_document_state_block_splitting() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![ContentBlock::Paragraph {
                 segments: vec![TextSegment::Text("Original paragraph".to_string())],
             }],
@@ -404,10 +402,8 @@ mod tests {
 
     #[test]
     fn test_document_state_insert_operations() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![ContentBlock::Paragraph {
                 segments: vec![TextSegment::Text("Middle paragraph".to_string())],
             }],
@@ -442,10 +438,8 @@ mod tests {
 
     #[test]
     fn test_block_splitting_creates_correct_blocks() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![ContentBlock::Paragraph {
                 segments: vec![TextSegment::Text("Original paragraph".to_string())],
             }],
@@ -483,10 +477,8 @@ mod tests {
 
     #[test]
     fn test_bug_reproduction_split_while_editing() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![ContentBlock::Paragraph {
                 segments: vec![TextSegment::Text("Hello".to_string())],
             }],
@@ -518,10 +510,8 @@ mod tests {
 
     #[test]
     fn test_no_splitting_clears_edit_state() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![ContentBlock::Paragraph {
                 segments: vec![TextSegment::Text("Original paragraph".to_string())],
             }],
@@ -548,10 +538,8 @@ mod tests {
 
     #[test]
     fn test_insert_block_at_end_workflow() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![ContentBlock::Paragraph {
                 segments: vec![TextSegment::Text("Existing paragraph".to_string())],
             }],
@@ -584,10 +572,8 @@ mod tests {
 
     #[test]
     fn test_block_navigation() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![
                 ContentBlock::Paragraph {
                     segments: vec![TextSegment::Text("First block".to_string())],
@@ -640,10 +626,8 @@ mod tests {
 
     #[test]
     fn test_start_editing_selected() {
-        use std::path::PathBuf;
-
         let document = Document::with_content(
-            PathBuf::from("test.md"),
+            RelativePathBuf::from("test.md"),
             vec![ContentBlock::Paragraph {
                 segments: vec![TextSegment::Text("Test content".to_string())],
             }],
