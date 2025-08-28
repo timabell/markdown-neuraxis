@@ -3,8 +3,16 @@
 //! This module handles the transformation of raw markdown content into a hierarchical
 //! document structure that can be rendered and manipulated by the application.
 
-use crate::models::{BlockId, ContentBlock, Document, ListItem, TextSegment};
-use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+use crate::models::{BlockId, BulletMarker, ContentBlock, Document, ListItem, TextSegment};
+
+/// Type alias for the complex item stack tuple to improve readability
+type ItemStackEntry = (
+    String,
+    Vec<ListItem>,
+    Vec<ContentBlock>,
+    Option<BulletMarker>,
+);
+use pulldown_cmark::{Event, Tag, TagEnd};
 use relative_path::RelativePathBuf;
 
 /// Parse text content and extract wiki-links, returning segments
@@ -52,6 +60,29 @@ fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
     segments
 }
 
+/// Detect the bullet marker type at a given position in the content
+fn detect_bullet_marker(content: &str, pos: usize) -> Option<BulletMarker> {
+    // Look backwards from the position to find the line start
+    let line_start = content[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    // Look at the whole line to find the marker
+    let line_end = content[pos..]
+        .find('\n')
+        .map(|p| p + pos)
+        .unwrap_or(content.len());
+    let full_line = &content[line_start..line_end];
+
+    // Look for the first non-whitespace character in the full line
+    for ch in full_line.chars() {
+        match ch {
+            '-' => return Some(BulletMarker::Dash),
+            '*' => return Some(BulletMarker::Star),
+            ' ' | '\t' => continue, // Skip whitespace
+            _ => break,             // Stop at any other character
+        }
+    }
+    None
+}
+
 /// Parse markdown content into a complete Document structure.
 ///
 /// This function processes markdown text and converts it into a structured document
@@ -65,11 +96,15 @@ fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
 /// # Returns
 /// A `Document` containing structured content blocks
 pub fn parse_markdown(content: &str, path: RelativePathBuf) -> Document {
-    let parser = Parser::new(content);
+    use pulldown_cmark::{Options, Parser};
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_TABLES);
+
+    let parser = Parser::new_ext(content, options).into_offset_iter();
     let mut processor = MarkdownProcessor::new();
 
-    for event in parser {
-        processor.process_event(event);
+    for (event, range) in parser {
+        processor.process_event_with_offset(event, range, content);
     }
 
     let blocks = processor.finalize();
@@ -132,6 +167,9 @@ struct MarkdownProcessor {
     /// Manages nested list parsing state
     list_parser: ListParser,
 
+    /// Tracks whether we're inside a blockquote
+    in_blockquote: bool,
+
     /// Tracks whether we're inside a code block
     in_code_block: bool,
 
@@ -148,22 +186,30 @@ impl MarkdownProcessor {
             blocks: Vec::new(),
             current_text: String::new(),
             list_parser: ListParser::new(),
+            in_blockquote: false,
             in_code_block: false,
             code_language: None,
             code_content: String::new(),
         }
     }
 
-    /// Process a single markdown event
-    fn process_event(&mut self, event: Event) {
+    /// Process a markdown event with offset information for marker detection
+    fn process_event_with_offset(
+        &mut self,
+        event: Event,
+        range: std::ops::Range<usize>,
+        content: &str,
+    ) {
         match event {
             Event::Start(Tag::Paragraph) => {
                 // New paragraph - flush any existing one
                 self.flush_paragraph();
             }
             Event::End(TagEnd::Paragraph) => {
-                // End paragraph - flush it
-                self.flush_paragraph();
+                // End paragraph - flush it unless we're in a blockquote
+                if !self.in_blockquote {
+                    self.flush_paragraph();
+                }
             }
             Event::Start(Tag::Heading { level: _, .. }) => {
                 self.flush_paragraph();
@@ -191,7 +237,9 @@ impl MarkdownProcessor {
                 }
             }
             Event::Start(Tag::Item) => {
-                self.list_parser.start_item();
+                // Detect bullet marker from the content at this position
+                let marker = detect_bullet_marker(content, range.start);
+                self.list_parser.start_item_with_marker(marker);
             }
             Event::End(TagEnd::Item) => {
                 self.list_parser.end_item();
@@ -232,6 +280,7 @@ impl MarkdownProcessor {
             }
             Event::Start(Tag::BlockQuote(_)) => {
                 self.flush_paragraph();
+                self.in_blockquote = true;
             }
             Event::End(TagEnd::BlockQuote) => {
                 let text = self.current_text.trim().to_string();
@@ -239,6 +288,7 @@ impl MarkdownProcessor {
                     self.blocks.push(ContentBlock::Quote(text));
                 }
                 self.current_text.clear();
+                self.in_blockquote = false;
             }
             Event::Rule => {
                 self.flush_paragraph();
@@ -313,11 +363,12 @@ struct ListParser {
     /// - Stack depth indicates current nesting level (0 = top-level)
     list_stack: Vec<(Vec<ListItem>, bool)>,
 
-    /// Stack of (text, children, nested_content) tuples for items being constructed
+    /// Stack of (text, children, nested_content, marker) tuples for items being constructed
     /// - Text accumulates while parsing item content
     /// - Children collect nested lists that appear within the item
     /// - Nested content collects code blocks and other content that appear within the item
-    item_stack: Vec<(String, Vec<ListItem>, Vec<ContentBlock>)>,
+    /// - Marker stores the original bullet marker type
+    item_stack: Vec<ItemStackEntry>,
 
     /// Whether we're currently parsing inside a list item
     in_item: bool,
@@ -373,19 +424,28 @@ impl ListParser {
                     });
                 }
             } else {
-                // This is a nested list, save it as children for the parent item
-                if let Some((_, children, _)) = self.item_stack.last_mut() {
-                    *children = items;
+                // This is a nested list, add it as children for the parent item
+                if let Some((_, children, _, _)) = self.item_stack.last_mut() {
+                    // If this was a numbered list, mark all items as numbered
+                    let mut items_to_add = items;
+                    if is_ordered {
+                        for item in &mut items_to_add {
+                            if item.marker.is_none() {
+                                item.marker = Some(BulletMarker::Numbered);
+                            }
+                        }
+                    }
+                    children.extend(items_to_add);
                 }
             }
         }
         None
     }
 
-    /// Start a new list item
-    fn start_item(&mut self) {
+    /// Start a new list item with a specific bullet marker
+    fn start_item_with_marker(&mut self, marker: Option<BulletMarker>) {
         self.item_stack
-            .push((String::new(), Vec::new(), Vec::new()));
+            .push((String::new(), Vec::new(), Vec::new(), marker));
         self.in_item = true;
     }
 
@@ -397,7 +457,7 @@ impl ListParser {
             "Item end without corresponding start"
         );
 
-        if let Some((text, children, nested_content)) = self.item_stack.pop() {
+        if let Some((text, children, nested_content, marker)) = self.item_stack.pop() {
             // Calculate nesting level: subtract 1 because list_stack includes the current list
             let level = self.list_stack.len().saturating_sub(1);
             let trimmed_text = text.trim().to_string();
@@ -414,6 +474,7 @@ impl ListParser {
 
             item.children = children;
             item.nested_content = nested_content;
+            item.marker = marker;
 
             // Add this item to the current list
             if let Some((items, _)) = self.list_stack.last_mut() {
@@ -424,14 +485,14 @@ impl ListParser {
 
     /// Add text content to the current item
     fn add_text(&mut self, text: &str) {
-        if let Some((item_text, _, _)) = self.item_stack.last_mut() {
+        if let Some((item_text, _, _, _)) = self.item_stack.last_mut() {
             item_text.push_str(text);
         }
     }
 
     /// Add nested content (like code blocks) to the current item
     fn add_nested_content(&mut self, content: ContentBlock) {
-        if let Some((_, _, nested_content)) = self.item_stack.last_mut() {
+        if let Some((_, _, nested_content, _)) = self.item_stack.last_mut() {
             nested_content.push(content);
         }
     }
@@ -499,7 +560,12 @@ pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
             if line.starts_with("- ") || line.starts_with("* ") {
                 let content = line[2..].trim().to_string();
                 let segments = parse_wiki_links(&content);
-                let item = if segments
+                let marker = if line.starts_with("- ") {
+                    Some(BulletMarker::Dash)
+                } else {
+                    Some(BulletMarker::Star)
+                };
+                let mut item = if segments
                     .iter()
                     .any(|s| matches!(s, TextSegment::WikiLink { .. }))
                 {
@@ -507,6 +573,7 @@ pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
                 } else {
                     ListItem::new(content, 0)
                 };
+                item.marker = marker;
                 items.push(item);
             }
         }
@@ -1063,6 +1130,226 @@ mod tests {
             }
         } else {
             panic!("Expected third block to be paragraph");
+        }
+    }
+
+    #[test]
+    fn test_bullet_marker_detection() {
+        let content = "- First dash item\n* First star item";
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+
+        // Different bullet types create separate lists
+        assert_eq!(doc.content.len(), 2);
+
+        // First list with dash marker
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].1.marker, Some(BulletMarker::Dash));
+        } else {
+            panic!("Expected first BulletList block");
+        }
+
+        // Second list with star marker
+        if let ContentBlock::BulletList { items } = &doc.content[1] {
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].1.marker, Some(BulletMarker::Star));
+        } else {
+            panic!("Expected second BulletList block");
+        }
+
+        // Test roundtrip behavior
+        use crate::models::DocumentState;
+        let doc_state = DocumentState::from_document(doc);
+        let roundtrip_doc = doc_state.to_document();
+        let roundtrip = roundtrip_doc
+            .content
+            .iter()
+            .map(|block| block.to_markdown())
+            .collect::<Vec<_>>()
+            .join("\n");
+        println!("Original: {content:?}");
+        println!("Roundtrip: {roundtrip:?}");
+        assert_eq!(content, roundtrip);
+    }
+
+    #[test]
+    fn test_parsing_numbered_list_with_nested_bullets() {
+        let content = "1. First item\n\t- Nested dash\n\t* Nested star\n2. Second item";
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+
+        if let ContentBlock::NumberedList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 2);
+
+            // First item should have both dash and star nested items
+            assert_eq!(items[0].1.content, "First item");
+            assert_eq!(items[0].1.children.len(), 2);
+            assert_eq!(items[0].1.children[0].content, "Nested dash");
+            assert_eq!(items[0].1.children[0].marker, Some(BulletMarker::Dash));
+            assert_eq!(items[0].1.children[1].content, "Nested star");
+            assert_eq!(items[0].1.children[1].marker, Some(BulletMarker::Star));
+
+            // Second item should have no children
+            assert_eq!(items[1].1.content, "Second item");
+            assert_eq!(items[1].1.children.len(), 0);
+        } else {
+            panic!("Expected NumberedList block");
+        }
+    }
+
+    #[test]
+    fn test_parsing_bullet_list_with_nested_numbered() {
+        let content = "- Bullet item\n\t1. First numbered\n\t2. Second numbered";
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+
+        assert_eq!(doc.content.len(), 1);
+
+        if let ContentBlock::BulletList { items } = &doc.content[0] {
+            assert_eq!(items.len(), 1);
+
+            // Bullet item should have nested numbered items
+            assert_eq!(items[0].1.content, "Bullet item");
+            assert_eq!(items[0].1.children.len(), 2);
+            assert_eq!(items[0].1.children[0].content, "First numbered");
+            assert_eq!(items[0].1.children[1].content, "Second numbered");
+
+            // These should now have Numbered marker
+            assert_eq!(items[0].1.children[0].marker, Some(BulletMarker::Numbered));
+            assert_eq!(items[0].1.children[1].marker, Some(BulletMarker::Numbered));
+
+            // Test that it roundtrips correctly
+            let regenerated = doc
+                .content
+                .iter()
+                .map(|block| block.to_markdown())
+                .collect::<Vec<_>>()
+                .join("\n");
+            println!("Original: {content}");
+            println!("Generated: {regenerated}");
+
+            // Should contain numbered items
+            assert!(regenerated.contains("1. First numbered"));
+            assert!(regenerated.contains("2. Second numbered"));
+        } else {
+            panic!("Expected BulletList block");
+        }
+    }
+
+    #[test]
+    fn test_rendering_nested_mixed_lists() {
+        use crate::models::{BlockId, ListItem};
+
+        // Test rendering numbered list with nested bullet items
+        let dash_child = ListItem {
+            content: "Nested dash".to_string(),
+            segments: None,
+            level: 1,
+            children: vec![],
+            nested_content: vec![],
+            marker: Some(BulletMarker::Dash),
+        };
+
+        let star_child = ListItem {
+            content: "Nested star".to_string(),
+            segments: None,
+            level: 1,
+            children: vec![],
+            nested_content: vec![],
+            marker: Some(BulletMarker::Star),
+        };
+
+        let parent_item = ListItem {
+            content: "Parent item".to_string(),
+            segments: None,
+            level: 0,
+            children: vec![dash_child, star_child],
+            nested_content: vec![],
+            marker: None,
+        };
+
+        let numbered_list = ContentBlock::NumberedList {
+            items: vec![(BlockId::new(), parent_item)],
+        };
+
+        let result = numbered_list.to_markdown();
+        println!("Rendered numbered with nested bullets: {result}");
+
+        // Should contain both dash and star markers
+        assert!(result.contains("- Nested dash"));
+        assert!(result.contains("* Nested star"));
+    }
+
+    #[test]
+    fn test_rendering_bullet_with_nested_numbered_items() {
+        use crate::models::{BlockId, ListItem};
+
+        // Test rendering bullet list with children that should be numbered
+        let first_numbered = ListItem {
+            content: "First numbered".to_string(),
+            segments: None,
+            level: 1,
+            children: vec![],
+            nested_content: vec![],
+            marker: None, // This is the issue - no marker to indicate it should be numbered
+        };
+
+        let second_numbered = ListItem {
+            content: "Second numbered".to_string(),
+            segments: None,
+            level: 1,
+            children: vec![],
+            nested_content: vec![],
+            marker: None,
+        };
+
+        let parent_item = ListItem {
+            content: "Bullet item".to_string(),
+            segments: None,
+            level: 0,
+            children: vec![first_numbered, second_numbered],
+            nested_content: vec![],
+            marker: Some(BulletMarker::Dash),
+        };
+
+        let bullet_list = ContentBlock::BulletList {
+            items: vec![(BlockId::new(), parent_item)],
+        };
+
+        let result = bullet_list.to_markdown();
+        println!("Rendered bullet with nested items: {result}");
+
+        // Currently this will render as "- First numbered" and "- Second numbered"
+        // But it should render as "1. First numbered" and "2. Second numbered"
+    }
+
+    #[test]
+    fn test_quote_parsing_debug() {
+        let content = "> This is a quote";
+        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+
+        println!("Parsed {} blocks:", doc.content.len());
+        for (i, block) in doc.content.iter().enumerate() {
+            println!("Block {i}: {block:?}");
+        }
+
+        let regenerated = doc
+            .content
+            .iter()
+            .map(|block| block.to_markdown())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        println!("Original: '{content}'");
+        println!("Generated: '{regenerated}'");
+
+        // Should be a quote
+        assert_eq!(doc.content.len(), 1);
+        if let ContentBlock::Quote(text) = &doc.content[0] {
+            assert_eq!(text, "This is a quote");
+            assert_eq!(regenerated, "> This is a quote");
+        } else {
+            panic!("Expected Quote block, got: {:?}", doc.content[0]);
         }
     }
 

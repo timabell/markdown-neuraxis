@@ -90,10 +90,11 @@ impl ContentBlock {
                 items_to_markdown(&list_items, true)
             }
             ContentBlock::CodeBlock { language, code } => {
+                let separator = if code.ends_with('\n') { "" } else { "\n" };
                 if let Some(lang) = language {
-                    format!("```{lang}\n{code}\n```")
+                    format!("```{lang}\n{code}{separator}```")
                 } else {
-                    format!("```\n{code}\n```")
+                    format!("```\n{code}{separator}```")
                 }
             }
             ContentBlock::Quote(text) => {
@@ -115,27 +116,82 @@ fn segments_to_markdown(segments: &[TextSegment]) -> String {
 }
 
 fn items_to_markdown(items: &[ListItem], is_numbered: bool) -> String {
-    items
-        .iter()
-        .enumerate()
-        .map(|(i, item)| {
-            let marker = if is_numbered {
-                format!("{}. ", i + 1)
+    fn render_item(item: &ListItem, is_numbered: bool, counter: &mut usize) -> Vec<String> {
+        let mut lines = Vec::new();
+
+        let marker = if is_numbered {
+            let num = *counter;
+            *counter += 1;
+            format!("{num}. ")
+        } else {
+            // Use stored marker if available, otherwise default to dash
+            if let Some(ref bullet_marker) = item.marker {
+                match bullet_marker {
+                    BulletMarker::Numbered => {
+                        // If this item was originally numbered, use numbered format
+                        let num = *counter;
+                        *counter += 1;
+                        format!("{num}. ")
+                    }
+                    _ => format!("{} ", bullet_marker.to_string()),
+                }
             } else {
                 "- ".to_string()
-            };
+            }
+        };
 
-            let indent = "  ".repeat(item.level);
-            let content = if let Some(ref segments) = item.segments {
-                segments_to_markdown(segments)
-            } else {
-                item.content.clone()
-            };
+        let indent = "\t".repeat(item.level);
+        let content = if let Some(ref segments) = item.segments {
+            segments_to_markdown(segments)
+        } else {
+            item.content.clone()
+        };
 
-            format!("{indent}{marker}{content}")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+        lines.push(format!("{indent}{marker}{content}"));
+
+        // Recursively render children with proper indentation
+        if !item.children.is_empty() {
+            // Check if children should be rendered as numbered list based on their markers
+            let should_be_numbered = item
+                .children
+                .iter()
+                .any(|child| matches!(child.marker, Some(BulletMarker::Numbered)));
+            let child_lines = items_to_markdown(&item.children, should_be_numbered);
+            for child_line in child_lines.split('\n') {
+                if !child_line.is_empty() {
+                    lines.push(child_line.to_string());
+                }
+            }
+        }
+
+        lines
+    }
+
+    let mut counter = 1;
+    let mut all_lines = Vec::new();
+
+    for item in items {
+        all_lines.extend(render_item(item, is_numbered, &mut counter));
+    }
+
+    all_lines.join("\n")
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BulletMarker {
+    Dash,     // -
+    Star,     // *
+    Numbered, // 1., 2., etc.
+}
+
+impl BulletMarker {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            BulletMarker::Dash => "-",
+            BulletMarker::Star => "*",
+            BulletMarker::Numbered => "1.", // Will be replaced with actual numbers during rendering
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -151,6 +207,7 @@ pub struct ListItem {
     pub level: usize,
     pub children: Vec<ListItem>,
     pub nested_content: Vec<ContentBlock>,
+    pub marker: Option<BulletMarker>, // Store original bullet marker type
 }
 
 impl ListItem {
@@ -161,6 +218,7 @@ impl ListItem {
             level,
             children: Vec::new(),
             nested_content: Vec::new(),
+            marker: None,
         }
     }
 
@@ -171,6 +229,7 @@ impl ListItem {
             level,
             children: Vec::new(),
             nested_content: Vec::new(),
+            marker: None,
         }
     }
 }

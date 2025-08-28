@@ -23,6 +23,7 @@ expression: normalized_content
           level: 0
           children: []
           nested_content: []
+          marker: Dash
       - - "<some-uuid>"
         - content: "Another item with [[1_Projects/Website]] link"
           segments:
@@ -33,3 +34,4 @@ expression: normalized_content
           level: 0
           children: []
           nested_content: []
+          marker: Dash

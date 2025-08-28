@@ -10,15 +10,18 @@ expression: normalized_content
           level: 0
           children: []
           nested_content: []
+          marker: Dash
       - - "<some-uuid>"
         - content: Second item
           segments: ~
           level: 0
           children: []
           nested_content: []
+          marker: Dash
       - - "<some-uuid>"
         - content: Third item
           segments: ~
           level: 0
           children: []
           nested_content: []
+          marker: Dash
