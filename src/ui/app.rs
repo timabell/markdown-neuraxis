@@ -35,7 +35,8 @@ pub fn App(notes_path: PathBuf) -> Element {
                         move |markdown_file: MarkdownFile| {
                             match io::read_file(markdown_file.relative_path(), &notes_path) {
                                 Ok(content) => {
-                                        let document = parsing::parse_markdown(&content, RelativePathBuf::from(markdown_file.relative_path()));
+                                        let blocks = parsing::parse_multiple_blocks(&content);
+                                        let document = Document::with_content(RelativePathBuf::from(markdown_file.relative_path()), blocks);
                                     let document_state = DocumentState::from_document(document);
                                     *current_document_state.write() = Some(document_state);
                                     *selected_file.write() = Some(markdown_file);
@@ -73,7 +74,8 @@ pub fn App(notes_path: PathBuf) -> Element {
 
                             match io::read_file(markdown_file.relative_path(), &notes_path) {
                                 Ok(content) => {
-                                    let document = parsing::parse_markdown(&content, RelativePathBuf::from(markdown_file.relative_path()));
+                                    let blocks = parsing::parse_multiple_blocks(&content);
+                                    let document = Document::with_content(RelativePathBuf::from(markdown_file.relative_path()), blocks);
                                     let document_state = DocumentState::from_document(document);
                                     *current_document_state.write() = Some(document_state);
                                     *selected_file.write() = Some(markdown_file);

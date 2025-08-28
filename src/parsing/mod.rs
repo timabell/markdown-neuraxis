@@ -3,7 +3,7 @@
 //! This module handles the transformation of raw markdown content into a hierarchical
 //! document structure that can be rendered and manipulated by the application.
 
-use crate::models::{BlockId, BulletMarker, ContentBlock, Document, ListItem, TextSegment};
+use crate::models::{BlockId, BulletMarker, ContentBlock, ListItem, TextSegment};
 
 /// Type alias for the complex item stack tuple to improve readability
 type ItemStackEntry = (
@@ -13,7 +13,6 @@ type ItemStackEntry = (
     Option<BulletMarker>,
 );
 use pulldown_cmark::{Event, Tag, TagEnd};
-use relative_path::RelativePathBuf;
 
 /// Parse text content and extract wiki-links, returning segments
 fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
@@ -81,34 +80,6 @@ fn detect_bullet_marker(content: &str, pos: usize) -> Option<BulletMarker> {
         }
     }
     None
-}
-
-/// Parse markdown content into a complete Document structure.
-///
-/// This function processes markdown text and converts it into a structured document
-/// with properly hierarchical content blocks including headings, paragraphs, lists,
-/// code blocks, quotes, and horizontal rules.
-///
-/// # Arguments
-/// * `content` - The raw markdown text to parse
-/// * `path` - The file path associated with this document
-///
-/// # Returns
-/// A `Document` containing structured content blocks
-pub fn parse_markdown(content: &str, path: RelativePathBuf) -> Document {
-    use pulldown_cmark::{Options, Parser};
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_TABLES);
-
-    let parser = Parser::new_ext(content, options).into_offset_iter();
-    let mut processor = MarkdownProcessor::new();
-
-    for (event, range) in parser {
-        processor.process_event_with_offset(event, range, content);
-    }
-
-    let blocks = processor.finalize();
-    Document::with_content(path, blocks)
 }
 
 /// Handles the complex state management required for parsing markdown events.
@@ -498,152 +469,13 @@ impl ListParser {
     }
 }
 
-/// Parse a single markdown block from text.
+/// Parse markdown content into a vector of content blocks.
 ///
-/// This function attempts to parse a single block of markdown content,
-/// determining its type based on content patterns (headings, lists, code blocks, etc.).
-///
-/// # Arguments
-/// * `markdown` - Raw markdown text representing a single block
-///
-/// # Returns
-/// A `Result` containing the parsed `ContentBlock` or an error message
-pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
-    let trimmed = markdown.trim();
-
-    // Try to parse as heading
-    if trimmed.starts_with('#') {
-        let level_end = trimmed.chars().take_while(|c| *c == '#').count();
-        if level_end > 0 && level_end <= 6 {
-            let text = trimmed[level_end..].trim().to_string();
-            return Ok(ContentBlock::Heading {
-                level: level_end as u8,
-                text,
-            });
-        }
-    }
-
-    // Try to parse as code block
-    if trimmed.starts_with("```") {
-        let lines: Vec<&str> = trimmed.lines().collect();
-        if lines.len() >= 2 && lines.last() == Some(&"```") {
-            let first_line = lines[0];
-            let language = if first_line.len() > 3 {
-                Some(first_line[3..].to_string())
-            } else {
-                None
-            };
-            let code = lines[1..lines.len() - 1].join("\n");
-            return Ok(ContentBlock::CodeBlock { language, code });
-        }
-    }
-
-    // Try to parse as quote
-    if let Some(stripped) = trimmed.strip_prefix('>') {
-        let text = stripped.trim().to_string();
-        return Ok(ContentBlock::Quote(text));
-    }
-
-    // Try to parse as rule
-    if trimmed == "---" || trimmed == "***" {
-        return Ok(ContentBlock::Rule);
-    }
-
-    // Try to parse as list
-    if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-        // Parse multiple bullet points separated by newlines
-        let lines: Vec<&str> = trimmed.lines().collect();
-        let mut items = Vec::new();
-
-        for line in lines {
-            let line = line.trim();
-            if line.starts_with("- ") || line.starts_with("* ") {
-                let content = line[2..].trim().to_string();
-                let segments = parse_wiki_links(&content);
-                let marker = if line.starts_with("- ") {
-                    Some(BulletMarker::Dash)
-                } else {
-                    Some(BulletMarker::Star)
-                };
-                let mut item = if segments
-                    .iter()
-                    .any(|s| matches!(s, TextSegment::WikiLink { .. }))
-                {
-                    ListItem::with_segments(content, segments, 0)
-                } else {
-                    ListItem::new(content, 0)
-                };
-                item.marker = marker;
-                items.push(item);
-            }
-        }
-
-        if !items.is_empty() {
-            let items_with_ids: Vec<(BlockId, ListItem)> = items
-                .into_iter()
-                .map(|item| (BlockId::new(), item))
-                .collect();
-            return Ok(ContentBlock::BulletList {
-                items: items_with_ids,
-            });
-        }
-    }
-
-    // Try to parse as numbered list
-    if trimmed
-        .chars()
-        .next()
-        .map(|c| c.is_ascii_digit())
-        .unwrap_or(false)
-        && trimmed.contains(". ")
-    {
-        // Parse multiple numbered items separated by newlines
-        let lines: Vec<&str> = trimmed.lines().collect();
-        let mut items = Vec::new();
-
-        for line in lines {
-            let line = line.trim();
-            // Check if line starts with number followed by ". "
-            if let Some(dot_pos) = line.find(". ") {
-                if line[..dot_pos].chars().all(|c| c.is_ascii_digit()) {
-                    let content = line[dot_pos + 2..].trim().to_string();
-                    let segments = parse_wiki_links(&content);
-                    let item = if segments
-                        .iter()
-                        .any(|s| matches!(s, TextSegment::WikiLink { .. }))
-                    {
-                        ListItem::with_segments(content, segments, 0)
-                    } else {
-                        ListItem::new(content, 0)
-                    };
-                    items.push(item);
-                }
-            }
-        }
-
-        if !items.is_empty() {
-            let items_with_ids: Vec<(BlockId, ListItem)> = items
-                .into_iter()
-                .map(|item| (BlockId::new(), item))
-                .collect();
-            return Ok(ContentBlock::NumberedList {
-                items: items_with_ids,
-            });
-        }
-    }
-
-    // Default to paragraph
-    let segments = parse_wiki_links(trimmed);
-    Ok(ContentBlock::Paragraph { segments })
-}
-
-/// Parse markdown content that may contain multiple blocks separated by double newlines.
-///
-/// This function splits markdown content on double newlines and parses each chunk
-/// as a separate block. Empty chunks are filtered out.
+/// This function directly uses the same parsing logic as `parse_markdown` but
+/// returns only the content blocks without wrapping them in a Document.
 ///
 /// # Arguments
-/// * `markdown` - Raw markdown text potentially containing multiple blocks
+/// * `markdown` - Raw markdown text to parse
 ///
 /// # Returns
 /// A vector of parsed `ContentBlock`s
@@ -652,29 +484,18 @@ pub fn parse_multiple_blocks(markdown: &str) -> Vec<ContentBlock> {
         return vec![];
     }
 
-    // Split on double newlines (handles \n\n, \r\n\r\n, etc.)
-    let chunks: Vec<&str> = markdown
-        .split("\n\n")
-        .map(|chunk| chunk.trim())
-        .filter(|chunk| !chunk.is_empty())
-        .collect();
+    use pulldown_cmark::{Options, Parser};
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_TABLES);
 
-    if chunks.is_empty() {
-        return vec![];
+    let parser = Parser::new_ext(markdown, options).into_offset_iter();
+    let mut processor = MarkdownProcessor::new();
+
+    for (event, range) in parser {
+        processor.process_event_with_offset(event, range, markdown);
     }
 
-    // If there's only one chunk, use the original single-block parsing
-    if chunks.len() == 1 {
-        if let Ok(block) = from_markdown(chunks[0]) {
-            return vec![block];
-        }
-    }
-
-    // Parse each chunk as a separate block
-    chunks
-        .into_iter()
-        .filter_map(|chunk| from_markdown(chunk).ok())
-        .collect()
+    processor.finalize()
 }
 
 #[cfg(test)]
@@ -686,13 +507,15 @@ mod snapshot_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ContentBlock, TextSegment};
+    use crate::models::{ContentBlock, Document, TextSegment};
+    use relative_path::RelativePathBuf;
 
     #[test]
-    fn test_heading_from_markdown() {
-        let result = from_markdown("### Test Heading").unwrap();
+    fn test_heading_parsing() {
+        let blocks = parse_multiple_blocks("### Test Heading");
+        assert_eq!(blocks.len(), 1);
         assert_eq!(
-            result,
+            blocks[0],
             ContentBlock::Heading {
                 level: 3,
                 text: "Test Heading".to_string()
@@ -701,9 +524,10 @@ mod tests {
     }
 
     #[test]
-    fn test_paragraph_from_markdown() {
-        let result = from_markdown("This is a [[wiki-link]] test.").unwrap();
-        if let ContentBlock::Paragraph { segments } = result {
+    fn test_paragraph_parsing() {
+        let blocks = parse_multiple_blocks("This is a [[wiki-link]] test.");
+        assert_eq!(blocks.len(), 1);
+        if let ContentBlock::Paragraph { segments } = &blocks[0] {
             assert_eq!(segments.len(), 3);
             assert_eq!(segments[0], TextSegment::Text("This is a ".to_string()));
             assert_eq!(
@@ -756,15 +580,16 @@ mod tests {
         // Test parsing numbered list that would happen when user types in the editor
         let markdown = "1. first item\n2. second item\n3. third item";
 
-        let result = from_markdown(markdown).unwrap();
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 1);
 
-        if let ContentBlock::NumberedList { items } = result {
+        if let ContentBlock::NumberedList { items } = &blocks[0] {
             assert_eq!(items.len(), 3);
             assert_eq!(items[0].1.content, "first item");
             assert_eq!(items[1].1.content, "second item");
             assert_eq!(items[2].1.content, "third item");
         } else {
-            panic!("Expected numbered list, got: {result:?}");
+            panic!("Expected numbered list, got: {:?}", blocks[0]);
         }
     }
 
@@ -773,24 +598,26 @@ mod tests {
         // Test parsing that would happen when user types a bullet list in the editor
         let markdown = "- bullet one\n- bullet two\n- bullet three";
 
-        // This simulates what happens when from_markdown is called
-        let result = from_markdown(markdown).unwrap();
+        // This simulates what happens when parse_multiple_blocks is called
+        let blocks = parse_multiple_blocks(markdown);
+        assert_eq!(blocks.len(), 1);
 
-        if let ContentBlock::BulletList { items } = result {
+        if let ContentBlock::BulletList { items } = &blocks[0] {
             // Should have 3 separate items
             assert_eq!(items.len(), 3);
             assert_eq!(items[0].1.content, "bullet one");
             assert_eq!(items[1].1.content, "bullet two");
             assert_eq!(items[2].1.content, "bullet three");
         } else {
-            panic!("Expected bullet list, got: {result:?}");
+            panic!("Expected bullet list, got: {:?}", blocks[0]);
         }
     }
 
     #[test]
     fn test_parse_simple_list() {
         let content = "- First item\n- Second item";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -805,7 +632,8 @@ mod tests {
     #[test]
     fn test_parse_nested_list() {
         let content = "- Parent\n  - Child";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -821,7 +649,8 @@ mod tests {
     #[test]
     fn test_parse_mixed_content() {
         let content = "# Title\n\nSome text\n\n- List item\n\n```rust\ncode\n```";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 4);
         assert!(matches!(
@@ -836,7 +665,8 @@ mod tests {
     #[test]
     fn test_parse_inline_code_in_list() {
         let content = "- This is a bullet point with inline code: `let x = 5;`";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -862,7 +692,8 @@ mod tests {
       println!("Hello");
   }
   ```"#;
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -897,7 +728,8 @@ mod tests {
   ```javascript
   console.log("test");
   ```"#;
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -939,7 +771,8 @@ mod tests {
     fn nested() { }
     ```
   - Another nested item"#;
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -962,7 +795,8 @@ mod tests {
     #[test]
     fn test_parse_wiki_links() {
         let content = "This is a paragraph with [[Simple-Link]] and [[Complex-Link]].";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::Paragraph { segments } = &doc.content[0] {
@@ -995,7 +829,8 @@ mod tests {
     #[test]
     fn test_parse_wiki_links_in_list() {
         let content = "- List item with [[Page-Link]] reference";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
@@ -1027,11 +862,13 @@ mod tests {
     fn test_soft_breaks_vs_hard_breaks() {
         // Test soft break (regular newline without trailing spaces)
         let soft_break_content = "First line\nSecond line in same paragraph";
-        let soft_doc = parse_markdown(soft_break_content, RelativePathBuf::from("test.md"));
+        let soft_blocks = parse_multiple_blocks(soft_break_content);
+        let soft_doc = Document::with_content(RelativePathBuf::from("test.md"), soft_blocks);
 
         // Test hard break (trailing spaces + newline)
         let hard_break_content = "First line  \nSecond line in same paragraph";
-        let hard_doc = parse_markdown(hard_break_content, RelativePathBuf::from("test.md"));
+        let hard_blocks = parse_multiple_blocks(hard_break_content);
+        let hard_doc = Document::with_content(RelativePathBuf::from("test.md"), hard_blocks);
 
         // Both should produce 1 paragraph
         assert_eq!(soft_doc.content.len(), 1);
@@ -1072,7 +909,8 @@ mod tests {
     fn test_bullet_list_with_soft_breaks() {
         // Test bullet list where items are separated by single newlines (soft breaks)
         let content = "- bullet one\n- bullet two\n- bullet three";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         // Should have 1 bullet list block
         assert_eq!(doc.content.len(), 1);
@@ -1091,7 +929,8 @@ mod tests {
     #[test]
     fn test_consecutive_paragraphs_are_separate_blocks() {
         let content = "First paragraph content here.\n\nSecond paragraph content here.\n\nThird paragraph content here.";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         // Should have 3 separate paragraph blocks
         assert_eq!(doc.content.len(), 3);
@@ -1136,7 +975,8 @@ mod tests {
     #[test]
     fn test_bullet_marker_detection() {
         let content = "- First dash item\n* First star item";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         // Different bullet types create separate lists
         assert_eq!(doc.content.len(), 2);
@@ -1175,7 +1015,8 @@ mod tests {
     #[test]
     fn test_parsing_numbered_list_with_nested_bullets() {
         let content = "1. First item\n\t- Nested dash\n\t* Nested star\n2. Second item";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
 
@@ -1201,7 +1042,8 @@ mod tests {
     #[test]
     fn test_parsing_bullet_list_with_nested_numbered() {
         let content = "- Bullet item\n\t1. First numbered\n\t2. Second numbered";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 1);
 
@@ -1326,7 +1168,8 @@ mod tests {
     #[test]
     fn test_quote_parsing_debug() {
         let content = "> This is a quote";
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         println!("Parsed {} blocks:", doc.content.len());
         for (i, block) in doc.content.iter().enumerate() {
@@ -1366,7 +1209,8 @@ fn standalone() {
 ```
 
 - List item after code block"#;
-        let doc = parse_markdown(content, RelativePathBuf::from("test.md"));
+        let blocks = parse_multiple_blocks(content);
+        let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
 
         assert_eq!(doc.content.len(), 4);
         assert!(matches!(doc.content[0], ContentBlock::Heading { .. }));

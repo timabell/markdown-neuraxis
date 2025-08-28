@@ -3,7 +3,8 @@
 //! These tests use insta to verify that parsing produces the expected output
 //! for various markdown inputs.
 
-use super::parse_markdown;
+use super::parse_multiple_blocks;
+use crate::models::Document;
 use insta::assert_yaml_snapshot;
 use regex::Regex;
 use relative_path::RelativePathBuf;
@@ -67,7 +68,8 @@ Paragraph with [[Getting-Started]] link.
     "wiki_links_mixed"
 )]
 fn test_document_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
-    let doc = parse_markdown(markdown, RelativePathBuf::from("test.md"));
+    let blocks = parse_multiple_blocks(markdown);
+    let doc = Document::with_content(RelativePathBuf::from("test.md"), blocks);
     let normalized_content = create_normalized_snapshot(&doc.content);
     assert_yaml_snapshot!(name, normalized_content);
 }

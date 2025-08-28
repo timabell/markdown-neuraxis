@@ -3,7 +3,7 @@
 //! These tests ensure that markdown can be parsed and converted back to
 //! markdown without losing information or introducing formatting changes.
 
-use crate::parsing::parse_markdown;
+use crate::models::Document;
 use std::fs;
 use std::path::Path;
 
@@ -25,7 +25,8 @@ fn test_roundtrip_all_test_files() {
                 fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read {file_name}"));
 
             use relative_path::RelativePathBuf;
-            let parsed_doc = parse_markdown(&original_markdown, RelativePathBuf::from(file_name));
+            let blocks = crate::parsing::parse_multiple_blocks(&original_markdown);
+            let parsed_doc = Document::with_content(RelativePathBuf::from(file_name), blocks);
 
             let regenerated_markdown = parsed_doc
                 .content
