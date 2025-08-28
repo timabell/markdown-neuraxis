@@ -1,102 +1,39 @@
 //! Roundtrip tests for markdown parsing and generation.
 //!
-//! These tests ensure that content can be converted to markdown and back
-//! without losing information.
+//! These tests ensure that markdown can be parsed and converted back to
+//! markdown without losing information or introducing formatting changes.
 
-use crate::models::ContentBlock;
 use crate::parsing::from_markdown;
+use std::fs;
+use std::path::Path;
 
 #[test]
-fn test_roundtrip_conversion() {
-    let original = ContentBlock::Heading {
-        level: 1,
-        text: "Main Title".to_string(),
-    };
-    let markdown = original.to_markdown();
-    let converted = from_markdown(&markdown).unwrap();
-    assert_eq!(original, converted);
-}
+fn test_roundtrip_all_test_files() {
+    let test_data_dir = Path::new("src/parsing/test_data");
 
-#[test]
-fn test_roundtrip_heading_levels() {
-    for level in 1..=6 {
-        let original = ContentBlock::Heading {
-            level,
-            text: format!("Heading Level {level}"),
-        };
-        let markdown = original.to_markdown();
-        let converted = from_markdown(&markdown).unwrap();
-        assert_eq!(original, converted);
+    let entries = fs::read_dir(test_data_dir).expect("Failed to read test data directory");
+
+    for entry in entries {
+        let entry = entry.expect("Failed to read directory entry");
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) == Some("md") {
+            let file_name = path.file_name().unwrap().to_str().unwrap();
+            println!("Testing roundtrip for: {file_name}");
+
+            let original_markdown =
+                fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read {file_name}"));
+
+            let parsed = from_markdown(&original_markdown)
+                .unwrap_or_else(|_| panic!("Failed to parse {file_name}"));
+
+            let regenerated_markdown = parsed.to_markdown();
+
+            assert_eq!(
+                original_markdown.trim(),
+                regenerated_markdown.trim(),
+                "Roundtrip failed for {file_name}"
+            );
+        }
     }
-}
-
-#[test]
-fn test_roundtrip_bullet_list() {
-    let original = ContentBlock::BulletList {
-        items: vec![
-            crate::models::ListItem::new("First item".to_string(), 0),
-            crate::models::ListItem::new("Second item".to_string(), 0),
-            crate::models::ListItem::new("Third item".to_string(), 0),
-        ],
-    };
-    let markdown = original.to_markdown();
-    let converted = from_markdown(&markdown).unwrap();
-    assert_eq!(original, converted);
-}
-
-#[test]
-fn test_roundtrip_numbered_list() {
-    let original = ContentBlock::NumberedList {
-        items: vec![
-            crate::models::ListItem::new("First item".to_string(), 0),
-            crate::models::ListItem::new("Second item".to_string(), 0),
-            crate::models::ListItem::new("Third item".to_string(), 0),
-        ],
-    };
-    let markdown = original.to_markdown();
-    let converted = from_markdown(&markdown).unwrap();
-    assert_eq!(original, converted);
-}
-
-#[test]
-fn test_roundtrip_code_block() {
-    let original = ContentBlock::CodeBlock {
-        language: Some("rust".to_string()),
-        code: "fn main() {\n    println!(\"Hello, world!\");\n}".to_string(),
-    };
-    let markdown = original.to_markdown();
-    let converted = from_markdown(&markdown).unwrap();
-    assert_eq!(original, converted);
-}
-
-#[test]
-fn test_roundtrip_quote() {
-    let original = ContentBlock::Quote("This is a quote".to_string());
-    let markdown = original.to_markdown();
-    let converted = from_markdown(&markdown).unwrap();
-    assert_eq!(original, converted);
-}
-
-#[test]
-fn test_roundtrip_rule() {
-    let original = ContentBlock::Rule;
-    let markdown = original.to_markdown();
-    let converted = from_markdown(&markdown).unwrap();
-    assert_eq!(original, converted);
-}
-
-#[test]
-fn test_roundtrip_paragraph_with_wiki_links() {
-    let original = ContentBlock::Paragraph {
-        segments: vec![
-            crate::models::TextSegment::Text("This is a ".to_string()),
-            crate::models::TextSegment::WikiLink {
-                target: "test-link".to_string(),
-            },
-            crate::models::TextSegment::Text(" paragraph.".to_string()),
-        ],
-    };
-    let markdown = original.to_markdown();
-    let converted = from_markdown(&markdown).unwrap();
-    assert_eq!(original, converted);
 }
