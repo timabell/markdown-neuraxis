@@ -152,11 +152,15 @@ fn items_to_markdown(items: &[ListItem], is_numbered: bool) -> String {
         // Recursively render children with proper indentation
         if !item.children.is_empty() {
             // Check if children should be rendered as numbered list based on their markers
-            let should_be_numbered = item
+            let children_items: Vec<ListItem> = item
                 .children
                 .iter()
+                .map(|(_, child)| child.clone())
+                .collect();
+            let should_be_numbered = children_items
+                .iter()
                 .any(|child| matches!(child.marker, Some(BulletMarker::Numbered)));
-            let child_lines = items_to_markdown(&item.children, should_be_numbered);
+            let child_lines = items_to_markdown(&children_items, should_be_numbered);
             for child_line in child_lines.split('\n') {
                 if !child_line.is_empty() {
                     lines.push(child_line.to_string());
@@ -205,7 +209,7 @@ pub struct ListItem {
     pub content: String,
     pub segments: Option<Vec<TextSegment>>,
     pub level: usize,
-    pub children: Vec<ListItem>,
+    pub children: Vec<(BlockId, ListItem)>,
     pub nested_content: Vec<ContentBlock>,
     pub marker: Option<BulletMarker>, // Store original bullet marker type
 }
@@ -254,6 +258,36 @@ impl Document {
 }
 
 impl DocumentState {
+    /// Helper method to find a nested list item by BlockId
+    fn find_nested_item(children: &[(BlockId, ListItem)], target_id: BlockId) -> Option<&ListItem> {
+        for (id, item) in children {
+            if *id == target_id {
+                return Some(item);
+            }
+            // Recursively search in nested children
+            if let Some(found) = Self::find_nested_item(&item.children, target_id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// Helper method to find a mutable nested list item by BlockId
+    fn find_nested_item_mut(
+        children: &mut [(BlockId, ListItem)],
+        target_id: BlockId,
+    ) -> Option<&mut ListItem> {
+        for (id, item) in children {
+            if *id == target_id {
+                return Some(item);
+            }
+            // Recursively search in nested children
+            if let Some(found) = Self::find_nested_item_mut(&mut item.children, target_id) {
+                return Some(found);
+            }
+        }
+        None
+    }
     pub fn from_document(document: Document) -> Self {
         let blocks = document
             .content
@@ -285,7 +319,7 @@ impl DocumentState {
             return;
         }
 
-        // If not found, try to find a list item with this ID
+        // If not found, try to find a list item with this ID (including nested items)
         for (_, block) in &self.blocks {
             match block {
                 ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
@@ -293,6 +327,14 @@ impl DocumentState {
                         let raw_markdown = list_item.content.clone();
                         self.editing_block = Some((block_id, raw_markdown));
                         return;
+                    }
+                    // Also search in nested children
+                    for (_, item) in items {
+                        if let Some(found_item) = Self::find_nested_item(&item.children, block_id) {
+                            let raw_markdown = found_item.content.clone();
+                            self.editing_block = Some((block_id, raw_markdown));
+                            return;
+                        }
                     }
                 }
                 _ => {}
@@ -331,7 +373,7 @@ impl DocumentState {
             }
         }
 
-        // If not found, try to find and update a list item with this ID
+        // If not found, try to find and update a list item with this ID (including nested items)
         for (_, block) in &mut self.blocks {
             match block {
                 ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
@@ -339,6 +381,16 @@ impl DocumentState {
                         list_item.content = new_content;
                         self.editing_block = None;
                         return vec![block_id]; // Return the same ID since we updated in place
+                    }
+                    // Also search in nested children
+                    for (_, item) in items {
+                        if let Some(found_item) =
+                            Self::find_nested_item_mut(&mut item.children, block_id)
+                        {
+                            found_item.content = new_content;
+                            self.editing_block = None;
+                            return vec![block_id]; // Return the same ID since we updated in place
+                        }
                     }
                 }
                 _ => {}

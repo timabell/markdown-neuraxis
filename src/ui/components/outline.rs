@@ -65,7 +65,7 @@ pub fn OutlineItemComponent(
         if !item.children.is_empty() {
             div {
                 class: "nested-list",
-                for (idx, child) in item.children.iter().enumerate() {
+                for (idx, (_child_id, child)) in item.children.iter().enumerate() {
                     OutlineItemComponent {
                         item: child.clone(),
                         indent: indent + 1,
@@ -80,7 +80,7 @@ pub fn OutlineItemComponent(
 }
 
 #[component]
-fn NestedContentComponent(
+pub fn NestedContentComponent(
     content: ContentBlock,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {

@@ -8,7 +8,7 @@ use crate::models::{BlockId, BulletMarker, ContentBlock, ListItem, TextSegment};
 /// Type alias for the complex item stack tuple to improve readability
 type ItemStackEntry = (
     String,
-    Vec<ListItem>,
+    Vec<(BlockId, ListItem)>,
     Vec<ContentBlock>,
     Option<BulletMarker>,
 );
@@ -406,7 +406,12 @@ impl ListParser {
                             }
                         }
                     }
-                    children.extend(items_to_add);
+                    // Add BlockIds to nested children items
+                    let items_with_ids: Vec<(BlockId, ListItem)> = items_to_add
+                        .into_iter()
+                        .map(|item| (BlockId::new(), item))
+                        .collect();
+                    children.extend(items_with_ids);
                 }
             }
         }
@@ -640,7 +645,7 @@ mod tests {
             assert_eq!(items.len(), 1);
             assert_eq!(items[0].1.content, "Parent");
             assert_eq!(items[0].1.children.len(), 1);
-            assert_eq!(items[0].1.children[0].content, "Child");
+            assert_eq!(items[0].1.children[0].1.content, "Child");
         } else {
             panic!("Expected BulletList block");
         }
@@ -781,12 +786,12 @@ mod tests {
             assert_eq!(items[0].1.children.len(), 2);
 
             // First nested item should have code block
-            assert_eq!(items[0].1.children[0].content, "Nested item with code:");
-            assert_eq!(items[0].1.children[0].nested_content.len(), 1);
+            assert_eq!(items[0].1.children[0].1.content, "Nested item with code:");
+            assert_eq!(items[0].1.children[0].1.nested_content.len(), 1);
 
             // Second nested item should not have code block
-            assert_eq!(items[0].1.children[1].content, "Another nested item");
-            assert_eq!(items[0].1.children[1].nested_content.len(), 0);
+            assert_eq!(items[0].1.children[1].1.content, "Another nested item");
+            assert_eq!(items[0].1.children[1].1.nested_content.len(), 0);
         } else {
             panic!("Expected BulletList block");
         }
@@ -1026,10 +1031,10 @@ mod tests {
             // First item should have both dash and star nested items
             assert_eq!(items[0].1.content, "First item");
             assert_eq!(items[0].1.children.len(), 2);
-            assert_eq!(items[0].1.children[0].content, "Nested dash");
-            assert_eq!(items[0].1.children[0].marker, Some(BulletMarker::Dash));
-            assert_eq!(items[0].1.children[1].content, "Nested star");
-            assert_eq!(items[0].1.children[1].marker, Some(BulletMarker::Star));
+            assert_eq!(items[0].1.children[0].1.content, "Nested dash");
+            assert_eq!(items[0].1.children[0].1.marker, Some(BulletMarker::Dash));
+            assert_eq!(items[0].1.children[1].1.content, "Nested star");
+            assert_eq!(items[0].1.children[1].1.marker, Some(BulletMarker::Star));
 
             // Second item should have no children
             assert_eq!(items[1].1.content, "Second item");
@@ -1053,12 +1058,18 @@ mod tests {
             // Bullet item should have nested numbered items
             assert_eq!(items[0].1.content, "Bullet item");
             assert_eq!(items[0].1.children.len(), 2);
-            assert_eq!(items[0].1.children[0].content, "First numbered");
-            assert_eq!(items[0].1.children[1].content, "Second numbered");
+            assert_eq!(items[0].1.children[0].1.content, "First numbered");
+            assert_eq!(items[0].1.children[1].1.content, "Second numbered");
 
             // These should now have Numbered marker
-            assert_eq!(items[0].1.children[0].marker, Some(BulletMarker::Numbered));
-            assert_eq!(items[0].1.children[1].marker, Some(BulletMarker::Numbered));
+            assert_eq!(
+                items[0].1.children[0].1.marker,
+                Some(BulletMarker::Numbered)
+            );
+            assert_eq!(
+                items[0].1.children[1].1.marker,
+                Some(BulletMarker::Numbered)
+            );
 
             // Test that it roundtrips correctly
             let regenerated = doc
@@ -1105,7 +1116,7 @@ mod tests {
             content: "Parent item".to_string(),
             segments: None,
             level: 0,
-            children: vec![dash_child, star_child],
+            children: vec![(BlockId::new(), dash_child), (BlockId::new(), star_child)],
             nested_content: vec![],
             marker: None,
         };
@@ -1149,7 +1160,10 @@ mod tests {
             content: "Bullet item".to_string(),
             segments: None,
             level: 0,
-            children: vec![first_numbered, second_numbered],
+            children: vec![
+                (BlockId::new(), first_numbered),
+                (BlockId::new(), second_numbered),
+            ],
             nested_content: vec![],
             marker: Some(BulletMarker::Dash),
         };
