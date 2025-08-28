@@ -74,10 +74,10 @@ src/
 ├── main.rs              # Entry point, CLI argument handling, window config
 ├── lib.rs               # Module exports and core unit tests
 ├── models/              # Core data structures
-│   ├── document.rs      # Document with ContentBlock enum (headings, lists, etc.)
+│   ├── document.rs      # Document with ContentBlock enum, ListItem with BlockId children
 │   └── mod.rs
 ├── parsing/             # Markdown processing
-│   ├── mod.rs           # pulldown-cmark integration, hierarchy building
+│   ├── mod.rs           # Consolidated pulldown-cmark parsing via parse_multiple_blocks()
 │   └── README.md        # Explains tree building challenges and solutions
 ├── io/                  # File system operations
 │   └── mod.rs           # File scanning, validation, reading
@@ -86,7 +86,8 @@ src/
 │   └── components/      # Reusable UI components
 │       ├── file_item.rs # Individual file list items
 │       ├── main_panel.rs # Content display panel
-│       ├── outline.rs   # Hierarchical outline renderer
+│       ├── outline.rs   # Hierarchical outline renderer  
+│       ├── editable_block.rs # Individual bullet editing components
 │       └── mod.rs
 ├── assets/              # Static resources
 │   └── solarized-light.css # Theme styling
@@ -99,8 +100,8 @@ src/
 ### Data Flow Architecture
 1. **Startup**: CLI validates notes directory structure via `io::validate_notes_dir()`
 2. **File Discovery**: `io::scan_markdown_files()` recursively finds `.md` files in notes root directory
-3. **File Selection**: User clicks file → `io::read_file()` → `parsing::parse_markdown()` 
-4. **Rendering**: Parsed `Document` with hierarchical `OutlineItem`s rendered via Dioxus components
+3. **File Selection**: User clicks file → `io::read_file()` → `parsing::parse_multiple_blocks()` 
+4. **Rendering**: Parsed `Document` with hierarchical `ListItem`s rendered via Dioxus components, with individual BlockId editing
 5. **State Management**: Dioxus signals track selected file and current document
 
 ### Plugin Architecture (ADR-0002)
@@ -117,7 +118,8 @@ src/
 ### Current Implementation Status
 - ✅ **CLI Interface**: Single argument for notes folder path
 - ✅ **File Browser**: Recursive markdown file discovery and selection
-- ✅ **Markdown Parsing**: Hierarchical bullet point outline extraction
+- ✅ **Markdown Parsing**: Hierarchical bullet point outline extraction with consolidated `parse_multiple_blocks()` 
+- ✅ **Individual Bullet Editing**: Each nested bullet is individually editable with BlockId-based selection
 - ✅ **UI Layout**: Sidebar + main content with Solarized Light theme
 - ✅ **Error Handling**: Graceful validation and error display
 - ✅ **Testing**: Snapshot tests for outline parsing, unit tests for core logic
