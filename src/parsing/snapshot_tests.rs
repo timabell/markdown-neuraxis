@@ -5,8 +5,23 @@
 
 use super::parse_markdown;
 use insta::assert_yaml_snapshot;
+use regex::Regex;
 use relative_path::RelativePathBuf;
 use rstest::rstest;
+
+/// Create a normalized snapshot value with UUIDs replaced by a placeholder
+fn create_normalized_snapshot(content: &[crate::models::ContentBlock]) -> serde_yaml::Value {
+    // Serialize to YAML string first
+    let yaml_str = serde_yaml::to_string(content).expect("Failed to serialize to YAML");
+
+    // Replace all UUIDs with a simple placeholder
+    let uuid_regex =
+        Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").unwrap();
+    let normalized_yaml = uuid_regex.replace_all(&yaml_str, "<some-uuid>");
+
+    // Parse back to serde_yaml::Value for snapshot comparison
+    serde_yaml::from_str(&normalized_yaml).expect("Failed to parse normalized YAML")
+}
 
 #[rstest]
 #[case(
@@ -53,5 +68,6 @@ Paragraph with [[Getting-Started]] link.
 )]
 fn test_document_parsing_snapshots(#[case] markdown: &str, #[case] name: &str) {
     let doc = parse_markdown(markdown, RelativePathBuf::from("test.md"));
-    assert_yaml_snapshot!(name, doc.content);
+    let normalized_content = create_normalized_snapshot(&doc.content);
+    assert_yaml_snapshot!(name, normalized_content);
 }

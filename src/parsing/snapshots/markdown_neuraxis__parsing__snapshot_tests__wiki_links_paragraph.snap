@@ -1,13 +1,13 @@
 ---
 source: src/parsing/snapshot_tests.rs
-expression: doc.content
+expression: normalized_content
 ---
-- Paragraph:
+- "!Paragraph":
     segments:
-      - Text: "This paragraph has "
-      - WikiLink:
+      - "!Text": "This paragraph has "
+      - "!WikiLink":
           target: Simple-Link
-      - Text: " and "
-      - WikiLink:
+      - "!Text": " and "
+      - "!WikiLink":
           target: Folder/Page
-      - Text: " references."
+      - "!Text": " references."

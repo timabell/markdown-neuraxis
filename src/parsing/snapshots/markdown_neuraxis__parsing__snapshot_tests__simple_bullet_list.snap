@@ -1,22 +1,22 @@
 ---
 source: src/parsing/snapshot_tests.rs
-expression: doc.content
+expression: normalized_content
 ---
-- BulletList:
+- "!BulletList":
     items:
-      - - fab67a42-2c82-4d16-bcbd-fd22ceeff934
+      - - "<some-uuid>"
         - content: First item
           segments: ~
           level: 0
           children: []
           nested_content: []
-      - - 778c6b5c-26a0-4d76-aaf4-a82470391b23
+      - - "<some-uuid>"
         - content: Second item
           segments: ~
           level: 0
           children: []
           nested_content: []
-      - - 7cc6caef-5a67-46f7-a356-bcd3dea139dd
+      - - "<some-uuid>"
         - content: Third item
           segments: ~
           level: 0

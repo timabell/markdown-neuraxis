@@ -1,10 +1,10 @@
 ---
 source: src/parsing/snapshot_tests.rs
-expression: doc.content
+expression: normalized_content
 ---
-- BulletList:
+- "!BulletList":
     items:
-      - - 10d4891d-c725-4430-8bfd-f26fc0ea4d34
+      - - "<some-uuid>"
         - content: Single item
           segments: ~
           level: 0
