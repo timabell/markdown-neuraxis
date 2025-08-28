@@ -4,58 +4,61 @@ expression: doc.content
 ---
 - BulletList:
     items:
-      - content: Item 1
-        segments: ~
-        level: 0
-        children:
-          - content: Item 1.1
-            segments: ~
-            level: 1
-            children:
-              - content: Item 1.1.1
-                segments: ~
-                level: 2
-                children:
-                  - content: Item 1.1.1.1
-                    segments: ~
-                    level: 3
-                    children: []
-                    nested_content: []
-                  - content: Item 1.1.1.2
-                    segments: ~
-                    level: 3
-                    children: []
-                    nested_content: []
-                nested_content: []
-              - content: Item 1.1.2
-                segments: ~
-                level: 2
-                children: []
-                nested_content: []
-            nested_content: []
-          - content: Item 1.2
-            segments: ~
-            level: 1
-            children:
-              - content: Item 1.2.1
-                segments: ~
-                level: 2
-                children: []
-                nested_content: []
-            nested_content: []
-        nested_content: []
-      - content: Item 2
-        segments: ~
-        level: 0
-        children:
-          - content: Item 2.1
-            segments: ~
-            level: 1
-            children: []
-            nested_content: []
-        nested_content: []
-      - content: Item 3
-        segments: ~
-        level: 0
-        children: []
-        nested_content: []
+      - - a6e8a350-12da-4887-ba76-a7fedcab2b64
+        - content: Item 1
+          segments: ~
+          level: 0
+          children:
+            - content: Item 1.1
+              segments: ~
+              level: 1
+              children:
+                - content: Item 1.1.1
+                  segments: ~
+                  level: 2
+                  children:
+                    - content: Item 1.1.1.1
+                      segments: ~
+                      level: 3
+                      children: []
+                      nested_content: []
+                    - content: Item 1.1.1.2
+                      segments: ~
+                      level: 3
+                      children: []
+                      nested_content: []
+                  nested_content: []
+                - content: Item 1.1.2
+                  segments: ~
+                  level: 2
+                  children: []
+                  nested_content: []
+              nested_content: []
+            - content: Item 1.2
+              segments: ~
+              level: 1
+              children:
+                - content: Item 1.2.1
+                  segments: ~
+                  level: 2
+                  children: []
+                  nested_content: []
+              nested_content: []
+          nested_content: []
+      - - 7ae05e81-7347-48d4-baa0-2f1a81b4cf38
+        - content: Item 2
+          segments: ~
+          level: 0
+          children:
+            - content: Item 2.1
+              segments: ~
+              level: 1
+              children: []
+              nested_content: []
+          nested_content: []
+      - - 9484ffb2-d3c7-4c98-8e48-2044eedd5564
+        - content: Item 3
+          segments: ~
+          level: 0
+          children: []
+          nested_content: []

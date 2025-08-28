@@ -4,8 +4,9 @@ expression: doc.content
 ---
 - BulletList:
     items:
-      - content: Single item
-        segments: ~
-        level: 0
-        children: []
-        nested_content: []
+      - - 10d4891d-c725-4430-8bfd-f26fc0ea4d34
+        - content: Single item
+          segments: ~
+          level: 0
+          children: []
+          nested_content: []

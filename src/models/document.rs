@@ -27,6 +27,12 @@ pub struct DocumentState {
 }
 
 // one piece of a longer markdown document, documents are divided up into blocks such as headings, lists, paragraphs etc to allow them to be selected and edited individually
+/// Trait for list-like content blocks
+pub trait ListBlock {
+    fn items(&self) -> &Vec<(BlockId, ListItem)>;
+    fn items_mut(&mut self) -> &mut Vec<(BlockId, ListItem)>;
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ContentBlock {
     Heading {
@@ -37,10 +43,10 @@ pub enum ContentBlock {
         segments: Vec<TextSegment>,
     },
     BulletList {
-        items: Vec<ListItem>,
+        items: Vec<(BlockId, ListItem)>,
     },
     NumberedList {
-        items: Vec<ListItem>,
+        items: Vec<(BlockId, ListItem)>,
     },
     CodeBlock {
         language: Option<String>,
@@ -50,6 +56,22 @@ pub enum ContentBlock {
     Rule,
 }
 
+impl ListBlock for ContentBlock {
+    fn items(&self) -> &Vec<(BlockId, ListItem)> {
+        match self {
+            ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => items,
+            _ => panic!("Called ListBlock methods on non-list ContentBlock"),
+        }
+    }
+
+    fn items_mut(&mut self) -> &mut Vec<(BlockId, ListItem)> {
+        match self {
+            ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => items,
+            _ => panic!("Called ListBlock methods on non-list ContentBlock"),
+        }
+    }
+}
+
 impl ContentBlock {
     pub fn to_markdown(&self) -> String {
         match self {
@@ -57,8 +79,16 @@ impl ContentBlock {
                 format!("{} {}", "#".repeat(*level as usize), text)
             }
             ContentBlock::Paragraph { segments } => segments_to_markdown(segments),
-            ContentBlock::BulletList { items } => items_to_markdown(items, false),
-            ContentBlock::NumberedList { items } => items_to_markdown(items, true),
+            ContentBlock::BulletList { items } => {
+                let list_items: Vec<ListItem> =
+                    items.iter().map(|(_, item)| item.clone()).collect();
+                items_to_markdown(&list_items, false)
+            }
+            ContentBlock::NumberedList { items } => {
+                let list_items: Vec<ListItem> =
+                    items.iter().map(|(_, item)| item.clone()).collect();
+                items_to_markdown(&list_items, true)
+            }
             ContentBlock::CodeBlock { language, code } => {
                 if let Some(lang) = language {
                     format!("```{lang}\n{code}\n```")
@@ -189,13 +219,30 @@ impl DocumentState {
     }
 
     pub fn start_editing(&mut self, block_id: BlockId) {
+        // First try to find a block with this ID
         if let Some((_, block)) = self.blocks.iter().find(|(id, _)| *id == block_id) {
             let raw_markdown = block.to_markdown();
             self.editing_block = Some((block_id, raw_markdown));
+            return;
+        }
+
+        // If not found, try to find a list item with this ID
+        for (_, block) in &self.blocks {
+            match block {
+                ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
+                    if let Some((_, list_item)) = items.iter().find(|(id, _)| *id == block_id) {
+                        let raw_markdown = list_item.content.clone();
+                        self.editing_block = Some((block_id, raw_markdown));
+                        return;
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
     pub fn finish_editing(&mut self, block_id: BlockId, new_content: String) -> Vec<BlockId> {
+        // First try to find a block with this ID
         if let Some(pos) = self.blocks.iter().position(|(id, _)| *id == block_id) {
             let new_blocks = crate::parsing::parse_multiple_blocks(&new_content);
 
@@ -222,6 +269,20 @@ impl DocumentState {
                 }
 
                 return new_block_ids;
+            }
+        }
+
+        // If not found, try to find and update a list item with this ID
+        for (_, block) in &mut self.blocks {
+            match block {
+                ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
+                    if let Some((_, list_item)) = items.iter_mut().find(|(id, _)| *id == block_id) {
+                        list_item.content = new_content;
+                        self.editing_block = None;
+                        return vec![block_id]; // Return the same ID since we updated in place
+                    }
+                }
+                _ => {}
             }
         }
 

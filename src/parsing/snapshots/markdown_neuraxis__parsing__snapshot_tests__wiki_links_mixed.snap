@@ -13,21 +13,23 @@ expression: doc.content
       - Text: " link."
 - BulletList:
     items:
-      - content: "List item with [[journal/2024-01-15]] reference"
-        segments:
-          - Text: "List item with "
-          - WikiLink:
-              target: journal/2024-01-15
-          - Text: " reference"
-        level: 0
-        children: []
-        nested_content: []
-      - content: "Another item with [[1_Projects/Website]] link"
-        segments:
-          - Text: "Another item with "
-          - WikiLink:
-              target: 1_Projects/Website
-          - Text: " link"
-        level: 0
-        children: []
-        nested_content: []
+      - - 4f462661-d7ea-4af4-853a-7d909f8b4888
+        - content: "List item with [[journal/2024-01-15]] reference"
+          segments:
+            - Text: "List item with "
+            - WikiLink:
+                target: journal/2024-01-15
+            - Text: " reference"
+          level: 0
+          children: []
+          nested_content: []
+      - - bfaa3421-5ba7-47e2-996a-b633e7bb4578
+        - content: "Another item with [[1_Projects/Website]] link"
+          segments:
+            - Text: "Another item with "
+            - WikiLink:
+                target: 1_Projects/Website
+            - Text: " link"
+          level: 0
+          children: []
+          nested_content: []

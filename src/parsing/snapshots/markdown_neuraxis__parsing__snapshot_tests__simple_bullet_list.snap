@@ -4,18 +4,21 @@ expression: doc.content
 ---
 - BulletList:
     items:
-      - content: First item
-        segments: ~
-        level: 0
-        children: []
-        nested_content: []
-      - content: Second item
-        segments: ~
-        level: 0
-        children: []
-        nested_content: []
-      - content: Third item
-        segments: ~
-        level: 0
-        children: []
-        nested_content: []
+      - - fab67a42-2c82-4d16-bcbd-fd22ceeff934
+        - content: First item
+          segments: ~
+          level: 0
+          children: []
+          nested_content: []
+      - - 778c6b5c-26a0-4d76-aaf4-a82470391b23
+        - content: Second item
+          segments: ~
+          level: 0
+          children: []
+          nested_content: []
+      - - 7cc6caef-5a67-46f7-a356-bcd3dea139dd
+        - content: Third item
+          segments: ~
+          level: 0
+          children: []
+          nested_content: []

@@ -3,7 +3,7 @@
 //! This module handles the transformation of raw markdown content into a hierarchical
 //! document structure that can be rendered and manipulated by the application.
 
-use crate::models::{ContentBlock, Document, ListItem, TextSegment};
+use crate::models::{BlockId, ContentBlock, Document, ListItem, TextSegment};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use relative_path::RelativePathBuf;
 
@@ -358,10 +358,18 @@ impl ListParser {
             if self.list_stack.is_empty() {
                 // This is a top-level list, return it as a content block
                 if !items.is_empty() {
+                    let items_with_ids: Vec<(BlockId, ListItem)> = items
+                        .into_iter()
+                        .map(|item| (BlockId::new(), item))
+                        .collect();
                     return Some(if is_ordered {
-                        ContentBlock::NumberedList { items }
+                        ContentBlock::NumberedList {
+                            items: items_with_ids,
+                        }
                     } else {
-                        ContentBlock::BulletList { items }
+                        ContentBlock::BulletList {
+                            items: items_with_ids,
+                        }
                     });
                 }
             } else {
@@ -504,7 +512,13 @@ pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
         }
 
         if !items.is_empty() {
-            return Ok(ContentBlock::BulletList { items });
+            let items_with_ids: Vec<(BlockId, ListItem)> = items
+                .into_iter()
+                .map(|item| (BlockId::new(), item))
+                .collect();
+            return Ok(ContentBlock::BulletList {
+                items: items_with_ids,
+            });
         }
     }
 
@@ -541,7 +555,13 @@ pub fn from_markdown(markdown: &str) -> Result<ContentBlock, String> {
         }
 
         if !items.is_empty() {
-            return Ok(ContentBlock::NumberedList { items });
+            let items_with_ids: Vec<(BlockId, ListItem)> = items
+                .into_iter()
+                .map(|item| (BlockId::new(), item))
+                .collect();
+            return Ok(ContentBlock::NumberedList {
+                items: items_with_ids,
+            });
         }
     }
 
@@ -673,9 +693,9 @@ mod tests {
 
         if let ContentBlock::NumberedList { items } = result {
             assert_eq!(items.len(), 3);
-            assert_eq!(items[0].content, "first item");
-            assert_eq!(items[1].content, "second item");
-            assert_eq!(items[2].content, "third item");
+            assert_eq!(items[0].1.content, "first item");
+            assert_eq!(items[1].1.content, "second item");
+            assert_eq!(items[2].1.content, "third item");
         } else {
             panic!("Expected numbered list, got: {result:?}");
         }
@@ -692,9 +712,9 @@ mod tests {
         if let ContentBlock::BulletList { items } = result {
             // Should have 3 separate items
             assert_eq!(items.len(), 3);
-            assert_eq!(items[0].content, "bullet one");
-            assert_eq!(items[1].content, "bullet two");
-            assert_eq!(items[2].content, "bullet three");
+            assert_eq!(items[0].1.content, "bullet one");
+            assert_eq!(items[1].1.content, "bullet two");
+            assert_eq!(items[2].1.content, "bullet three");
         } else {
             panic!("Expected bullet list, got: {result:?}");
         }
@@ -708,8 +728,8 @@ mod tests {
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 2);
-            assert_eq!(items[0].content, "First item");
-            assert_eq!(items[1].content, "Second item");
+            assert_eq!(items[0].1.content, "First item");
+            assert_eq!(items[1].1.content, "Second item");
         } else {
             panic!("Expected BulletList block");
         }
@@ -723,9 +743,9 @@ mod tests {
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].content, "Parent");
-            assert_eq!(items[0].children.len(), 1);
-            assert_eq!(items[0].children[0].content, "Child");
+            assert_eq!(items[0].1.content, "Parent");
+            assert_eq!(items[0].1.children.len(), 1);
+            assert_eq!(items[0].1.children[0].content, "Child");
         } else {
             panic!("Expected BulletList block");
         }
@@ -755,11 +775,11 @@ mod tests {
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 1);
             assert_eq!(
-                items[0].content,
+                items[0].1.content,
                 "This is a bullet point with inline code: `let x = 5;`"
             );
             assert!(
-                items[0].nested_content.is_empty(),
+                items[0].1.nested_content.is_empty(),
                 "Inline code should not create nested content"
             );
         } else {
@@ -780,10 +800,10 @@ mod tests {
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].content, "This bullet has a fenced code block:");
-            assert_eq!(items[0].nested_content.len(), 1);
+            assert_eq!(items[0].1.content, "This bullet has a fenced code block:");
+            assert_eq!(items[0].1.nested_content.len(), 1);
 
-            if let ContentBlock::CodeBlock { language, code } = &items[0].nested_content[0] {
+            if let ContentBlock::CodeBlock { language, code } = &items[0].1.nested_content[0] {
                 assert_eq!(language.as_ref().unwrap(), "rust");
                 assert!(code.contains("fn example()"));
                 assert!(code.contains("println!"));
@@ -817,24 +837,24 @@ mod tests {
             assert_eq!(items.len(), 3);
 
             // First item - one code block
-            assert_eq!(items[0].content, "First item with code:");
-            assert_eq!(items[0].nested_content.len(), 1);
+            assert_eq!(items[0].1.content, "First item with code:");
+            assert_eq!(items[0].1.nested_content.len(), 1);
 
             // Second item - inline code only
-            assert_eq!(items[1].content, "Second item with inline: `x = 1`");
-            assert_eq!(items[1].nested_content.len(), 0);
+            assert_eq!(items[1].1.content, "Second item with inline: `x = 1`");
+            assert_eq!(items[1].1.nested_content.len(), 0);
 
             // Third item - two code blocks
-            assert_eq!(items[2].content, "Third item with multiple blocks:");
-            assert_eq!(items[2].nested_content.len(), 2);
+            assert_eq!(items[2].1.content, "Third item with multiple blocks:");
+            assert_eq!(items[2].1.nested_content.len(), 2);
 
-            if let ContentBlock::CodeBlock { language, .. } = &items[2].nested_content[0] {
+            if let ContentBlock::CodeBlock { language, .. } = &items[2].1.nested_content[0] {
                 assert_eq!(language.as_ref().unwrap(), "python");
             } else {
                 panic!("Expected first CodeBlock to be Python");
             }
 
-            if let ContentBlock::CodeBlock { language, .. } = &items[2].nested_content[1] {
+            if let ContentBlock::CodeBlock { language, .. } = &items[2].1.nested_content[1] {
                 assert_eq!(language.as_ref().unwrap(), "javascript");
             } else {
                 panic!("Expected second CodeBlock to be JavaScript");
@@ -857,16 +877,16 @@ mod tests {
         assert_eq!(doc.content.len(), 1);
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].content, "Parent item");
-            assert_eq!(items[0].children.len(), 2);
+            assert_eq!(items[0].1.content, "Parent item");
+            assert_eq!(items[0].1.children.len(), 2);
 
             // First nested item should have code block
-            assert_eq!(items[0].children[0].content, "Nested item with code:");
-            assert_eq!(items[0].children[0].nested_content.len(), 1);
+            assert_eq!(items[0].1.children[0].content, "Nested item with code:");
+            assert_eq!(items[0].1.children[0].nested_content.len(), 1);
 
             // Second nested item should not have code block
-            assert_eq!(items[0].children[1].content, "Another nested item");
-            assert_eq!(items[0].children[1].nested_content.len(), 0);
+            assert_eq!(items[0].1.children[1].content, "Another nested item");
+            assert_eq!(items[0].1.children[1].nested_content.len(), 0);
         } else {
             panic!("Expected BulletList block");
         }
@@ -915,7 +935,7 @@ mod tests {
             assert_eq!(items.len(), 1);
 
             // Check that the item has segments
-            if let Some(ref segments) = items[0].segments {
+            if let Some(ref segments) = items[0].1.segments {
                 assert_eq!(segments.len(), 3);
                 assert_eq!(
                     segments[0],
@@ -993,9 +1013,9 @@ mod tests {
         if let ContentBlock::BulletList { items } = &doc.content[0] {
             // Should have 3 separate items, not combined
             assert_eq!(items.len(), 3);
-            assert_eq!(items[0].content, "bullet one");
-            assert_eq!(items[1].content, "bullet two");
-            assert_eq!(items[2].content, "bullet three");
+            assert_eq!(items[0].1.content, "bullet one");
+            assert_eq!(items[1].1.content, "bullet two");
+            assert_eq!(items[2].1.content, "bullet three");
         } else {
             panic!("Expected bullet list block");
         }

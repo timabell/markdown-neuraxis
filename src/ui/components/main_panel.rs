@@ -121,7 +121,8 @@ pub fn EditableMainPanel(
                                     on_edit: handle_edit,
                                     on_save: handle_save,
                                     on_editing_end: Some(handle_focus_document),
-                                    on_file_select: on_file_select
+                                    on_file_select: on_file_select,
+                                    document_state: document_state.clone()
                                 }
                             }
                         }
@@ -209,7 +210,7 @@ pub fn ContentBlockComponent(
             rsx! {
                 div {
                     class: "bullet-list",
-                    for item in items {
+                    for (_block_id, item) in items {
                         super::OutlineItemComponent {
                             item: item.clone(),
                             indent: 0,
@@ -225,7 +226,7 @@ pub fn ContentBlockComponent(
             rsx! {
                 div {
                     class: "numbered-list",
-                    for (idx, item) in items.iter().enumerate() {
+                    for (idx, (_block_id, item)) in items.iter().enumerate() {
                         super::OutlineItemComponent {
                             item: item.clone(),
                             indent: 0,
