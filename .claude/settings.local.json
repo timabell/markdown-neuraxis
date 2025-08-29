@@ -14,7 +14,8 @@
       "WebFetch(domain:github.com)",
       "Bash(find:*)",
       "Bash(mkdir:*)",
-      "Bash(./clippy-harsh.sh)"
+      "Bash(./clippy-harsh.sh)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
