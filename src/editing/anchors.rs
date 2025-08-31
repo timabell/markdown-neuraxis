@@ -7,7 +7,7 @@ use xi_rope::{Delta, RopeInfo};
 use crate::editing::Document;
 
 /// Stable identifier for a text range that survives edits
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Anchor {
     pub id: AnchorId,
     pub range: std::ops::Range<usize>, // byte range in the rope

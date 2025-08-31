@@ -357,6 +357,25 @@ hr {
     border-radius: 2px;
 }
 
+/* Clickable block styles for focus editing */
+.clickable-block {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    padding: 4px;
+    margin: 2px 0;
+    outline: none;
+}
+
+.clickable-block:hover {
+    background-color: var(--base2);
+    box-shadow: 0 0 0 1px var(--base1);
+}
+
+.clickable-block:focus {
+    box-shadow: 0 0 0 2px var(--blue);
+}
+
 /* Editable block styles */
 .editable-block {
     cursor: pointer;

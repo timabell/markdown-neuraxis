@@ -67,13 +67,15 @@ pub fn App(notes_path: PathBuf) -> Element {
             }
             div {
                 class: "main-content",
-                if let (Some(file), Some(snapshot)) = (
+                if let (Some(file), Some(snapshot), Some(document)) = (
                     selected_file.read().as_ref(),
-                    current_snapshot.read().as_ref()
+                    current_snapshot.read().as_ref(),
+                    current_document.read().as_ref()
                 ) {
                     super::components::SnapshotMainPanel {
                         file: file.clone(),
                         snapshot: snapshot.clone(),
+                        document: document.clone(),
                         on_file_select: Some(Callback::new({
                             let notes_path = notes_path.clone();
                             move |file_path: PathBuf| {
@@ -127,6 +129,16 @@ pub fn App(notes_path: PathBuf) -> Element {
                             // TODO: Implement save functionality using editing core
                             // For now, we'll use a placeholder
                             // todo!("Save functionality using editing core not yet implemented");
+                        },
+                        on_document_changed: {
+                            let mut current_document = current_document;
+                            let mut current_snapshot = current_snapshot;
+                            move |updated_document: Document| {
+                                // Update the document state
+                                let new_snapshot = updated_document.snapshot();
+                                *current_document.write() = Some(updated_document);
+                                *current_snapshot.write() = Some(new_snapshot);
+                            }
                         }
                     }
                 } else {

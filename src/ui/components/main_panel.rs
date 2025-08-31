@@ -1,4 +1,4 @@
-use crate::editing::{BlockKind, Marker, RenderBlock, Snapshot};
+use crate::editing::{AnchorId, BlockKind, Cmd, Document, Marker, RenderBlock, Snapshot};
 use crate::models::MarkdownFile;
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -7,24 +7,132 @@ use std::path::PathBuf;
 pub fn SnapshotMainPanel(
     file: MarkdownFile,
     snapshot: Snapshot,
+    mut document: Document,
     on_file_select: Option<Callback<PathBuf>>,
     on_save: Callback<()>,
+    on_document_changed: Callback<Document>,
 ) -> Element {
+    // Focus state management - track which block is currently focused for editing
+    let mut focused_block_id = use_signal(|| None::<AnchorId>);
+
+    // Helper to navigate to next/previous block
+    let mut navigate_to_block = {
+        let mut focused_block_id = focused_block_id;
+        let snapshot = snapshot.clone();
+        move |direction: i32| {
+            let current_focus = *focused_block_id.read();
+            if let Some(current_id) = current_focus {
+                // Find current block index and navigate
+                if let Some(current_index) = snapshot.blocks.iter().position(|b| b.id == current_id)
+                {
+                    let next_index = (current_index as i32 + direction).max(0) as usize;
+                    if next_index < snapshot.blocks.len() {
+                        focused_block_id.set(Some(snapshot.blocks[next_index].id));
+                    }
+                }
+            } else if !snapshot.blocks.is_empty() {
+                // No block focused - focus first or last depending on direction
+                let index = if direction > 0 {
+                    0
+                } else {
+                    snapshot.blocks.len() - 1
+                };
+                focused_block_id.set(Some(snapshot.blocks[index].id));
+            }
+        }
+    };
+
     let display_name = file.display_path();
 
     rsx! {
         div {
             class: "document-container",
+            tabindex: "0", // Make container focusable for keyboard navigation
+
+            // Handle keyboard navigation when not in editing mode
+            onkeydown: move |event| {
+                // Only handle navigation when no block is being edited
+                if focused_block_id.read().is_none() {
+                    match event.key() {
+                        Key::Tab => {
+                            event.prevent_default();
+                            if event.modifiers().shift() {
+                                navigate_to_block(-1); // Previous block
+                            } else {
+                                navigate_to_block(1); // Next block
+                            }
+                        },
+                        Key::Enter => {
+                            // Enter focuses the first block if none are focused
+                            if !snapshot.blocks.is_empty() {
+                                focused_block_id.set(Some(snapshot.blocks[0].id));
+                            }
+                        },
+                        Key::ArrowDown => {
+                            event.prevent_default();
+                            navigate_to_block(1);
+                        },
+                        Key::ArrowUp => {
+                            event.prevent_default();
+                            navigate_to_block(-1);
+                        },
+                        _ => {}
+                    }
+                }
+            },
+
             h1 { "📝 {display_name}" }
             hr {}
             if !snapshot.blocks.is_empty() {
                 div {
                     class: "document-content",
                     for (index, block) in snapshot.blocks.iter().enumerate() {
-                        RenderBlockComponent {
-                            key: "{index}",
-                            block: block.clone(),
-                            on_file_select: on_file_select
+                        // Switch between pretty rendering and raw editing based on focus state
+                        if focused_block_id.read().as_ref() == Some(&block.id) {
+                            // Block is focused - show raw markdown editor
+                            EditorBlock {
+                                key: "{index}-editor",
+                                block: block.clone(),
+                                content_text: document.slice_to_cow(block.byte_range.clone()).to_string(),
+                                on_command: {
+                                    let mut document = document.clone();
+                                    let on_document_changed = on_document_changed;
+                                    let mut focused_block_id = focused_block_id;
+                                    move |cmd: Cmd| {
+                                        // Apply command to document
+                                        let _patch = document.apply(cmd);
+
+                                        // Notify parent of document change
+                                        on_document_changed.call(document.clone());
+
+                                        // For now, exit editing after command
+                                        // TODO: Keep editing and update textarea content
+                                        focused_block_id.set(None);
+                                    }
+                                },
+                                on_cancel: {
+                                    let mut focused_block_id = focused_block_id;
+                                    move |_| {
+                                        // Cancel editing - return to pretty view
+                                        focused_block_id.set(None);
+                                    }
+                                }
+                            }
+                        } else {
+                            // Block is not focused - show pretty rendering
+                            RenderBlockComponent {
+                                key: "{index}-render",
+                                block: block.clone(),
+                                on_file_select: on_file_select,
+                                on_focus: {
+                                    let mut focused_block_id = focused_block_id;
+                                    let block_id = block.id;
+                                    move |_| {
+                                        // Focus this block for editing
+                                        focused_block_id.set(Some(block_id));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -50,23 +158,37 @@ pub fn SnapshotMainPanel(
 pub fn RenderBlockComponent(
     block: RenderBlock,
     on_file_select: Option<Callback<PathBuf>>,
+    on_focus: Callback<()>,
 ) -> Element {
     match block.kind {
         BlockKind::Heading { level } => {
-            let class_name = format!("heading level-{level}");
+            let class_name = format!("heading level-{level} clickable-block");
             match level {
-                1 => rsx! { h1 { class: "{class_name}", "{block.content}" } },
-                2 => rsx! { h2 { class: "{class_name}", "{block.content}" } },
-                3 => rsx! { h3 { class: "{class_name}", "{block.content}" } },
-                4 => rsx! { h4 { class: "{class_name}", "{block.content}" } },
-                5 => rsx! { h5 { class: "{class_name}", "{block.content}" } },
-                _ => rsx! { h6 { class: "{class_name}", "{block.content}" } },
+                1 => {
+                    rsx! { h1 { class: "{class_name}", onclick: move |_| on_focus.call(()), "{block.content}" } }
+                }
+                2 => {
+                    rsx! { h2 { class: "{class_name}", onclick: move |_| on_focus.call(()), "{block.content}" } }
+                }
+                3 => {
+                    rsx! { h3 { class: "{class_name}", onclick: move |_| on_focus.call(()), "{block.content}" } }
+                }
+                4 => {
+                    rsx! { h4 { class: "{class_name}", onclick: move |_| on_focus.call(()), "{block.content}" } }
+                }
+                5 => {
+                    rsx! { h5 { class: "{class_name}", onclick: move |_| on_focus.call(()), "{block.content}" } }
+                }
+                _ => {
+                    rsx! { h6 { class: "{class_name}", onclick: move |_| on_focus.call(()), "{block.content}" } }
+                }
             }
         }
         BlockKind::Paragraph => {
             rsx! {
                 p {
-                    class: "paragraph",
+                    class: "paragraph clickable-block",
+                    onclick: move |_| on_focus.call(()),
                     "{block.content}"
                 }
             }
@@ -81,7 +203,8 @@ pub fn RenderBlockComponent(
 
             rsx! {
                 div {
-                    class: "list-item",
+                    class: "list-item clickable-block",
+                    onclick: move |_| on_focus.call(()),
                     // Render indent blocks for proper CSS-based indentation
                     for _ in 0..depth {
                         div { class: "indent-block" }
@@ -100,7 +223,8 @@ pub fn RenderBlockComponent(
 
             rsx! {
                 div {
-                    class: "code-block",
+                    class: "code-block clickable-block",
+                    onclick: move |_| on_focus.call(()),
                     if let Some(lang_str) = lang {
                         div { class: "code-language", "{lang_str}" }
                     }
@@ -152,6 +276,7 @@ pub fn EditorBlock(
                 value: textarea_value(),
                 spellcheck: false,
                 rows: calculate_textarea_rows(&textarea_value()),
+                autofocus: true, // Try to auto-focus when created
 
                 // Basic input handling - full beforeinput mapping comes later
                 oninput: move |event| {
@@ -164,39 +289,36 @@ pub fn EditorBlock(
                 onkeydown: move |event| {
                     match event.key() {
                         Key::Tab => {
+                            // Tab navigation while editing exits to pretty view
                             event.prevent_default();
-                            if event.modifiers().shift() {
-                                // TODO: on_command.call(Cmd::OutdentLines { range: ... });
-                            } else {
-                                // TODO: on_command.call(Cmd::IndentLines { range: ... });
-                            }
+                            on_cancel.call(());
                         },
                         Key::Enter => {
-                            event.prevent_default();
-                            // TODO: on_command.call(Cmd::SplitListItem { at: ... });
+                            if event.modifiers().shift() {
+                                // Shift+Enter: insert newline (default behavior)
+                            } else {
+                                event.prevent_default();
+                                // TODO: on_command.call(Cmd::SplitListItem { at: ... });
+                                // For now, just exit editing mode
+                                on_cancel.call(());
+                            }
                         },
                         Key::Escape => {
                             on_cancel.call(());
                         },
-                        Key::Backspace => {
-                            event.prevent_default();
-                            // TODO: Handle backspace via DeleteRange command
-                            let current = textarea_value();
-                            if !current.is_empty() {
-                                textarea_value.set(current[..current.len()-1].to_string());
-                            }
-                        },
-                        _ => {} // Other keys will be handled by beforeinput
+                        _ => {} // Other keys will be handled normally
                     }
+                },
+
+                // Auto-cancel editing when focus is lost
+                onblur: move |_| {
+                    // When the textarea loses focus, return to pretty view
+                    on_cancel.call(());
                 },
 
                 // Handle focus for editor lifecycle
                 onfocus: move |_| {
-                    // Editor is now active - could set focus state in parent
-                },
-
-                onblur: move |_| {
-                    // Could auto-commit changes or validate on blur
+                    // Editor is now active
                 },
             }
         }

@@ -178,6 +178,38 @@ impl Document {
     }
 }
 
+impl Clone for Document {
+    fn clone(&self) -> Self {
+        // Create a new parser since Parser doesn't implement Clone
+        let mut parser = Parser::new();
+        let _ = parser.set_language(&LANGUAGE.into());
+
+        // Re-parse the document for the cloned version
+        let tree = parser.parse(self.buffer.to_string(), None);
+
+        Self {
+            buffer: self.buffer.clone(),
+            selection: self.selection.clone(),
+            version: self.version,
+            parser,
+            tree,
+            anchors: self.anchors.clone(),
+        }
+    }
+}
+
+impl PartialEq for Document {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare the essential state that matters for equality
+        // Compare buffer content as strings since Node doesn't implement PartialEq
+        self.buffer.to_string() == other.buffer.to_string()
+            && self.selection == other.selection
+            && self.version == other.version
+            && self.anchors == other.anchors
+        // Note: We don't compare parser or tree as they are derived from buffer
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
