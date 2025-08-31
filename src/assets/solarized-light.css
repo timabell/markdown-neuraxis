@@ -241,29 +241,26 @@ hr {
 }
 
 .list-item {
+    display: flex;
+    align-items: flex-start;
     margin: 4px 0;
 }
 
-.list-item-content {
-    display: flex;
-    align-items: flex-start;
+/* Indent block system for flexible indentation */
+.indent-block {
+    width: 20px; /* 20px per indent level */
+    flex-shrink: 0;
 }
 
 .list-marker {
     margin-right: 8px;
     flex-shrink: 0;
     font-weight: 500;
-}
-
-.list-marker.bullet {
     color: var(--blue);
+    min-width: 1.2em;
 }
 
-.list-marker.numbered {
-    color: var(--green);
-}
-
-.list-text {
+.list-content {
     flex: 1;
     color: var(--base01);
 }
@@ -438,3 +435,65 @@ hr {
     padding: 16px 24px;
     font-size: 18px;
 }
+
+/* Editor block styles for raw markdown editing */
+.editor-block {
+    display: flex;
+    align-items: flex-start;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    background-color: var(--base3);
+    border: 2px solid var(--blue);
+    border-radius: 4px;
+    padding: 8px;
+    margin: 4px 0;
+    min-height: 1.5em;
+    position: relative;
+}
+
+/* Indent blocks in editor maintain same spacing as pretty view */
+.editor-block .indent-block {
+    width: 20px; /* Same as list indent blocks */
+    flex-shrink: 0;
+}
+
+.editor-gutter {
+    color: var(--base1);
+    white-space: pre;
+    user-select: none;
+    padding-right: 4px;
+    flex-shrink: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    min-width: 1.2em;
+}
+
+.editor-textarea {
+    border: none;
+    outline: none;
+    resize: vertical;
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: var(--base01);
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    min-height: inherit;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.editor-textarea:focus {
+    outline: none;
+}
+
+/* Semantic CSS classes for different indent levels */
+.indent-level-0 { /* For future use if needed */ }
+.indent-level-1 { /* For future use if needed */ }
+.indent-level-2 { /* For future use if needed */ }
+.indent-level-3 { /* For future use if needed */ }
+.indent-level-4 { /* For future use if needed */ }
