@@ -2,6 +2,32 @@ use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Direct operations on bullets for instant editing
+#[derive(Debug, Clone)]
+pub enum BulletOperation {
+    /// Update bullet content instantly
+    UpdateContent(BlockId, String),
+    /// Split bullet at cursor position, content after cursor goes to new bullet
+    SplitAtCursor(BlockId, String, usize), // content, cursor_position
+    /// Indent bullet (increase nesting level)
+    Indent(BlockId),
+    /// Outdent bullet (decrease nesting level)  
+    Outdent(BlockId),
+    /// Merge with previous bullet (backspace at start)
+    MergeWithPrevious(BlockId),
+    /// Delete empty bullet
+    DeleteEmpty(BlockId),
+}
+
+/// Split string at cursor position (character-aware, not byte-aware)
+fn split_string_at_position(text: &str, cursor_pos: usize) -> (String, String) {
+    let chars: Vec<char> = text.chars().collect();
+    let split_pos = cursor_pos.min(chars.len());
+    let before: String = chars[..split_pos].iter().collect();
+    let after: String = chars[split_pos..].iter().collect();
+    (before, after)
+}
+
 // BlockId is an ephemeral unique identifier so that the UI can keep track of blocks in a markdown file as they move around during editing
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BlockId(pub Uuid);
@@ -288,6 +314,291 @@ impl DocumentState {
         }
         None
     }
+
+    /// Execute a bullet operation instantly
+    pub fn execute_bullet_operation(&mut self, operation: BulletOperation) -> bool {
+        match operation {
+            BulletOperation::UpdateContent(block_id, content) => {
+                self.update_bullet_content(block_id, content)
+            }
+            BulletOperation::SplitAtCursor(block_id, content, cursor_pos) => {
+                let (before, after) = split_string_at_position(&content, cursor_pos);
+                self.split_bullet_at_cursor(block_id, before, after)
+                    .is_some()
+            }
+            BulletOperation::Indent(block_id) => self.indent_bullet(block_id),
+            BulletOperation::Outdent(block_id) => self.outdent_bullet(block_id),
+            BulletOperation::MergeWithPrevious(block_id) => {
+                self.merge_bullet_with_previous(block_id)
+            }
+            BulletOperation::DeleteEmpty(block_id) => self.delete_empty_bullet(block_id),
+        }
+    }
+
+    /// Update bullet content instantly
+    fn update_bullet_content(&mut self, block_id: BlockId, content: String) -> bool {
+        // Clear any editing state since we're doing instant updates
+        self.editing_block = None;
+
+        // Try to find and update the bullet
+        for (_, block) in &mut self.blocks {
+            match block {
+                ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
+                    if let Some((_, item)) = items.iter_mut().find(|(id, _)| *id == block_id) {
+                        item.content = content;
+                        item.segments = None; // Clear segments for raw content
+                        return true;
+                    }
+                    // Also search nested bullets
+                    if Self::update_nested_bullet_content(items, block_id, &content) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Helper to update nested bullet content
+    fn update_nested_bullet_content(
+        items: &mut [(BlockId, ListItem)],
+        target_id: BlockId,
+        content: &str,
+    ) -> bool {
+        for (_, item) in items {
+            // Check direct children
+            if let Some((_, child)) = item.children.iter_mut().find(|(id, _)| *id == target_id) {
+                child.content = content.to_string();
+                child.segments = None;
+                return true;
+            }
+            // Recurse into nested children
+            if Self::update_nested_bullet_content(&mut item.children, target_id, content) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Split bullet at cursor position - creates new bullet with content after cursor
+    fn split_bullet_at_cursor(
+        &mut self,
+        block_id: BlockId,
+        before_cursor: String,
+        after_cursor: String,
+    ) -> Option<BlockId> {
+        for (_, block) in &mut self.blocks {
+            match block {
+                ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
+                    if let Some(pos) = items.iter().position(|(id, _)| *id == block_id) {
+                        let original_level = items[pos].1.level;
+                        let original_marker = items[pos].1.marker.clone();
+
+                        // Update original bullet with content before cursor
+                        items[pos].1.content = before_cursor;
+                        items[pos].1.segments = None;
+
+                        // Create new bullet with content after cursor
+                        let new_id = BlockId::new();
+                        let new_item = ListItem {
+                            content: after_cursor,
+                            segments: None,
+                            level: original_level,
+                            children: vec![],
+                            nested_content: vec![],
+                            marker: original_marker,
+                        };
+
+                        // Insert new bullet right after original
+                        items.insert(pos + 1, (new_id, new_item));
+                        return Some(new_id);
+                    }
+
+                    // Handle nested bullets
+                    if let Some(new_id) = Self::split_nested_bullet_at_cursor(
+                        items,
+                        block_id,
+                        &before_cursor,
+                        &after_cursor,
+                    ) {
+                        return Some(new_id);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Helper to split nested bullets
+    fn split_nested_bullet_at_cursor(
+        items: &mut [(BlockId, ListItem)],
+        target_id: BlockId,
+        before_cursor: &str,
+        after_cursor: &str,
+    ) -> Option<BlockId> {
+        for (_, item) in items {
+            if let Some(pos) = item.children.iter().position(|(id, _)| *id == target_id) {
+                let original_level = item.children[pos].1.level;
+                let original_marker = item.children[pos].1.marker.clone();
+
+                // Update original
+                item.children[pos].1.content = before_cursor.to_string();
+                item.children[pos].1.segments = None;
+
+                // Create new bullet
+                let new_id = BlockId::new();
+                let new_item = ListItem {
+                    content: after_cursor.to_string(),
+                    segments: None,
+                    level: original_level,
+                    children: vec![],
+                    nested_content: vec![],
+                    marker: original_marker,
+                };
+
+                item.children.insert(pos + 1, (new_id, new_item));
+                return Some(new_id);
+            }
+
+            // Recurse
+            if let Some(new_id) = Self::split_nested_bullet_at_cursor(
+                &mut item.children,
+                target_id,
+                before_cursor,
+                after_cursor,
+            ) {
+                return Some(new_id);
+            }
+        }
+        None
+    }
+
+    /// Indent bullet (move to child of previous bullet)
+    fn indent_bullet(&mut self, _block_id: BlockId) -> bool {
+        todo!("Implement indent logic")
+    }
+
+    /// Outdent bullet (move to parent level)
+    fn outdent_bullet(&mut self, _block_id: BlockId) -> bool {
+        todo!("Implement outdent logic")
+    }
+
+    /// Merge bullet with previous (backspace at start)
+    fn merge_bullet_with_previous(&mut self, block_id: BlockId) -> bool {
+        // Clear any editing state since we're doing instant updates
+        self.editing_block = None;
+
+        // Find and merge the bullet
+        for (_, block) in &mut self.blocks {
+            match block {
+                ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
+                    // Check direct items first
+                    if let Some(pos) = items.iter().position(|(id, _)| *id == block_id) {
+                        if pos > 0 {
+                            // Get content from current bullet
+                            let current_content = items[pos].1.content.clone();
+                            let current_children = items[pos].1.children.clone();
+
+                            // Merge content with previous bullet
+                            items[pos - 1].1.content.push_str(&current_content);
+
+                            // Move children to previous bullet
+                            items[pos - 1].1.children.extend(current_children);
+
+                            // Remove current bullet
+                            items.remove(pos);
+                            return true;
+                        }
+                    }
+                    // Also search nested bullets
+                    if Self::merge_nested_bullet_with_previous(items, block_id) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Helper to merge nested bullets with previous
+    fn merge_nested_bullet_with_previous(
+        items: &mut [(BlockId, ListItem)],
+        target_id: BlockId,
+    ) -> bool {
+        for (_, item) in items {
+            // Check direct children
+            if let Some(pos) = item.children.iter().position(|(id, _)| *id == target_id) {
+                if pos > 0 {
+                    // Get content from current bullet
+                    let current_content = item.children[pos].1.content.clone();
+                    let current_children = item.children[pos].1.children.clone();
+
+                    // Merge content with previous bullet
+                    item.children[pos - 1].1.content.push_str(&current_content);
+
+                    // Move children to previous bullet
+                    item.children[pos - 1].1.children.extend(current_children);
+
+                    // Remove current bullet
+                    item.children.remove(pos);
+                    return true;
+                }
+            }
+            // Recurse into nested children
+            if Self::merge_nested_bullet_with_previous(&mut item.children, target_id) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Delete empty bullet
+    fn delete_empty_bullet(&mut self, block_id: BlockId) -> bool {
+        // Clear any editing state since we're doing instant updates
+        self.editing_block = None;
+
+        // Find and delete the bullet
+        for (_, block) in &mut self.blocks {
+            match block {
+                ContentBlock::BulletList { items } | ContentBlock::NumberedList { items } => {
+                    // Check direct items first
+                    if let Some(pos) = items.iter().position(|(id, _)| *id == block_id) {
+                        items.remove(pos);
+                        return true;
+                    }
+                    // Also search nested bullets
+                    if Self::delete_nested_empty_bullet(items, block_id) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Helper to delete nested empty bullets
+    fn delete_nested_empty_bullet(
+        items: &mut Vec<(BlockId, ListItem)>,
+        target_id: BlockId,
+    ) -> bool {
+        for (_, item) in items {
+            // Check direct children
+            if let Some(pos) = item.children.iter().position(|(id, _)| *id == target_id) {
+                item.children.remove(pos);
+                return true;
+            }
+            // Recurse into nested children
+            if Self::delete_nested_empty_bullet(&mut item.children, target_id) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn from_document(document: Document) -> Self {
         let blocks = document
             .content
@@ -819,5 +1130,187 @@ mod tests {
         // Start editing selected block
         assert!(doc_state.start_editing_selected());
         assert!(doc_state.is_editing(block_id).is_some());
+    }
+
+    #[test]
+    fn test_bullet_operation_update_content() {
+        let document = Document::with_content(
+            RelativePathBuf::from("test.md"),
+            vec![ContentBlock::BulletList {
+                items: vec![(
+                    BlockId::new(),
+                    ListItem::new("Original content".to_string(), 0),
+                )],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let block_id = doc_state.blocks[0].1.items()[0].0;
+
+        // Update bullet content
+        let success = doc_state.execute_bullet_operation(BulletOperation::UpdateContent(
+            block_id,
+            "Updated content".to_string(),
+        ));
+
+        assert!(success);
+        assert_eq!(
+            doc_state.blocks[0].1.items()[0].1.content,
+            "Updated content"
+        );
+    }
+
+    #[test]
+    fn test_bullet_operation_split_at_cursor() {
+        let document = Document::with_content(
+            RelativePathBuf::from("test.md"),
+            vec![ContentBlock::BulletList {
+                items: vec![(BlockId::new(), ListItem::new("Hello World".to_string(), 0))],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let original_block_id = doc_state.blocks[0].1.items()[0].0;
+
+        // Split at position 6 (after "Hello ")
+        let success = doc_state.execute_bullet_operation(BulletOperation::SplitAtCursor(
+            original_block_id,
+            "Hello World".to_string(),
+            6,
+        ));
+
+        assert!(success);
+        assert_eq!(doc_state.blocks[0].1.items().len(), 2);
+        assert_eq!(doc_state.blocks[0].1.items()[0].1.content, "Hello ");
+        assert_eq!(doc_state.blocks[0].1.items()[1].1.content, "World");
+    }
+
+    #[test]
+    #[ignore = "Operation not implemented yet"]
+    fn test_bullet_operation_delete_empty() {
+        let document = Document::with_content(
+            RelativePathBuf::from("test.md"),
+            vec![ContentBlock::BulletList {
+                items: vec![
+                    (BlockId::new(), ListItem::new("First bullet".to_string(), 0)),
+                    (BlockId::new(), ListItem::new("".to_string(), 0)),
+                    (BlockId::new(), ListItem::new("Third bullet".to_string(), 0)),
+                ],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let empty_block_id = doc_state.blocks[0].1.items()[1].0;
+
+        // Delete empty bullet
+        let success =
+            doc_state.execute_bullet_operation(BulletOperation::DeleteEmpty(empty_block_id));
+
+        assert!(success);
+        assert_eq!(doc_state.blocks[0].1.items().len(), 2);
+        assert_eq!(doc_state.blocks[0].1.items()[0].1.content, "First bullet");
+        assert_eq!(doc_state.blocks[0].1.items()[1].1.content, "Third bullet");
+    }
+
+    #[test]
+    #[ignore = "Operation not implemented yet"]
+    fn test_bullet_operation_merge_with_previous() {
+        let document = Document::with_content(
+            RelativePathBuf::from("test.md"),
+            vec![ContentBlock::BulletList {
+                items: vec![
+                    (BlockId::new(), ListItem::new("First".to_string(), 0)),
+                    (BlockId::new(), ListItem::new(" Second".to_string(), 0)),
+                    (BlockId::new(), ListItem::new("Third".to_string(), 0)),
+                ],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+        let second_block_id = doc_state.blocks[0].1.items()[1].0;
+
+        // Merge second bullet with previous
+        let success =
+            doc_state.execute_bullet_operation(BulletOperation::MergeWithPrevious(second_block_id));
+
+        assert!(success);
+        assert_eq!(doc_state.blocks[0].1.items().len(), 2);
+        assert_eq!(doc_state.blocks[0].1.items()[0].1.content, "First Second");
+        assert_eq!(doc_state.blocks[0].1.items()[1].1.content, "Third");
+    }
+
+    #[test]
+    #[ignore = "Operation not implemented yet"]
+    fn test_bullet_operation_nested_bullets() {
+        // Create a nested structure with child bullets
+        let mut parent = ListItem::new("Parent bullet".to_string(), 0);
+        let child_id = BlockId::new();
+        parent
+            .children
+            .push((child_id, ListItem::new("Child bullet".to_string(), 1)));
+
+        let document = Document::with_content(
+            RelativePathBuf::from("test.md"),
+            vec![ContentBlock::BulletList {
+                items: vec![(BlockId::new(), parent)],
+            }],
+        );
+
+        let mut doc_state = DocumentState::from_document(document);
+
+        // Update nested bullet content
+        let success = doc_state.execute_bullet_operation(BulletOperation::UpdateContent(
+            child_id,
+            "Updated child".to_string(),
+        ));
+
+        assert!(success);
+        assert_eq!(
+            doc_state.blocks[0].1.items()[0].1.children[0].1.content,
+            "Updated child"
+        );
+    }
+
+    #[test]
+    fn test_split_string_at_position() {
+        // Test ASCII
+        assert_eq!(
+            split_string_at_position("hello", 0),
+            ("".to_string(), "hello".to_string())
+        );
+        assert_eq!(
+            split_string_at_position("hello", 3),
+            ("hel".to_string(), "lo".to_string())
+        );
+        assert_eq!(
+            split_string_at_position("hello", 5),
+            ("hello".to_string(), "".to_string())
+        );
+
+        // Test boundary - should not panic
+        assert_eq!(
+            split_string_at_position("hello", 10),
+            ("hello".to_string(), "".to_string())
+        );
+
+        // Test Unicode emoji
+        assert_eq!(
+            split_string_at_position("👋 hello", 1),
+            ("👋".to_string(), " hello".to_string())
+        );
+        assert_eq!(
+            split_string_at_position("👋 hello", 2),
+            ("👋 ".to_string(), "hello".to_string())
+        );
+
+        // Test multi-byte characters
+        assert_eq!(
+            split_string_at_position("café", 3),
+            ("caf".to_string(), "é".to_string())
+        );
+        assert_eq!(
+            split_string_at_position("café", 4),
+            ("café".to_string(), "".to_string())
+        );
     }
 }

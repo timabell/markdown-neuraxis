@@ -1,4 +1,6 @@
-use crate::models::{BlockId, ContentBlock, Document, DocumentState, MarkdownFile};
+use crate::models::{
+    BlockId, BulletOperation, ContentBlock, Document, DocumentState, MarkdownFile,
+};
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
@@ -11,6 +13,7 @@ pub fn EditableMainPanel(
 ) -> Element {
     let display_name = file.display_path();
 
+    // Keep the old editing system for non-bullet blocks (paragraphs, headings, etc)
     let edit_state = document_state.clone();
     let handle_edit = Callback::new(move |block_id: BlockId| {
         let mut new_state = edit_state.clone();
@@ -22,9 +25,18 @@ pub fn EditableMainPanel(
     let handle_save = Callback::new(move |(block_id, content): (BlockId, String)| {
         let mut new_state = save_state.clone();
         let _new_block_ids = new_state.finish_editing(block_id, content);
-        // When blocks are created (e.g., from splitting), the first new block is automatically selected
-        // by finish_editing, so no additional focus management is needed here
         on_save.call(new_state);
+    });
+
+    // Handler for bullet operations
+    let operation_state = document_state.clone();
+    let handle_bullet_operation = Callback::new(move |operation: BulletOperation| {
+        let mut new_state = operation_state.clone();
+
+        // Execute the operation
+        if new_state.execute_bullet_operation(operation) {
+            on_save.call(new_state);
+        }
     });
 
     let add_block_state = document_state.clone();
@@ -120,6 +132,7 @@ pub fn EditableMainPanel(
                                     is_selected: is_selected,
                                     on_edit: handle_edit,
                                     on_save: handle_save,
+                                    on_bullet_operation: Some(handle_bullet_operation),
                                     on_editing_end: Some(handle_focus_document),
                                     on_file_select: on_file_select,
                                     document_state: document_state.clone()
@@ -211,7 +224,7 @@ pub fn ContentBlockComponent(
                 div {
                     class: "bullet-list",
                     for (_block_id, item) in items {
-                        super::OutlineItemComponent {
+                        super::BulletItemComponent {
                             item: item.clone(),
                             indent: 0,
                             is_numbered: false,
@@ -227,7 +240,7 @@ pub fn ContentBlockComponent(
                 div {
                     class: "numbered-list",
                     for (idx, (_block_id, item)) in items.iter().enumerate() {
-                        super::OutlineItemComponent {
+                        super::BulletItemComponent {
                             item: item.clone(),
                             indent: 0,
                             is_numbered: true,

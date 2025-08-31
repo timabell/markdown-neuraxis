@@ -18,7 +18,7 @@ fn resolve_wiki_link(target: &str) -> PathBuf {
 }
 
 #[component]
-pub fn OutlineItemComponent(
+pub fn BulletItemComponent(
     item: ListItem,
     indent: usize,
     is_numbered: bool,
@@ -66,7 +66,7 @@ pub fn OutlineItemComponent(
             div {
                 class: "nested-list",
                 for (idx, (_child_id, child)) in item.children.iter().enumerate() {
-                    OutlineItemComponent {
+                    BulletItemComponent {
                         item: child.clone(),
                         indent: indent + 1,
                         is_numbered: is_numbered,
