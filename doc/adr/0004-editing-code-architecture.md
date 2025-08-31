@@ -61,6 +61,8 @@ pub enum Cmd {
 
 ### 4) **Anchors**: stable IDs over byte ranges (v1 simple)
 
+See [../anchors.md](../anchors.md)
+
 We need stable IDs for blocks that survive edits.
 
 ```rust
