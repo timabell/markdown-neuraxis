@@ -284,6 +284,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 
 [[package]]
+name = "bytecount"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be0fdd54b507df8f22012890aadd099979befdba27713c767993f8380112ca7c"
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2570,6 +2576,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "uuid",
+ "xi-rope",
 ]
 
 [[package]]
@@ -5377,6 +5384,18 @@ checksum = "ec1cdab258fb55c0da61328dc52c8764709b249011b2cad0454c72f0bf10a1f6"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "xi-rope"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1266c6612194a86462905372bc7bbc9887e3f3826da6b82ea4a35492bc65d5a"
+dependencies = [
+ "bytecount",
+ "memchr",
+ "regex",
+ "unicode-segmentation",
 ]
 
 [[package]]
