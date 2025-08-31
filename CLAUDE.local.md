@@ -3,3 +3,4 @@
 - you will NEVER be allowed to create debug files with `cat`
 - you may not EVER create and use indivual .rs files and rustc for experiments. Use real TDD.
 - don't run `git add` if the files are already staged, check the status
+- when calling the implementor agent pass the verbatim original prompt list so the implementor can include it in the commit message
