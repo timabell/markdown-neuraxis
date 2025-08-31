@@ -15,7 +15,8 @@
       "Bash(find:*)",
       "Bash(mkdir:*)",
       "Bash(./clippy-harsh.sh)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cargo doc:*)"
     ],
     "deny": []
   }
