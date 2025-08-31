@@ -13,33 +13,33 @@ pub fn TreeView(
     let items = use_memo(move || tree.read().get_items());
     let mut focused_index = use_signal(|| 0usize);
     let mut has_focus = use_signal(|| false);
-    let mut last_selected_file = use_signal(|| selected_file.clone());
 
-    // Sync focused index only when selected file changes (not during keyboard nav)
-    if selected_file != *last_selected_file.read() {
-        *last_selected_file.write() = selected_file.clone();
-
-        if let Some(selected_file) = &selected_file {
-            let items_list = items.read();
-            if let Some(index) = items_list.iter().position(|item| {
-                if let Some(ref item_markdown_file) = item.node.markdown_file {
-                    item_markdown_file.relative_path() == selected_file.relative_path()
-                } else {
-                    false
+    // Use effect to sync focused index when selected file changes
+    {
+        let selected_file_clone = selected_file.clone();
+        use_effect(move || {
+            if let Some(ref selected_file) = selected_file_clone {
+                let items_list = items.read();
+                if let Some(index) = items_list.iter().position(|item| {
+                    if let Some(ref item_markdown_file) = item.node.markdown_file {
+                        item_markdown_file.relative_path() == selected_file.relative_path()
+                    } else {
+                        false
+                    }
+                }) {
+                    focused_index.set(index);
                 }
-            }) {
-                *focused_index.write() = index;
             }
-        }
+        });
     }
 
     // Handle focus events
     let handle_focus = move |_| {
-        *has_focus.write() = true;
+        has_focus.set(true);
     };
 
     let handle_blur = move |_| {
-        *has_focus.write() = false;
+        has_focus.set(false);
     };
 
     // Handle keyboard navigation (only when focused)
@@ -58,7 +58,7 @@ pub fn TreeView(
             Key::ArrowDown => {
                 evt.prevent_default(); // Prevent scrolling
                 let new_index = (current_index + 1).min(items_list.len() - 1);
-                *focused_index.write() = new_index;
+                focused_index.set(new_index);
 
                 let item = &items_list[new_index];
                 if !item.node.is_folder {
@@ -70,7 +70,7 @@ pub fn TreeView(
             Key::ArrowUp => {
                 evt.prevent_default(); // Prevent scrolling
                 let new_index = current_index.saturating_sub(1);
-                *focused_index.write() = new_index;
+                focused_index.set(new_index);
 
                 let item = &items_list[new_index];
                 if !item.node.is_folder {
@@ -110,7 +110,7 @@ pub fn TreeView(
             onblur: handle_blur,
             for (index, item) in items.read().iter().enumerate() {
                 TreeViewItem {
-                    key: "{item.node.relative_path}",
+                    key: "{index}",
                     item: item.clone(),
                     is_selected: {
                         if let (Some(selected_file), Some(item_markdown_file)) =

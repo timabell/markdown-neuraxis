@@ -20,9 +20,9 @@ pub fn SnapshotMainPanel(
             if !snapshot.blocks.is_empty() {
                 div {
                     class: "document-content",
-                    for block in &snapshot.blocks {
+                    for (index, block) in snapshot.blocks.iter().enumerate() {
                         RenderBlockComponent {
-                            key: "{block.id:?}",
+                            key: "{index}",
                             block: block.clone(),
                             on_file_select: on_file_select
                         }
