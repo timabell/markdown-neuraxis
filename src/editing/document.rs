@@ -4,6 +4,15 @@ use xi_rope::{Delta, Rope, RopeInfo};
 
 use crate::editing::{Anchor, Cmd, Patch};
 
+/// Marker types for list items
+#[derive(Debug, Clone, PartialEq)]
+pub enum Marker {
+    Dash,     // "-"
+    Asterisk, // "*"
+    Plus,     // "+"
+    Numbered, // "1.", "2.", etc.
+}
+
 /// Core document structure that holds the text buffer and provides editing operations.
 /// Uses xi-rope for efficient text manipulation and preserves exact byte representation.
 pub struct Document {

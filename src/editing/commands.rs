@@ -1,7 +1,7 @@
 use xi_rope::delta::Builder;
 use xi_rope::{Delta, Rope, RopeInfo};
 
-use crate::editing::Document;
+use crate::editing::{Document, document::Marker};
 
 /// Commands that can be applied to the document
 #[derive(Debug, Clone, PartialEq)]
@@ -12,15 +12,6 @@ pub enum Cmd {
     IndentLines { range: std::ops::Range<usize> },
     OutdentLines { range: std::ops::Range<usize> },
     ToggleMarker { line_start: usize, to: Marker },
-}
-
-/// Marker types for list items
-#[derive(Debug, Clone, PartialEq)]
-pub enum Marker {
-    Dash,     // "-"
-    Asterisk, // "*"
-    Plus,     // "+"
-    Numbered, // "1.", "2.", etc.
 }
 
 /// Compile a command into a delta

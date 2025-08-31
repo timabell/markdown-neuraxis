@@ -7,7 +7,7 @@ mod snapshot;
 
 // Public API re-exports
 pub use anchors::{Anchor, AnchorId};
-pub use commands::{Cmd, Marker};
-pub use document::Document;
+pub use commands::Cmd;
+pub use document::{Document, Marker};
 pub use patch::Patch;
 pub use snapshot::{BlockKind, RenderBlock, Snapshot};

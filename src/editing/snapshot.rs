@@ -1,4 +1,4 @@
-use crate::editing::{AnchorId, Document, Marker, anchors::find_anchor_for_range};
+use crate::editing::{AnchorId, Document, anchors::find_anchor_for_range, document::Marker};
 
 /// Snapshot of the document for rendering
 pub struct Snapshot {
