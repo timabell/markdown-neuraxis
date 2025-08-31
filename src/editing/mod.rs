@@ -1,3 +1,5 @@
+use tree_sitter::{Parser, Tree};
+use tree_sitter_md::LANGUAGE;
 use xi_rope::delta::Builder;
 use xi_rope::{Delta, Rope, RopeInfo};
 
@@ -10,6 +12,12 @@ pub struct Document {
     selection: std::ops::Range<usize>,
     /// Version number that increments with each edit
     version: u64,
+    /// Tree-sitter parser for incremental parsing
+    parser: Parser,
+    /// Current parse tree (None until first parse)
+    tree: Option<Tree>,
+    /// Anchors for stable block IDs that survive edits
+    anchors: Vec<Anchor>,
 }
 
 impl Document {
@@ -19,10 +27,21 @@ impl Document {
         let text = std::str::from_utf8(bytes)?;
         let buffer = Rope::from(text);
         let len = buffer.len();
+
+        // Initialize tree-sitter parser with markdown block grammar
+        let mut parser = Parser::new();
+        parser.set_language(&LANGUAGE.into())?;
+
+        // Initial parse of the document
+        let tree = parser.parse(buffer.to_string(), None);
+
         Ok(Self {
             buffer,
             selection: len..len, // Start with cursor at end
             version: 0,
+            parser,
+            tree,
+            anchors: Vec::new(),
         })
     }
 
@@ -54,7 +73,20 @@ impl Document {
         }
 
         // Apply delta to buffer
+        let _old_buffer = self.buffer.clone();
         self.buffer = delta.apply(&self.buffer);
+
+        // Update tree-sitter with incremental parse
+        if let Some(ref mut tree) = self.tree {
+            // TODO: Implement proper incremental editing with tree.edit()
+            // For now, we'll re-parse the entire document
+            self.tree = self.parser.parse(self.buffer.to_string(), Some(tree));
+        } else {
+            self.tree = self.parser.parse(self.buffer.to_string(), None);
+        }
+
+        // Transform anchors through the delta
+        self.transform_anchors(&delta);
 
         // Transform selection through command
         let new_selection = self.transform_selection_for_command(&self.selection, &cmd);
@@ -344,7 +376,22 @@ impl Document {
 
     /// Get a snapshot of the document for rendering (placeholder for now)
     pub fn snapshot(&self) -> Snapshot {
-        todo!("Snapshot generation will be implemented later")
+        // TODO: Implement snapshot generation from tree-sitter parse tree and anchors
+        // This will walk the CST and generate RenderBlocks for UI consumption
+        Snapshot {
+            version: self.version,
+            blocks: Vec::new(), // Placeholder for now
+        }
+    }
+
+    /// Transform anchors through a delta operation
+    fn transform_anchors(&mut self, _delta: &Delta<RopeInfo>) {
+        // TODO: Implement anchor transformation
+        // For now, this is a placeholder that would transform each anchor's byte range
+        // through the delta to keep stable IDs aligned with text
+        for _anchor in &mut self.anchors {
+            // Placeholder: would use delta.transform_expand() to update ranges
+        }
     }
 
     /// Get the current selection range
@@ -408,6 +455,13 @@ pub struct RenderBlock {
     pub byte_range: std::ops::Range<usize>,
     pub content_range: std::ops::Range<usize>,
     pub depth: usize,
+}
+
+/// Stable identifier for a text range that survives edits
+pub struct Anchor {
+    pub id: AnchorId,
+    pub range: std::ops::Range<usize>, // byte range in the rope
+                                       // TODO v2: add bias/stickiness and kind hints
 }
 
 /// Unique identifier for an anchor
