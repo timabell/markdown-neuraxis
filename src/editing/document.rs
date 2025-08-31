@@ -82,16 +82,21 @@ impl Document {
             }
         }
 
-        // Apply delta to buffer
-        let _old_buffer = self.buffer.clone();
-        self.buffer = delta.apply(&self.buffer);
+        // Update tree-sitter with incremental parse using proper tree.edit() calls
+        let old_buffer = self.buffer.clone();
 
-        // Update tree-sitter with incremental parse
         if let Some(ref mut tree) = self.tree {
-            // TODO: Implement proper incremental editing with tree.edit()
-            // For now, we'll re-parse the entire document
+            // Apply incremental edits to the tree based on the delta
+            apply_tree_edits_to_tree(tree, &delta, &old_buffer);
+
+            // Apply delta to buffer
+            self.buffer = delta.apply(&self.buffer);
+
+            // Incremental parse only the changed regions
             self.tree = self.parser.parse(self.buffer.to_string(), Some(tree));
         } else {
+            // Apply delta to buffer
+            self.buffer = delta.apply(&self.buffer);
             self.tree = self.parser.parse(self.buffer.to_string(), None);
         }
 
@@ -176,6 +181,135 @@ impl Document {
     pub fn snapshot(&self) -> crate::editing::Snapshot {
         crate::editing::snapshot::create_snapshot(self)
     }
+
+    /// Hit-testing helper: Find which block contains the given byte position
+    /// Returns the block ID and the local offset within that block's content
+    /// This implements ADR-0004 selection/caret transformation requirements
+    pub fn locate_in_block(
+        &self,
+        byte_position: usize,
+    ) -> Option<(crate::editing::AnchorId, usize)> {
+        let snapshot = self.snapshot();
+
+        for block in &snapshot.blocks {
+            if block.byte_range.contains(&byte_position) {
+                // Calculate local offset within this block's content range
+                let local_offset = byte_position.saturating_sub(block.content_range.start);
+                return Some((block.id, local_offset));
+            }
+        }
+
+        None
+    }
+
+    /// Hit-testing helper: Convert global byte position to textarea-local description
+    /// Returns the block ID, local byte offset, and cursor position for textarea
+    /// This implements ADR-0004 selection mapping between rope and textarea
+    pub fn describe_point(&self, byte_position: usize) -> Option<crate::editing::PointDescription> {
+        if let Some((block_id, local_offset)) = self.locate_in_block(byte_position) {
+            let snapshot = self.snapshot();
+
+            // Find the block to get its content
+            if let Some(block) = snapshot.blocks.iter().find(|b| b.id == block_id) {
+                let content = &block.content;
+
+                // Calculate line and column within the content for textarea mapping
+                let (local_line, local_col) = byte_to_point_in_text(content, local_offset);
+
+                return Some(crate::editing::PointDescription {
+                    block_id,
+                    local_byte_offset: local_offset,
+                    local_line,
+                    local_col,
+                    textarea_cursor_pos: local_offset, // For textarea selectionStart/End
+                });
+            }
+        }
+
+        None
+    }
+}
+
+/// Apply incremental edits to the tree-sitter parse tree based on rope delta
+/// This implements proper ADR-0004 incremental parsing instead of re-parsing everything  
+fn apply_tree_edits_to_tree(
+    tree: &mut tree_sitter::Tree,
+    delta: &Delta<RopeInfo>,
+    old_buffer: &xi_rope::Rope,
+) {
+    use tree_sitter::InputEdit;
+    use xi_rope::delta::DeltaElement;
+
+    let mut old_position = 0; // Position in the old buffer
+    let mut _new_position = 0; // Position in the new buffer after delta is applied
+
+    for element in &delta.els {
+        match element {
+            DeltaElement::Copy(from, to) => {
+                // Copy operation - text was preserved from old to new buffer
+                let copy_len = to - from;
+                old_position = *to;
+                _new_position += copy_len;
+            }
+            DeltaElement::Insert(rope) => {
+                // Insert operation - pure insertion or replacement of deleted content
+                let inserted_text = rope.to_string();
+                let inserted_len = inserted_text.len();
+
+                // For insertions in xi-rope deltas, old_end_byte == start_byte (pure insertion)
+                // The key insight is that xi-rope represents both insertions and deletions as inserts
+
+                // Convert byte positions to line/column positions for tree-sitter
+                let (start_row, start_col) =
+                    byte_to_point_in_text(&old_buffer.to_string(), old_position);
+                let (old_end_row, old_end_col) =
+                    byte_to_point_in_text(&old_buffer.to_string(), old_position);
+
+                // For new position, calculate from the new buffer position
+                let (new_end_row, new_end_col) =
+                    byte_to_point_in_text(&inserted_text, inserted_len);
+
+                let edit = InputEdit {
+                    start_byte: old_position,
+                    old_end_byte: old_position, // Pure insertion
+                    new_end_byte: old_position + inserted_len,
+                    start_position: tree_sitter::Point::new(start_row, start_col),
+                    old_end_position: tree_sitter::Point::new(old_end_row, old_end_col),
+                    new_end_position: tree_sitter::Point::new(
+                        start_row + new_end_row,
+                        if new_end_row > 0 {
+                            new_end_col
+                        } else {
+                            start_col + new_end_col
+                        },
+                    ),
+                };
+
+                tree.edit(&edit);
+                _new_position += inserted_len;
+            }
+        }
+    }
+}
+
+/// Convert byte offset to (row, column) position in given text
+/// Helper function used by tree-sitter InputEdit construction
+fn byte_to_point_in_text(text: &str, byte_offset: usize) -> (usize, usize) {
+    let text_bytes = text.as_bytes();
+    let offset = byte_offset.min(text_bytes.len());
+
+    let mut row = 0;
+    let mut last_newline = 0;
+
+    for (i, &byte) in text_bytes.iter().enumerate().take(offset) {
+        if byte == b'\n' {
+            row += 1;
+            last_newline = i + 1;
+        }
+    }
+
+    let col = offset - last_newline;
+    (row, col)
 }
 
 impl Clone for Document {

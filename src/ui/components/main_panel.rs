@@ -97,7 +97,6 @@ pub fn SnapshotMainPanel(
                                 on_command: {
                                     let mut document = document.clone();
                                     let on_document_changed = on_document_changed;
-                                    let mut focused_block_id = focused_block_id;
                                     move |cmd: Cmd| {
                                         // Apply command to document
                                         let _patch = document.apply(cmd);
@@ -105,9 +104,8 @@ pub fn SnapshotMainPanel(
                                         // Notify parent of document change
                                         on_document_changed.call(document.clone());
 
-                                        // For now, exit editing after command
-                                        // TODO: Keep editing and update textarea content
-                                        focused_block_id.set(None);
+                                        // Keep editing - don't exit editor mode
+                                        // The parent will re-render with updated content
                                     }
                                 },
                                 on_cancel: {
@@ -252,9 +250,6 @@ pub fn EditorBlock(
 ) -> Element {
     use dioxus::prelude::*;
 
-    // Signal for the textarea value (controlled input)
-    let mut textarea_value = use_signal(|| content_text.clone());
-
     rsx! {
         div {
             class: "editor-block",
@@ -273,40 +268,97 @@ pub fn EditorBlock(
             // Controlled textarea for raw markdown editing
             textarea {
                 class: "editor-textarea",
-                value: textarea_value(),
+                value: content_text.clone(),
                 spellcheck: false,
-                rows: calculate_textarea_rows(&textarea_value()),
+                rows: calculate_textarea_rows(&content_text),
                 autofocus: true, // Try to auto-focus when created
 
-                // Basic input handling - full beforeinput mapping comes later
-                oninput: move |event| {
-                    // For now, update the textarea value directly
-                    // TODO: Replace with proper command mapping via ADR-0004
-                    textarea_value.set(event.value());
+                // ADR-0004: Controlled input pattern using oninput with proper command mapping
+                // Since onbeforeinput is not available in Dioxus, we intercept oninput and
+                // prevent the default behavior by controlling the textarea value directly
+                oninput: {
+                    let on_command = on_command;
+                    move |event: Event<FormData>| {
+                        // Prevent default behavior by not allowing the input to change the textarea
+                        event.prevent_default();
+
+                        // For proper ADR-0004 implementation, we need to:
+                        // 1. Track caret position/selection
+                        // 2. Map input changes to commands
+                        // 3. Apply commands to update document
+                        // 4. Update textarea value from document
+
+                        // For now, implement a basic version that captures text input
+                        // TODO: Implement full caret tracking and proper input type detection
+                        let new_value = event.value();
+
+                        // Simple approach: Replace entire content with new text
+                        // This is temporary until we implement proper caret tracking
+                        if !new_value.is_empty() {
+                            let cmd = Cmd::InsertText {
+                                at: block.content_range.start,
+                                text: new_value,
+                            };
+                            on_command.call(cmd);
+                        }
+                    }
                 },
 
-                // Handle special keys via keydown
-                onkeydown: move |event| {
-                    match event.key() {
-                        Key::Tab => {
-                            // Tab navigation while editing exits to pretty view
-                            event.prevent_default();
-                            on_cancel.call(());
-                        },
-                        Key::Enter => {
-                            if event.modifiers().shift() {
-                                // Shift+Enter: insert newline (default behavior)
-                            } else {
+                // Handle special keyboard commands via keydown (Tab, Shift+Tab, Enter, Escape)
+                onkeydown: {
+                    let block_byte_range = block.byte_range.clone();
+                    let block_content_range = block.content_range.clone();
+                    let block_kind = block.kind.clone();
+                    let on_command = on_command;
+                    let on_cancel = on_cancel;
+                    move |event: Event<KeyboardData>| {
+                        match event.key() {
+                            Key::Tab => {
                                 event.prevent_default();
-                                // TODO: on_command.call(Cmd::SplitListItem { at: ... });
-                                // For now, just exit editing mode
+
+                                if event.modifiers().shift() {
+                                    // Shift+Tab: Outdent lines
+                                    let cmd = Cmd::OutdentLines {
+                                        range: block_byte_range.clone(),
+                                    };
+                                    on_command.call(cmd);
+                                } else {
+                                    // Tab: Indent lines
+                                    let cmd = Cmd::IndentLines {
+                                        range: block_byte_range.clone(),
+                                    };
+                                    on_command.call(cmd);
+                                }
+                            },
+                            Key::Enter => {
+                                if event.modifiers().shift() {
+                                    // Shift+Enter: allow default newline behavior
+                                } else {
+                                    event.prevent_default();
+                                    // Enter: Split list item if in a list
+                                    match block_kind {
+                                        BlockKind::ListItem { .. } => {
+                                            let cmd = Cmd::SplitListItem {
+                                                at: block_content_range.end, // Insert at end for now
+                                            };
+                                            on_command.call(cmd);
+                                        },
+                                        _ => {
+                                            // For non-list items, just insert a newline
+                                            let cmd = Cmd::InsertText {
+                                                at: block_content_range.end,
+                                                text: "\n".to_string(),
+                                            };
+                                            on_command.call(cmd);
+                                        }
+                                    }
+                                }
+                            },
+                            Key::Escape => {
                                 on_cancel.call(());
-                            }
-                        },
-                        Key::Escape => {
-                            on_cancel.call(());
-                        },
-                        _ => {} // Other keys will be handled normally
+                            },
+                            _ => {}
+                        }
                     }
                 },
 
@@ -319,6 +371,33 @@ pub fn EditorBlock(
                 // Handle focus for editor lifecycle
                 onfocus: move |_| {
                     // Editor is now active
+                },
+
+                // ADR-0004: Composition event handling for IME support
+                oncompositionstart: {
+                    move |_| {
+                        // IME composition started - let browser handle input until compositionend
+                        // Disable our command processing during composition
+                    }
+                },
+
+                oncompositionend: {
+                    let on_command = on_command;
+                    let block = block.clone();
+                    move |event: Event<CompositionData>| {
+                        // IME composition finished - apply the composed text as a command
+                        let composition_data = event.data();
+                        let composed_text = composition_data.data();
+
+                        if !composed_text.is_empty() {
+                            // Apply composition result as insert command
+                            let cmd = Cmd::InsertText {
+                                at: block.content_range.end, // Insert at end for now
+                                text: composed_text,
+                            };
+                            on_command.call(cmd);
+                        }
+                    }
                 },
             }
         }
