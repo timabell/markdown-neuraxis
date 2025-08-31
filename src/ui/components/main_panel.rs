@@ -1,138 +1,30 @@
-use crate::models::{BlockId, ContentBlock, Document, DocumentState, MarkdownFile};
+use crate::editing::{BlockKind, Marker, RenderBlock, Snapshot};
+use crate::models::MarkdownFile;
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
 #[component]
-pub fn EditableMainPanel(
+pub fn SnapshotMainPanel(
     file: MarkdownFile,
-    document_state: DocumentState,
+    snapshot: Snapshot,
     on_file_select: Option<Callback<PathBuf>>,
-    on_save: Callback<DocumentState>,
+    on_save: Callback<()>,
 ) -> Element {
     let display_name = file.display_path();
-
-    let edit_state = document_state.clone();
-    let handle_edit = Callback::new(move |block_id: BlockId| {
-        let mut new_state = edit_state.clone();
-        new_state.start_editing(block_id);
-        on_save.call(new_state);
-    });
-
-    let save_state = document_state.clone();
-    let handle_save = Callback::new(move |(block_id, content): (BlockId, String)| {
-        let mut new_state = save_state.clone();
-        let _new_block_ids = new_state.finish_editing(block_id, content);
-        // When blocks are created (e.g., from splitting), the first new block is automatically selected
-        // by finish_editing, so no additional focus management is needed here
-        on_save.call(new_state);
-    });
-
-    let add_block_state = document_state.clone();
-    let handle_add_block = Callback::new(move |_| {
-        let mut new_state = add_block_state.clone();
-        // Add an empty paragraph at the end and start editing it
-        let new_block = crate::models::ContentBlock::Paragraph {
-            segments: vec![crate::models::TextSegment::Text("".to_string())],
-        };
-        let new_block_id = new_state.insert_block_at_end(new_block);
-        new_state.start_editing(new_block_id);
-        on_save.call(new_state);
-    });
-
-    // Handle document-level keyboard navigation
-    let nav_state = document_state.clone();
-    let handle_keydown = Callback::new(move |evt: KeyboardEvent| {
-        // Only handle navigation keys if we're not currently editing
-        if nav_state.editing_block.is_none()
-            && !evt.data().modifiers().ctrl()
-            && !evt.data().modifiers().shift()
-            && !evt.data().modifiers().alt()
-        {
-            match evt.key() {
-                Key::ArrowUp => {
-                    let mut new_state = nav_state.clone();
-                    new_state.select_previous_block();
-                    on_save.call(new_state);
-                    evt.prevent_default();
-                }
-                Key::ArrowDown => {
-                    let mut new_state = nav_state.clone();
-                    new_state.select_next_block();
-                    on_save.call(new_state);
-                    evt.prevent_default();
-                }
-                Key::Enter => {
-                    let mut new_state = nav_state.clone();
-                    if new_state.start_editing_selected() {
-                        on_save.call(new_state);
-                    }
-                    evt.prevent_default();
-                }
-                _ => {}
-            }
-        }
-    });
-
-    // Create a reference to the document container for focus management
-    let mut document_ref = use_signal(|| None::<std::rc::Rc<MountedData>>);
-
-    // Handle focus request when editing ends
-    let handle_focus_document = Callback::new(move |_| {
-        if let Some(mounted) = document_ref.read().clone() {
-            spawn(async move {
-                let _ = mounted.set_focus(true).await;
-            });
-        }
-    });
 
     rsx! {
         div {
             class: "document-container",
-            tabindex: "0", // Make div focusable for keyboard events
-            onkeydown: handle_keydown,
-            autofocus: true,
-            onmounted: move |evt| {
-                document_ref.set(Some(evt.data()));
-            },
-
             h1 { "📝 {display_name}" }
             hr {}
-            if !document_state.blocks.is_empty() {
+            if !snapshot.blocks.is_empty() {
                 div {
                     class: "document-content",
-                    for (block_id, block) in &document_state.blocks {
-                        {
-                            let is_editing = document_state.is_editing(*block_id).is_some();
-                            let is_selected = document_state.selected_block() == Some(*block_id);
-                            rsx! {
-                                super::EditableBlock {
-                                    // Addition of the key forces component recreation when BlockId changes.
-                                    // When blocks are split (1 -> N blocks), each gets a new UUID-based BlockId.
-                                    // Without this key, Dioxus reuses components and editing signals retain stale content.
-                                    // With this key, split blocks get fresh components with correct initial content.
-                                    // NOTE: This is similar to React's key prop but Dioxus uses it for component identity,
-                                    // ensuring use_signal() gets re-initialized with the correct block content.
-                                    // Also include editing state in key to force recreation when editing state changes.
-                                    key: "{block_id:?}-{is_editing}-{is_selected}",
-                                    block: block.clone(),
-                                    block_id: *block_id,
-                                    editing_raw: document_state.is_editing(*block_id).cloned(),
-                                    is_selected: is_selected,
-                                    on_edit: handle_edit,
-                                    on_save: handle_save,
-                                    on_editing_end: Some(handle_focus_document),
-                                    on_file_select: on_file_select
-                                }
-                            }
-                        }
-                    }
-                    // Add block button at the end of the document
-                    div {
-                        class: "add-block-container",
-                        button {
-                            class: "add-block-button",
-                            onclick: handle_add_block,
-                            "+"
+                    for block in &snapshot.blocks {
+                        RenderBlockComponent {
+                            key: "{block.id:?}",
+                            block: block.clone(),
+                            on_file_select: on_file_select
                         }
                     }
                 }
@@ -142,7 +34,10 @@ pub fn EditableMainPanel(
                     p { "This document appears to be empty." }
                     button {
                         class: "add-block-button",
-                        onclick: handle_add_block,
+                        onclick: move |_| {
+                            // TODO: Implement add block functionality using editing core
+                            // todo!("Add block functionality using editing core not yet implemented");
+                        },
                         "Add first block +"
                     }
                 }
@@ -152,94 +47,51 @@ pub fn EditableMainPanel(
 }
 
 #[component]
-pub fn MainPanel(
-    file: MarkdownFile,
-    document: Document,
+pub fn RenderBlockComponent(
+    block: RenderBlock,
     on_file_select: Option<Callback<PathBuf>>,
 ) -> Element {
-    let display_name = file.display_path();
-
-    rsx! {
-        h1 { "📝 {display_name}" }
-        hr {}
-        if !document.content.is_empty() {
-            div {
-                class: "document-content",
-                for block in &document.content {
-                    ContentBlockComponent { block: block.clone(), on_file_select: on_file_select }
-                }
-            }
-        } else {
-            div {
-                class: "empty-document",
-                p { "This document appears to be empty." }
-            }
-        }
-    }
-}
-
-#[component]
-pub fn ContentBlockComponent(
-    block: ContentBlock,
-    on_file_select: Option<Callback<PathBuf>>,
-) -> Element {
-    match block {
-        ContentBlock::Heading { level, text } => {
+    match block.kind {
+        BlockKind::Heading { level } => {
             let class_name = format!("heading level-{level}");
             match level {
-                1 => rsx! { h1 { class: "{class_name}", "{text}" } },
-                2 => rsx! { h2 { class: "{class_name}", "{text}" } },
-                3 => rsx! { h3 { class: "{class_name}", "{text}" } },
-                4 => rsx! { h4 { class: "{class_name}", "{text}" } },
-                5 => rsx! { h5 { class: "{class_name}", "{text}" } },
-                _ => rsx! { h6 { class: "{class_name}", "{text}" } },
+                1 => rsx! { h1 { class: "{class_name}", "{block.content}" } },
+                2 => rsx! { h2 { class: "{class_name}", "{block.content}" } },
+                3 => rsx! { h3 { class: "{class_name}", "{block.content}" } },
+                4 => rsx! { h4 { class: "{class_name}", "{block.content}" } },
+                5 => rsx! { h5 { class: "{class_name}", "{block.content}" } },
+                _ => rsx! { h6 { class: "{class_name}", "{block.content}" } },
             }
         }
-        ContentBlock::Paragraph { segments } => {
+        BlockKind::Paragraph => {
             rsx! {
                 p {
                     class: "paragraph",
-                    for segment in segments {
-                        super::TextSegmentComponent { segment: segment.clone(), on_file_select: on_file_select }
-                    }
+                    "{block.content}"
                 }
             }
         }
-        ContentBlock::BulletList { items } => {
+        BlockKind::ListItem { marker, depth } => {
+            let marker_text = match marker {
+                Marker::Dash => "-",
+                Marker::Asterisk => "*",
+                Marker::Plus => "+",
+                Marker::Numbered => "1.", // TODO: Get actual number
+            };
+            let indent_style = format!("margin-left: {}px;", depth * 20);
+
             rsx! {
                 div {
-                    class: "bullet-list",
-                    for item in items {
-                        super::OutlineItemComponent {
-                            item: item.clone(),
-                            indent: 0,
-                            is_numbered: false,
-                            item_number: None,
-                            on_file_select: on_file_select
-                        }
-                    }
+                    class: "list-item",
+                    style: "{indent_style}",
+                    span { class: "marker", "{marker_text} " }
+                    span { class: "content", "{block.content}" }
                 }
             }
         }
-        ContentBlock::NumberedList { items } => {
-            rsx! {
-                div {
-                    class: "numbered-list",
-                    for (idx, item) in items.iter().enumerate() {
-                        super::OutlineItemComponent {
-                            item: item.clone(),
-                            indent: 0,
-                            is_numbered: true,
-                            item_number: Some(idx + 1),
-                            on_file_select: on_file_select
-                        }
-                    }
-                }
-            }
-        }
-        ContentBlock::CodeBlock { language, code } => {
-            let code_class = if let Some(ref lang) = language {
-                format!("language-{lang}")
+        BlockKind::CodeFence { lang } => {
+            let code_class = if let Some(ref lang_str) = lang {
+                format!("language-{lang_str}")
             } else {
                 "language-text".to_string()
             };
@@ -247,27 +99,36 @@ pub fn ContentBlockComponent(
             rsx! {
                 div {
                     class: "code-block",
-                    if let Some(lang) = language {
-                        div { class: "code-language", "{lang}" }
+                    if let Some(lang_str) = lang {
+                        div { class: "code-language", "{lang_str}" }
                     }
                     pre {
                         code {
                             class: "{code_class}",
-                            "{code}"
+                            "{block.content}"
                         }
                     }
                 }
             }
         }
-        ContentBlock::Quote(text) => {
-            rsx! {
-                blockquote { class: "quote", "{text}" }
-            }
-        }
-        ContentBlock::Rule => {
-            rsx! {
-                hr { class: "rule" }
-            }
-        }
     }
+}
+
+/// EditorBlock component for raw markdown editing when a block is focused
+/// This will implement the editing pattern from ADR-0004 where focused blocks
+/// switch to raw markdown editing mode
+#[component]
+pub fn EditorBlock(
+    block: RenderBlock,
+    on_save: Callback<String>,
+    on_cancel: Callback<()>,
+) -> Element {
+    // TODO: Implement raw markdown editing with controlled textarea
+    // Following ADR-0004 pattern:
+    // - Show exact bytes of content_range in textarea
+    // - Use beforeinput -> preventDefault -> send Cmd -> apply() -> update value
+    // - Handle Tab/Shift+Tab for indent/outdent
+    // - Handle Enter for split list item
+    // - Align textarea with gutter for indent/marker
+    todo!("EditorBlock component not yet implemented - will provide raw markdown editing")
 }

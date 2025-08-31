@@ -1,18 +1,21 @@
 use crate::editing::{AnchorId, Document, anchors::find_anchor_for_range, document::Marker};
 
 /// Snapshot of the document for rendering
+#[derive(Clone, PartialEq)]
 pub struct Snapshot {
     pub version: u64,
     pub blocks: Vec<RenderBlock>,
 }
 
 /// A renderable block in the document
+#[derive(Clone, PartialEq)]
 pub struct RenderBlock {
     pub id: AnchorId,
     pub kind: BlockKind,
     pub byte_range: std::ops::Range<usize>,
     pub content_range: std::ops::Range<usize>,
     pub depth: usize,
+    pub content: String,
 }
 
 /// Block types for rendering
@@ -59,6 +62,7 @@ fn collect_render_blocks_recursive(
             let level = extract_heading_level(doc, &node);
             let content_range = extract_heading_content_range(doc, &node);
             let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -66,6 +70,7 @@ fn collect_render_blocks_recursive(
                 byte_range,
                 content_range,
                 depth: current_depth,
+                content,
             });
         }
         "list_item" => {
@@ -73,6 +78,7 @@ fn collect_render_blocks_recursive(
             let list_depth = calculate_list_depth(doc, &node);
             let content_range = extract_list_item_content_range(doc, &node);
             let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -83,6 +89,7 @@ fn collect_render_blocks_recursive(
                 byte_range,
                 content_range,
                 depth: list_depth,
+                content,
             });
 
             // Also recursively process children to find nested list items
@@ -99,6 +106,7 @@ fn collect_render_blocks_recursive(
             if !is_inside_list_item {
                 // Top-level paragraph
                 let anchor_id = find_anchor_for_range(doc, &byte_range);
+                let content = doc.slice_to_cow(byte_range.clone()).trim().to_string();
 
                 blocks.push(RenderBlock {
                     id: anchor_id,
@@ -106,6 +114,7 @@ fn collect_render_blocks_recursive(
                     byte_range: byte_range.clone(),
                     content_range: byte_range.clone(), // For paragraphs, content equals byte range
                     depth: current_depth,
+                    content,
                 });
             }
             // If inside a list item, skip the paragraph block entirely
@@ -115,6 +124,7 @@ fn collect_render_blocks_recursive(
             let lang = extract_code_fence_language(doc, &node);
             let content_range = extract_code_fence_content_range(doc, &node);
             let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let content = doc.slice_to_cow(content_range.clone()).to_string();
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -122,10 +132,12 @@ fn collect_render_blocks_recursive(
                 byte_range,
                 content_range,
                 depth: current_depth,
+                content,
             });
         }
         "indented_code_block" => {
             let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let content = doc.slice_to_cow(byte_range.clone()).to_string();
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -133,6 +145,7 @@ fn collect_render_blocks_recursive(
                 byte_range: byte_range.clone(),
                 content_range: byte_range.clone(),
                 depth: current_depth,
+                content,
             });
         }
         _ => {
