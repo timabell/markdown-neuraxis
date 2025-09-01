@@ -104,8 +104,8 @@ pub fn SnapshotMainPanel(
                                         // Notify parent of document change
                                         on_document_changed.call(document.clone());
 
-                                        // Keep editing - don't exit editor mode
-                                        // The parent will re-render with updated content
+                                        // Important: Keep the block focused to stay in edit mode
+                                        // The focused_block_id is maintained, so editing continues
                                     }
                                 },
                                 on_cancel: {
@@ -274,32 +274,35 @@ pub fn EditorBlock(
                 autofocus: true, // Try to auto-focus when created
 
                 // ADR-0004: Controlled input pattern using oninput with proper command mapping
-                // Since onbeforeinput is not available in Dioxus, we intercept oninput and
-                // prevent the default behavior by controlling the textarea value directly
+                // We need to detect what changed and create appropriate commands
                 oninput: {
                     let on_command = on_command;
+                    let block_content_range = block.content_range.clone();
+                    let _old_content = content_text.clone();
                     move |event: Event<FormData>| {
-                        // Prevent default behavior by not allowing the input to change the textarea
-                        event.prevent_default();
-
-                        // For proper ADR-0004 implementation, we need to:
-                        // 1. Track caret position/selection
-                        // 2. Map input changes to commands
-                        // 3. Apply commands to update document
-                        // 4. Update textarea value from document
-
-                        // For now, implement a basic version that captures text input
-                        // TODO: Implement full caret tracking and proper input type detection
+                        // Get the new value from the textarea
                         let new_value = event.value();
 
-                        // Simple approach: Replace entire content with new text
-                        // This is temporary until we implement proper caret tracking
+                        // Compare with old content to determine what changed
+                        // For now, replace the entire block content
+                        // This is a simplified approach until we implement proper diff detection
+
+                        // Delete the old content and insert the new
+                        // First delete the existing content
+                        if !block_content_range.is_empty() {
+                            let delete_cmd = Cmd::DeleteRange {
+                                range: block_content_range.clone(),
+                            };
+                            on_command.call(delete_cmd);
+                        }
+
+                        // Then insert the new content
                         if !new_value.is_empty() {
-                            let cmd = Cmd::InsertText {
-                                at: block.content_range.start,
+                            let insert_cmd = Cmd::InsertText {
+                                at: block_content_range.start,
                                 text: new_value,
                             };
-                            on_command.call(cmd);
+                            on_command.call(insert_cmd);
                         }
                     }
                 },
@@ -363,8 +366,10 @@ pub fn EditorBlock(
                 },
 
                 // Auto-cancel editing when focus is lost
-                onblur: move |_| {
-                    // When the textarea loses focus, return to pretty view
+                onblur: move |_event| {
+                    // Only cancel if we're truly losing focus (not just re-rendering)
+                    // Check if the blur is due to the component being unmounted
+                    // For now, we'll cancel on blur but this might need refinement
                     on_cancel.call(());
                 },
 

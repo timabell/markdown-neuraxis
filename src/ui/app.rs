@@ -125,17 +125,47 @@ pub fn App(notes_path: PathBuf) -> Element {
                                 }
                             }
                         })),
-                        on_save: move |_| {
-                            // TODO: Implement save functionality using editing core
-                            // For now, we'll use a placeholder
-                            // todo!("Save functionality using editing core not yet implemented");
+                        on_save: {
+                            let notes_path = notes_path.clone();
+                            let selected_file = selected_file.read().clone();
+                            let current_document = current_document.read().clone();
+                            move |_| {
+                                // Save the current document to disk
+                                if let (Some(file), Some(document)) = (&selected_file, &current_document) {
+                                    let content = document.text();
+                                    match io::write_file(file.relative_path(), &notes_path, &content) {
+                                        Ok(()) => {
+                                            println!("File saved successfully: {:?}", file.relative_path());
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Error saving file {:?}: {e}", file.relative_path());
+                                        }
+                                    }
+                                }
+                            }
                         },
                         on_document_changed: {
                             let mut current_document = current_document;
                             let mut current_snapshot = current_snapshot;
+                            let notes_path = notes_path.clone();
+                            let selected_file = selected_file.read().clone();
                             move |updated_document: Document| {
                                 // Update the document state
                                 let new_snapshot = updated_document.snapshot();
+
+                                // Auto-save the document to disk
+                                if let Some(file) = &selected_file {
+                                    let content = updated_document.text();
+                                    match io::write_file(file.relative_path(), &notes_path, &content) {
+                                        Ok(()) => {
+                                            // File saved successfully
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Error auto-saving file {:?}: {e}", file.relative_path());
+                                        }
+                                    }
+                                }
+
                                 *current_document.write() = Some(updated_document);
                                 *current_snapshot.write() = Some(new_snapshot);
                             }
