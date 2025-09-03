@@ -259,13 +259,7 @@ pub fn EditorBlock(
                 div { class: "indent-block" }
             }
 
-            // Gutter showing the block marker/prefix
-            div {
-                class: "editor-gutter",
-                {render_block_prefix(&block)}
-            }
-
-            // ContentEditable div for raw markdown editing
+            // ContentEditable div for raw markdown editing (includes prefix)
             div {
                 class: "editor-content",
                 contenteditable: "true",
@@ -279,7 +273,7 @@ pub fn EditorBlock(
                 // We need to extract the plain text content and create appropriate commands
                 oninput: {
                     let on_command = on_command;
-                    let block_content_range = block.content_range.clone();
+                    let block_byte_range = block.byte_range.clone();
                     move |event: Event<FormData>| {
                         // Get the text content from the contentEditable element
                         // Note: In a native Dioxus desktop app, we get the textContent, not innerHTML
@@ -287,9 +281,9 @@ pub fn EditorBlock(
 
                         // Delete the old content and insert the new
                         // First delete the existing content
-                        if !block_content_range.is_empty() {
+                        if !block_byte_range.is_empty() {
                             let delete_cmd = Cmd::DeleteRange {
-                                range: block_content_range.clone(),
+                                range: block_byte_range.clone(),
                             };
                             on_command.call(delete_cmd);
                         }
@@ -297,7 +291,7 @@ pub fn EditorBlock(
                         // Then insert the new content
                         if !new_value.is_empty() {
                             let insert_cmd = Cmd::InsertText {
-                                at: block_content_range.start,
+                                at: block_byte_range.start,
                                 text: new_value,
                             };
                             on_command.call(insert_cmd);
@@ -377,106 +371,6 @@ pub fn EditorBlock(
                     // ContentEditable should maintain focus naturally
                 },
             }
-        }
-    }
-}
-
-/// Render the block prefix/marker for the editor gutter
-fn render_block_prefix(block: &RenderBlock) -> String {
-    match &block.kind {
-        BlockKind::ListItem { marker, .. } => {
-            match marker {
-                Marker::Dash => "- ".to_string(),
-                Marker::Asterisk => "* ".to_string(),
-                Marker::Plus => "+ ".to_string(),
-                Marker::Numbered => "1. ".to_string(), // TODO: Get actual number
-            }
-        }
-        BlockKind::Heading { level } => {
-            format!("{} ", "#".repeat(*level as usize))
-        }
-        BlockKind::Paragraph => String::new(),
-        BlockKind::CodeFence { lang: _ } => "``` ".to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::editing::{AnchorId, Marker};
-
-    #[test]
-    fn test_render_block_prefix_list_item() {
-        let block = RenderBlock {
-            id: AnchorId(123), // Simple test anchor ID
-            kind: BlockKind::ListItem {
-                marker: Marker::Dash,
-                depth: 1,
-            },
-            byte_range: 0..10,
-            content_range: 4..10,
-            depth: 1,
-            content: "Test content".to_string(),
-        };
-
-        let prefix = render_block_prefix(&block);
-        assert_eq!(prefix, "- ");
-    }
-
-    #[test]
-    fn test_render_block_prefix_heading() {
-        let block = RenderBlock {
-            id: AnchorId(124),
-            kind: BlockKind::Heading { level: 2 },
-            byte_range: 0..15,
-            content_range: 3..15,
-            depth: 0,
-            content: "Test Heading".to_string(),
-        };
-
-        let prefix = render_block_prefix(&block);
-        assert_eq!(prefix, "## ");
-    }
-
-    #[test]
-    fn test_render_block_prefix_paragraph() {
-        let block = RenderBlock {
-            id: AnchorId(125),
-            kind: BlockKind::Paragraph,
-            byte_range: 0..15,
-            content_range: 0..15,
-            depth: 0,
-            content: "Regular paragraph".to_string(),
-        };
-
-        let prefix = render_block_prefix(&block);
-        assert_eq!(prefix, "");
-    }
-
-    #[test]
-    fn test_render_block_prefix_different_markers() {
-        let test_cases = [
-            (Marker::Dash, "- "),
-            (Marker::Asterisk, "* "),
-            (Marker::Plus, "+ "),
-            (Marker::Numbered, "1. "),
-        ];
-
-        for (i, (marker, expected_prefix)) in test_cases.iter().enumerate() {
-            let block = RenderBlock {
-                id: AnchorId(200 + i as u128), // Unique ID for each test case
-                kind: BlockKind::ListItem {
-                    marker: marker.clone(),
-                    depth: 0,
-                },
-                byte_range: 0..10,
-                content_range: 2..10,
-                depth: 0,
-                content: "Content".to_string(),
-            };
-
-            let prefix = render_block_prefix(&block);
-            assert_eq!(prefix, *expected_prefix);
         }
     }
 }
