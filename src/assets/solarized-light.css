@@ -489,10 +489,9 @@ hr {
     min-width: 1.2em;
 }
 
-.editor-textarea {
+.editor-content {
     border: none;
     outline: none;
-    resize: vertical;
     background: transparent;
     font-family: inherit;
     font-size: inherit;
@@ -500,13 +499,15 @@ hr {
     color: var(--base01);
     padding: 0;
     margin: 0;
-    width: 100%;
+    flex: 1;
     min-height: inherit;
     overflow-y: auto;
     overflow-x: hidden;
+    white-space: pre-wrap;  /* Preserve whitespace for markdown formatting */
+    word-wrap: break-word;  /* Wrap long lines */
 }
 
-.editor-textarea:focus {
+.editor-content:focus {
     outline: none;
 }
 

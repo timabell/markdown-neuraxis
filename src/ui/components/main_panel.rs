@@ -240,7 +240,7 @@ pub fn RenderBlockComponent(
 
 /// EditorBlock component for raw markdown editing when a block is focused
 /// This implements the editing pattern from ADR-0004 where focused blocks
-/// switch to raw markdown editing mode with controlled textarea
+/// switch to raw markdown editing mode with contentEditable div
 #[component]
 pub fn EditorBlock(
     block: RenderBlock,
@@ -265,27 +265,25 @@ pub fn EditorBlock(
                 {render_block_prefix(&block)}
             }
 
-            // Controlled textarea for raw markdown editing
-            textarea {
-                class: "editor-textarea",
-                value: content_text.clone(),
-                spellcheck: false,
-                rows: calculate_textarea_rows(&content_text),
-                autofocus: true, // Try to auto-focus when created
+            // ContentEditable div for raw markdown editing
+            div {
+                class: "editor-content",
+                contenteditable: "true",
+                spellcheck: "false",
+                autofocus: "true",
+                // Use dangerous_inner_html to set initial text content properly
+                // We escape HTML to ensure raw markdown display
+                dangerous_inner_html: html_escape::encode_text(&content_text).to_string(),
 
-                // ADR-0004: Controlled input pattern using oninput with proper command mapping
-                // We need to detect what changed and create appropriate commands
+                // ADR-0004: Handle input events for contentEditable
+                // We need to extract the plain text content and create appropriate commands
                 oninput: {
                     let on_command = on_command;
                     let block_content_range = block.content_range.clone();
-                    let _old_content = content_text.clone();
                     move |event: Event<FormData>| {
-                        // Get the new value from the textarea
+                        // Get the text content from the contentEditable element
+                        // Note: In a native Dioxus desktop app, we get the textContent, not innerHTML
                         let new_value = event.value();
-
-                        // Compare with old content to determine what changed
-                        // For now, replace the entire block content
-                        // This is a simplified approach until we implement proper diff detection
 
                         // Delete the old content and insert the new
                         // First delete the existing content
@@ -335,7 +333,7 @@ pub fn EditorBlock(
                             },
                             Key::Enter => {
                                 if event.modifiers().shift() {
-                                    // Shift+Enter: allow default newline behavior
+                                    // Shift+Enter: allow default newline behavior in contentEditable
                                 } else {
                                     event.prevent_default();
                                     // Enter: Split list item if in a list
@@ -358,6 +356,7 @@ pub fn EditorBlock(
                                 }
                             },
                             Key::Escape => {
+                                event.prevent_default();
                                 on_cancel.call(());
                             },
                             _ => {}
@@ -367,42 +366,15 @@ pub fn EditorBlock(
 
                 // Auto-cancel editing when focus is lost
                 onblur: move |_event| {
-                    // Only cancel if we're truly losing focus (not just re-rendering)
-                    // Check if the blur is due to the component being unmounted
-                    // For now, we'll cancel on blur but this might need refinement
+                    // ContentEditable naturally maintains focus better than textarea
+                    // Still cancel on blur for now, but this should be more stable
                     on_cancel.call(());
                 },
 
                 // Handle focus for editor lifecycle
                 onfocus: move |_| {
                     // Editor is now active
-                },
-
-                // ADR-0004: Composition event handling for IME support
-                oncompositionstart: {
-                    move |_| {
-                        // IME composition started - let browser handle input until compositionend
-                        // Disable our command processing during composition
-                    }
-                },
-
-                oncompositionend: {
-                    let on_command = on_command;
-                    let block = block.clone();
-                    move |event: Event<CompositionData>| {
-                        // IME composition finished - apply the composed text as a command
-                        let composition_data = event.data();
-                        let composed_text = composition_data.data();
-
-                        if !composed_text.is_empty() {
-                            // Apply composition result as insert command
-                            let cmd = Cmd::InsertText {
-                                at: block.content_range.end, // Insert at end for now
-                                text: composed_text,
-                            };
-                            on_command.call(cmd);
-                        }
-                    }
+                    // ContentEditable should maintain focus naturally
                 },
             }
         }
@@ -426,12 +398,6 @@ fn render_block_prefix(block: &RenderBlock) -> String {
         BlockKind::Paragraph => String::new(),
         BlockKind::CodeFence { lang: _ } => "``` ".to_string(),
     }
-}
-
-/// Calculate appropriate number of rows for textarea based on content
-fn calculate_textarea_rows(content: &str) -> u32 {
-    let line_count = content.lines().count().max(1);
-    (line_count as u32).min(20) // Cap at 20 rows to avoid huge textareas
 }
 
 #[cfg(test)]
@@ -512,22 +478,5 @@ mod tests {
             let prefix = render_block_prefix(&block);
             assert_eq!(prefix, *expected_prefix);
         }
-    }
-
-    #[test]
-    fn test_calculate_textarea_rows() {
-        // Test single line content
-        assert_eq!(calculate_textarea_rows("Single line"), 1);
-
-        // Test multi-line content
-        let multi_line = "Line 1\nLine 2\nLine 3";
-        assert_eq!(calculate_textarea_rows(multi_line), 3);
-
-        // Test empty content
-        assert_eq!(calculate_textarea_rows(""), 1);
-
-        // Test very long content (should be capped at 20)
-        let long_content = "Line\n".repeat(30);
-        assert_eq!(calculate_textarea_rows(&long_content), 20);
     }
 }
