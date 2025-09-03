@@ -6,12 +6,30 @@ use crate::editing::{Document, document::Marker};
 /// Commands that can be applied to the document
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cmd {
-    InsertText { at: usize, text: String },
-    DeleteRange { range: std::ops::Range<usize> },
-    SplitListItem { at: usize },
-    IndentLines { range: std::ops::Range<usize> },
-    OutdentLines { range: std::ops::Range<usize> },
-    ToggleMarker { line_start: usize, to: Marker },
+    InsertText {
+        at: usize,
+        text: String,
+    },
+    DeleteRange {
+        range: std::ops::Range<usize>,
+    },
+    ReplaceRange {
+        range: std::ops::Range<usize>,
+        text: String,
+    },
+    SplitListItem {
+        at: usize,
+    },
+    IndentLines {
+        range: std::ops::Range<usize>,
+    },
+    OutdentLines {
+        range: std::ops::Range<usize>,
+    },
+    ToggleMarker {
+        line_start: usize,
+        to: Marker,
+    },
 }
 
 /// Compile a command into a delta
@@ -26,6 +44,12 @@ pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
         Cmd::DeleteRange { range } => {
             let mut builder = Builder::new(doc.len());
             builder.delete(range.clone());
+            builder.build()
+        }
+        Cmd::ReplaceRange { range, text } => {
+            let mut builder = Builder::new(doc.len());
+            let replace_rope = Rope::from(text);
+            builder.replace(range.clone(), replace_rope);
             builder.build()
         }
         Cmd::SplitListItem { at } => {
@@ -157,6 +181,32 @@ pub(crate) fn transform_selection_for_command(
             } else if *at < range.end {
                 range.start..(range.end + insert_len)
             } else {
+                range.clone()
+            }
+        }
+        Cmd::ReplaceRange {
+            range: replace_range,
+            text,
+        } => {
+            // Replace is essentially delete + insert at the same position
+            let del_len = replace_range.len();
+            let insert_len = text.len();
+
+            if replace_range.end <= range.start {
+                // Replacement is before selection - shift by net change
+                let net_change = insert_len as i32 - del_len as i32;
+                if net_change >= 0 {
+                    let shift = net_change as usize;
+                    (range.start + shift)..(range.end + shift)
+                } else {
+                    let shift = (-net_change) as usize;
+                    (range.start.saturating_sub(shift))..(range.end.saturating_sub(shift))
+                }
+            } else if replace_range.start >= range.end {
+                // Replacement is after selection - no change
+                range.clone()
+            } else {
+                // Replacement overlaps selection - this is complex, for now keep selection unchanged
                 range.clone()
             }
         }
@@ -698,5 +748,126 @@ mod tests {
 
         // Version should be 4 after 4 commands
         assert_eq!(doc.version(), 4);
+    }
+
+    #[test]
+    fn test_replace_range_basic() {
+        let mut doc = Document::from_bytes(b"Hello World").unwrap();
+
+        let patch = doc.apply(Cmd::ReplaceRange {
+            range: 6..11, // "World"
+            text: "Universe".to_string(),
+        });
+
+        assert_eq!(doc.text(), "Hello Universe");
+        assert!(!patch.changed.is_empty());
+    }
+
+    #[test]
+    fn test_replace_range_with_shorter_text() {
+        let mut doc = Document::from_bytes(b"Hello World").unwrap();
+
+        let patch = doc.apply(Cmd::ReplaceRange {
+            range: 6..11,           // "World" (5 chars)
+            text: "Hi".to_string(), // 2 chars
+        });
+
+        assert_eq!(doc.text(), "Hello Hi");
+        assert!(!patch.changed.is_empty());
+    }
+
+    #[test]
+    fn test_replace_range_with_longer_text() {
+        let mut doc = Document::from_bytes(b"Hello World").unwrap();
+
+        let patch = doc.apply(Cmd::ReplaceRange {
+            range: 6..11,                           // "World" (5 chars)
+            text: "Beautiful Universe".to_string(), // 18 chars
+        });
+
+        assert_eq!(doc.text(), "Hello Beautiful Universe");
+        assert!(!patch.changed.is_empty());
+    }
+
+    #[test]
+    fn test_replace_range_empty_text() {
+        let mut doc = Document::from_bytes(b"Hello World").unwrap();
+
+        let _patch = doc.apply(Cmd::ReplaceRange {
+            range: 5..11, // " World"
+            text: "".to_string(),
+        });
+
+        assert_eq!(doc.text(), "Hello");
+        // Replacement with empty text effectively deletes the range
+    }
+
+    #[test]
+    fn test_replace_range_full_content() {
+        let mut doc = Document::from_bytes(b"- Hello").unwrap();
+
+        let patch = doc.apply(Cmd::ReplaceRange {
+            range: 0..7, // entire content
+            text: "- Hello World".to_string(),
+        });
+
+        assert_eq!(doc.text(), "- Hello World");
+        assert!(!patch.changed.is_empty());
+    }
+
+    #[test]
+    fn test_replace_range_markdown_block() {
+        let mut doc = Document::from_bytes(b"- Hello\n- Second").unwrap();
+
+        // Replace first list item entirely
+        let patch = doc.apply(Cmd::ReplaceRange {
+            range: 0..7, // "- Hello"
+            text: "- Goodbye".to_string(),
+        });
+
+        assert_eq!(doc.text(), "- Goodbye\n- Second");
+        assert!(!patch.changed.is_empty());
+    }
+
+    #[test]
+    fn test_replace_range_vs_delete_insert() {
+        // Test that ReplaceRange gives same result as delete+insert
+        let original = "- Hello World\n- Second item";
+
+        // Test with ReplaceRange
+        let mut doc1 = Document::from_bytes(original.as_bytes()).unwrap();
+        doc1.apply(Cmd::ReplaceRange {
+            range: 0..13, // "- Hello World"
+            text: "- Hello Universe".to_string(),
+        });
+
+        // Test with delete+insert sequence
+        let mut doc2 = Document::from_bytes(original.as_bytes()).unwrap();
+        doc2.apply(Cmd::DeleteRange { range: 0..13 });
+        doc2.apply(Cmd::InsertText {
+            at: 0,
+            text: "- Hello Universe".to_string(),
+        });
+
+        // Results should be the same
+        assert_eq!(doc1.text(), doc2.text());
+        assert_eq!(doc1.text(), "- Hello Universe\n- Second item");
+    }
+
+    #[test]
+    fn test_replace_range_selection_transform() {
+        let mut doc = Document::from_bytes(b"Hello World Test").unwrap();
+        doc.set_selection(12..16); // "Test" selected
+
+        // Replace "World" with "Universe"
+        doc.apply(Cmd::ReplaceRange {
+            range: 6..11, // "World"
+            text: "Universe".to_string(),
+        });
+
+        // Selection should shift to account for length difference
+        // "World" (5) -> "Universe" (8), so +3 chars
+        assert_eq!(doc.selection(), 15..19); // "Test" shifted right by 3
+        assert_eq!(doc.text(), "Hello Universe Test");
     }
 }

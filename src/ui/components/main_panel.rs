@@ -279,23 +279,12 @@ pub fn EditorBlock(
                         // Note: In a native Dioxus desktop app, we get the textContent, not innerHTML
                         let new_value = event.value();
 
-                        // Delete the old content and insert the new
-                        // First delete the existing content
-                        if !block_byte_range.is_empty() {
-                            let delete_cmd = Cmd::DeleteRange {
-                                range: block_byte_range.clone(),
-                            };
-                            on_command.call(delete_cmd);
-                        }
-
-                        // Then insert the new content
-                        if !new_value.is_empty() {
-                            let insert_cmd = Cmd::InsertText {
-                                at: block_byte_range.start,
-                                text: new_value,
-                            };
-                            on_command.call(insert_cmd);
-                        }
+                        // Replace the entire block content atomically
+                        let replace_cmd = Cmd::ReplaceRange {
+                            range: block_byte_range.clone(),
+                            text: new_value,
+                        };
+                        on_command.call(replace_cmd);
                     }
                 },
 
