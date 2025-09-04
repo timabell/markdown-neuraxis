@@ -477,19 +477,7 @@ hr {
     flex-shrink: 0;
 }
 
-.editor-gutter {
-    color: var(--base1);
-    white-space: pre;
-    user-select: none;
-    padding-right: 4px;
-    flex-shrink: 0;
-    font-family: inherit;
-    font-size: inherit;
-    line-height: inherit;
-    min-width: 1.2em;
-}
-
-.editor-content {
+.editor-textarea {
     border: none;
     outline: none;
     background: transparent;
@@ -505,9 +493,10 @@ hr {
     overflow-x: hidden;
     white-space: pre-wrap;  /* Preserve whitespace for markdown formatting */
     word-wrap: break-word;  /* Wrap long lines */
+    resize: none; /* Disable manual resize since we calculate rows */
 }
 
-.editor-content:focus {
+.editor-textarea:focus {
     outline: none;
 }
 
