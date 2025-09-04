@@ -1,0 +1,482 @@
+---
+title: Complete Markdown Demo
+date: 2024-01-15
+author: markdown-neuraxis
+tags: [demo, markdown, reference, testing]
+status: complete
+project: Documentation
+priority: high
+id: md-demo-2024
+---
+
+# Complete Markdown Demo for markdown-neuraxis
+
+This file demonstrates all supported markdown features in markdown-neuraxis, including standard markdown, Logseq-style properties, task states, and advanced formatting.
+
+## Table of Contents
+
+- [[#basic-text-formatting|Basic Text Formatting]]
+- [[#headings-and-hierarchy|Headings and Hierarchy]]
+- [[#lists-and-bullets|Lists and Bullets]]
+- [[#task-states-gtd|Task States (GTD)]]
+- [[#properties-and-metadata|Properties and Metadata]]
+- [[#links-and-references|Links and References]]
+- [[#code-blocks|Code Blocks]]
+- [[#advanced-features|Advanced Features]]
+
+## Basic Text Formatting
+
+Here are the basic text formatting options:
+
+- **Bold text** using double asterisks
+- *Italic text* using single asterisks
+- ***Bold and italic*** using triple asterisks
+- ~~Strikethrough text~~ using tildes
+- `Inline code` using backticks
+- Regular text with no formatting
+
+You can combine these: **Bold with *nested italic* text** and `**bold code**`.
+
+Line breaks can be created with two spaces at the end  
+Like this line break.
+
+Or use a blank line for paragraph breaks.
+
+## Headings and Hierarchy
+
+### Level 3 Heading
+#### Level 4 Heading
+##### Level 5 Heading
+###### Level 6 Heading
+
+## Lists and Bullets
+
+### Unordered Lists with Mixed Markers
+
+- Dash marker item
+  - Nested with dash
+    - Deeper nesting
+      - Even deeper with 4 levels
+        - Maximum depth
+- Back to top level
+
+* Asterisk marker item
+  * Nested with asterisk
+    * Deeper nesting
+  * Back to level 2
+
++ Plus marker item
+  + Nested with plus
+  + Another plus item
+
+### Ordered Lists
+
+1. First numbered item
+2. Second numbered item
+   1. Nested numbered item
+   2. Another nested item
+      1. Deeper nested number
+      2. Another deep item
+3. Back to top level
+4. Final numbered item
+
+### Mixed Lists with Content
+
+- Main bullet point
+  ```python
+  # Code block inside bullet
+  def example():
+      return "Code in bullets!"
+  ```
+  
+- Bullet with blockquote
+  > This is a quote inside a bullet point
+  > It can span multiple lines
+  
+- Bullet with nested content
+  - Sub-bullet with **bold text**
+  - Sub-bullet with [[wiki-link]]
+  - Sub-bullet with #tags
+
+### Task Lists (Checkbox Style)
+
+- [ ] Uncompleted task
+- [x] Completed task  
+- [ ] Another uncompleted task
+  - [x] Nested completed subtask
+  - [ ] Nested uncompleted subtask
+
+## Task States (GTD)
+
+### Core GTD Task States
+
+- INBOX Unprocessed capture that needs triage
+  captured:: 2024-01-15
+  source:: email
+
+- ACTION Call dentist for appointment
+  priority:: high
+  due:: 2024-01-16
+  context:: #@phone
+
+- DOING Complete quarterly review presentation
+  started:: 2024-01-15T09:00
+  progress:: 60%
+  
+- WAITING Budget approval from finance
+  waiting-for:: CFO signature
+  blocked-since:: 2024-01-10
+  
+- SOMEDAY Research vacation destinations for summer
+  energy:: low
+  review-date:: 2024-03-01
+
+- DONE Reply to client email about project scope
+  completed:: 2024-01-15T08:30
+  outcome:: approved
+
+- ABANDONED Old productivity system migration
+  reason:: Better solution found
+  abandoned:: 2024-01-10
+
+### Task Hierarchies
+
+- ACTION Plan team offsite
+  due:: 2024-02-01
+  assigned:: @sarah
+  - DOING Research venues
+    - DONE Check hotel availability
+    - ACTION Get catering quotes
+      contacts:: [Acme Catering, Best Foods LLC]
+  - INBOX Send invitations
+  - SOMEDAY Plan team building activities
+
+## Properties and Metadata
+
+### Logseq-style Properties in Bullets
+
+- Meeting with design team
+  attendees:: [@alice, @bob, @carol]
+  location:: Conference Room A
+  duration:: 2 hours
+  outcome:: Approved new design system
+  follow-up:: Schedule implementation planning
+
+- Book: "Atomic Habits" by James Clear
+  rating:: 9/10
+  genre:: Self-help
+  pages:: 320
+  status:: completed
+  notes:: Great insights on habit formation
+  recommended-by:: @friend-jane
+
+- Project milestone: User authentication complete
+  milestone:: true
+  completion-date:: 2024-01-15
+  team:: [Frontend, Backend, QA]
+  dependencies:: [API design, UI mockups]
+  risks:: [Third-party integration, Security review]
+
+### Inline Properties
+
+- Buy groceries due::2024-01-16 #@errands priority::medium
+- Team meeting at::2pm location::Zoom room::main-conference
+- Call mom birthday::2024-01-20 gift-idea::flowers reminder::set
+
+## Links and References
+
+### Wiki Links (Internal)
+
+- [[Getting-Started]] - Link to another file
+- [[journal/2024-01-15]] - Link to specific journal
+- [[1_Projects/Website-Redesign]] - Link to project file
+- [[3_Resources/Productivity-Tips#time-blocking]] - Link to specific section
+
+### External Links
+
+- [Markdown Guide](https://www.markdownguide.org/) - External website
+- [GTD Methodology](https://gettingthingsdone.com/ "Official GTD website") - Link with title
+- [Reference link style][1] using reference syntax
+
+### Cross-references with UUIDs (Logseq-style)
+
+- Main goal: Complete certification course
+  id:: 68951faf-4df2-4851-9c38-12474ce9806a
+  
+- Study session for course
+  goal:: ((68951faf-4df2-4851-9c38-12474ce9806a))
+  duration:: 2 hours
+
+## Code Blocks
+
+### Programming Languages
+
+```javascript
+// JavaScript example
+function calculateTax(income, rate) {
+    return income * rate / 100;
+}
+
+const tax = calculateTax(50000, 25);
+console.log(`Tax owed: $${tax}`);
+```
+
+```python
+# Python example with line numbers
+def fibonacci(n):
+    """Generate Fibonacci sequence up to n"""
+    a, b = 0, 1
+    while a < n:
+        yield a
+        a, b = b, a + b
+
+# Usage
+for num in fibonacci(100):
+    print(num, end=' ')
+```
+
+```rust
+// Rust example
+fn main() {
+    let numbers = vec![1, 2, 3, 4, 5];
+    let sum: i32 = numbers.iter().sum();
+    println!("Sum: {}", sum);
+}
+```
+
+```bash
+#!/bin/bash
+# Shell script example
+echo "Setting up markdown-neuraxis..."
+cargo build --release
+mkdir -p ~/notes/journal
+cd ~/notes && ../target/release/markdown-neuraxis .
+```
+
+```sql
+-- SQL example
+SELECT p.name, COUNT(t.id) as task_count
+FROM projects p
+LEFT JOIN tasks t ON p.id = t.project_id
+WHERE p.status = 'active'
+GROUP BY p.name
+ORDER BY task_count DESC;
+```
+
+### Configuration Files
+
+```yaml
+# YAML configuration
+database:
+  host: localhost
+  port: 5432
+  name: markdown_neuraxis
+  
+features:
+  - wiki_links
+  - task_states
+  - properties
+  - code_highlighting
+```
+
+```json
+{
+  "name": "markdown-neuraxis",
+  "version": "0.1.0",
+  "features": [
+    "parsing",
+    "editing", 
+    "gui"
+  ],
+  "dependencies": {
+    "pulldown-cmark": "0.11",
+    "dioxus": "0.6"
+  }
+}
+```
+
+```toml
+# Cargo.toml example
+[package]
+name = "markdown-neuraxis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dioxus = "0.6"
+pulldown-cmark = "0.11"
+```
+
+## Advanced Features
+
+### Blockquotes
+
+> Standard blockquote for highlighting important information
+> This can span multiple lines
+
+> Nested quotes work too
+>> Like this deeper quote
+>>> And even deeper
+
+> **Bold text in quotes** and *italic text*
+> 
+> With code: `inline code in quotes`
+
+### Tables
+
+| Feature | Status | Priority | Notes |
+|---------|--------|----------|-------|
+| Basic parsing | ✅ Done | High | Core functionality |  
+| Wiki links | ✅ Done | High | Internal navigation |
+| Task states | ✅ Done | High | GTD methodology |
+| Properties | 🚧 In Progress | Medium | Logseq compatibility |
+| Queries | ❌ Todo | Low | Dynamic dashboards |
+| Kanban view | ❌ Todo | Medium | Visual task management |
+
+### Alignment Example
+
+| Left Aligned | Center Aligned | Right Aligned |
+|:-------------|:--------------:|--------------:|
+| Text | Text | Text |
+| More text | More text | More text |
+
+### Complex Lists with Everything
+
+- PROJECT Website redesign project
+  id:: proj-website-2024
+  status:: active
+  team:: [@alice, @bob, @design-team]
+  budget:: $15000
+  deadline:: 2024-03-15
+  
+  - ACTION Create wireframes
+    assigned:: @alice
+    due:: 2024-01-20
+    dependencies:: [User research, Brand guidelines]
+    
+    ```mermaid
+    flowchart LR
+        A[Research] --> B[Wireframes]
+        B --> C[Design]
+        C --> D[Development]
+    ```
+    
+  - DOING User research and interviews
+    progress:: 75%
+    interviews-completed:: 8/10
+    insights:: [Mobile-first needed, Accessibility gaps, Performance issues]
+    
+    > "Users want faster load times and better mobile experience"
+    > - Key finding from user interview #3
+    
+  - WAITING Design system approval
+    waiting-for:: Stakeholder review
+    escalation-date:: 2024-01-18
+    
+### HTML Elements (When Needed)
+
+<details>
+<summary>🔍 Click to expand advanced configuration</summary>
+
+This section contains advanced configuration options that are collapsed by default.
+
+```yaml
+advanced_settings:
+  performance:
+    cache_size: 1000
+    lazy_loading: true
+  ui:
+    theme: solarized-light
+    animations: enabled
+```
+
+</details>
+
+### Horizontal Rules
+
+Content above the rule
+
+---
+
+Content after triple dashes
+
+***
+
+Content after triple asterisks  
+
+___
+
+Content after triple underscores
+
+### Escaping and Special Characters
+
+- Use backslash to escape: \*not italic\* and \#not-a-tag
+- Special characters: © ® ™ § ¶ † ‡ • … ‰ ‱ ¿ ¡
+- Emoji: 🚀 📝 ✅ ❌ 🔍 💡 ⚡ 🎯 🏆 📊
+- Unicode: α β γ δ ε → ← ↑ ↓ ∞ ± × ÷
+
+### Inline HTML (Limited Support)
+
+Regular text with <mark>highlighted text</mark> and <kbd>Ctrl+C</kbd> keyboard shortcuts.
+
+<sup>superscript</sup> and <sub>subscript</sub> text.
+
+## Tags and Contexts
+
+### Regular Tags
+This content has #markdown #demo #reference tags throughout.
+
+### GTD Contexts  
+Tasks organized by context: #@home #@office #@computer #@phone #@errands #@agenda
+
+### Energy Levels
+Organize by energy: #energy-high #energy-medium #energy-low
+
+### Project Tags
+Link to projects: #project-website #project-mobile-app #project-documentation
+
+## Queries (Planned Feature)
+
+```query
+query:: status:: DOING
+```
+
+```query  
+query:: tags:: #work AND due:: before::2024-01-20
+```
+
+```query
+query:: project:: ((proj-website-2024)) AND status:: NOT DONE
+```
+
+## File References
+
+Related files in this knowledge base:
+- [[Getting-Started]] - System introduction
+- [[How-It-All-Works]] - Methodology overview  
+- [[journal/2024-01-15]] - Daily planning example
+- [[1_Projects/Learn-PKM-System]] - Learning project
+- [[2_Areas/Health-Fitness]] - Life area management
+- [[0_Inbox/quick-capture]] - Inbox processing
+
+---
+
+## Summary
+
+This demo file showcases the comprehensive markdown support in markdown-neuraxis, including:
+
+✅ **Standard Markdown**: Headers, lists, links, code, tables, quotes  
+✅ **GTD Task States**: INBOX, ACTION, DOING, WAITING, DONE, SOMEDAY, ABANDONED  
+✅ **Logseq Properties**: Key-value metadata in bullets and inline  
+✅ **Wiki Links**: Internal cross-referencing with [[double brackets]]  
+✅ **UUID References**: Cross-document linking with ((uuid)) syntax  
+✅ **Tags & Contexts**: Flexible categorization with #hashtags  
+✅ **YAML Frontmatter**: Document metadata and properties  
+✅ **Code Highlighting**: Multi-language syntax support  
+✅ **Advanced Lists**: Deep nesting with mixed content types  
+
+This creates a powerful, flexible system for personal knowledge management and task organization that works entirely with plain text files.
+
+*Generated: 2024-01-15 | System: markdown-neuraxis v0.1.0*
+
+[1]: https://example.com/reference-link
