@@ -250,6 +250,24 @@ pub fn EditorBlock(
 ) -> Element {
     use dioxus::prelude::*;
 
+    // Local state for textarea content - only commit changes on specific events
+    let local_content = use_signal(|| content_text.clone());
+
+    // Helper to commit current changes to the document
+    let commit_changes = {
+        let on_command = on_command;
+        let block_byte_range = block.byte_range.clone();
+        let local_content = local_content;
+        move || {
+            let current_text = local_content.read().clone();
+            let replace_cmd = Cmd::ReplaceRange {
+                range: block_byte_range.clone(),
+                text: current_text,
+            };
+            on_command.call(replace_cmd);
+        }
+    };
+
     rsx! {
         div {
             class: "editor-block",
@@ -259,29 +277,19 @@ pub fn EditorBlock(
                 div { class: "indent-block" }
             }
 
-            // Controlled textarea for raw markdown editing with prefix included
+            // Uncontrolled textarea that manages its own content locally
             textarea {
                 class: "editor-textarea",
-                value: content_text.clone(),
+                value: local_content.read().clone(),
                 spellcheck: false,
-                rows: calculate_textarea_rows(&content_text),
-                autofocus: true, // Try to auto-focus when created
+                rows: calculate_textarea_rows(&local_content.read()),
+                autofocus: true,
 
-                // ADR-0004: Controlled input pattern using oninput with ReplaceRange command
-                // We replace the entire block content atomically using the improved command
+                // Update local state only - no commands triggered on regular typing
                 oninput: {
-                    let on_command = on_command;
-                    let block_byte_range = block.byte_range.clone();
+                    let mut local_content = local_content;
                     move |event: Event<FormData>| {
-                        // Get the new value from the textarea
-                        let new_value = event.value();
-
-                        // Replace the entire block content atomically using ReplaceRange
-                        let replace_cmd = Cmd::ReplaceRange {
-                            range: block_byte_range.clone(),
-                            text: new_value,
-                        };
-                        on_command.call(replace_cmd);
+                        local_content.set(event.value());
                     }
                 },
 
@@ -292,10 +300,14 @@ pub fn EditorBlock(
                     let block_kind = block.kind.clone();
                     let on_command = on_command;
                     let on_cancel = on_cancel;
+                    let commit_changes = commit_changes.clone();
                     move |event: Event<KeyboardData>| {
                         match event.key() {
                             Key::Tab => {
                                 event.prevent_default();
+
+                                // First commit any current changes
+                                commit_changes();
 
                                 if event.modifiers().shift() {
                                     // Shift+Tab: Outdent lines
@@ -316,6 +328,10 @@ pub fn EditorBlock(
                                     // Shift+Enter: allow default newline behavior
                                 } else {
                                     event.prevent_default();
+
+                                    // First commit any current changes
+                                    commit_changes();
+
                                     // Enter: Split list item if in a list
                                     match block_kind {
                                         BlockKind::ListItem { .. } => {
@@ -336,6 +352,8 @@ pub fn EditorBlock(
                                 }
                             },
                             Key::Escape => {
+                                // Commit changes before canceling
+                                commit_changes();
                                 on_cancel.call(());
                             },
                             _ => {}
@@ -343,13 +361,9 @@ pub fn EditorBlock(
                     }
                 },
 
-                // Auto-cancel editing when focus is lost
-                onblur: move |_event| {
-                    // Only cancel if we're truly losing focus (not just re-rendering)
-                    // Check if the blur is due to the component being unmounted
-                    // For now, we'll cancel on blur but this might need refinement
-                    on_cancel.call(());
-                },
+                // Note: Removed onblur handler that was causing premature exit from edit mode
+                // Edit mode should only exit on explicit user actions (Escape key, Enter, etc.)
+                // not on blur events which can be triggered by normal typing
 
                 // Handle focus for editor lifecycle
                 onfocus: move |_| {
