@@ -257,7 +257,6 @@ pub fn EditorBlock(
     let commit_changes = {
         let on_command = on_command;
         let block_byte_range = block.byte_range.clone();
-        let local_content = local_content;
         move || {
             let current_text = local_content.read().clone();
             let replace_cmd = Cmd::ReplaceRange {
@@ -361,9 +360,13 @@ pub fn EditorBlock(
                     }
                 },
 
-                // Note: Removed onblur handler that was causing premature exit from edit mode
-                // Edit mode should only exit on explicit user actions (Escape key, Enter, etc.)
-                // not on blur events which can be triggered by normal typing
+                // Simple blur handler to commit changes when focus is lost
+                onblur: {
+                    let commit_changes = commit_changes.clone();
+                    move |_| {
+                        commit_changes();
+                    }
+                },
 
                 // Handle focus for editor lifecycle
                 onfocus: move |_| {
