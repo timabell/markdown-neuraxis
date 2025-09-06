@@ -72,7 +72,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                     current_snapshot.read().as_ref(),
                     current_document.read().as_ref()
                 ) {
-                    super::components::SnapshotMainPanel {
+                    super::components::MainPanel {
                         file: file.clone(),
                         snapshot: snapshot.clone(),
                         document: document.clone(),

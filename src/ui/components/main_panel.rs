@@ -8,7 +8,7 @@ use dioxus::prelude::*;
 use std::path::PathBuf;
 
 #[component]
-pub fn SnapshotMainPanel(
+pub fn MainPanel(
     file: MarkdownFile,
     snapshot: Snapshot,
     document: Document,
