@@ -99,7 +99,8 @@ fn collect_render_blocks_recursive(
             let marker = extract_list_marker(doc, &node);
             let list_depth = calculate_list_depth(doc, &node);
             let content_range = extract_list_item_content_range(doc, &node);
-            let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let own_byte_range = extract_list_item_own_range(doc, &node);
+            let anchor_id = find_anchor_for_range(doc, &own_byte_range);
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
             blocks.push(RenderBlock {
@@ -108,7 +109,7 @@ fn collect_render_blocks_recursive(
                     marker,
                     depth: list_depth,
                 },
-                byte_range,
+                byte_range: own_byte_range,
                 content_range,
                 depth: list_depth,
                 content,
@@ -267,6 +268,21 @@ fn calculate_list_depth(doc: &Document, node: &tree_sitter::Node) -> usize {
 
     // Each 4 spaces = 1 depth level (standard markdown convention)
     indent_chars / 4
+}
+
+/// Extract the byte range for just the list item's own line (excluding children)
+fn extract_list_item_own_range(doc: &Document, node: &tree_sitter::Node) -> std::ops::Range<usize> {
+    let byte_range = node.byte_range();
+    let text = doc.slice_to_cow(byte_range.clone());
+
+    // Find the end of the first line (list item's own content)
+    let line_end = if let Some(newline_pos) = text.find('\n') {
+        byte_range.start + newline_pos
+    } else {
+        byte_range.end
+    };
+
+    byte_range.start..line_end
 }
 
 /// Extract content range for a list item (after the marker and space)
@@ -590,6 +606,29 @@ mod tests {
                 }
             ));
         }
+
+        // Verify that parent list item's byte_range doesn't include children
+        let parent_item = &snapshot.blocks[0];
+        assert_eq!(parent_item.content, "Item 1");
+        assert_eq!(parent_item.byte_range, 0..8); // Just "- Item 1" without the newline
+        assert_eq!(doc.slice_to_cow(parent_item.byte_range.clone()), "- Item 1");
+
+        // Verify nested items have their own ranges
+        let nested_item1 = &snapshot.blocks[1];
+        assert_eq!(nested_item1.content, "Nested 1");
+        assert_eq!(nested_item1.byte_range, 11..21); // "  - Nested 1" line (note: starts at 9 + 2 spaces)
+        assert_eq!(
+            doc.slice_to_cow(nested_item1.byte_range.clone()),
+            "- Nested 1"
+        );
+
+        let nested_item2 = &snapshot.blocks[2];
+        assert_eq!(nested_item2.content, "Nested 2");
+        assert_eq!(nested_item2.byte_range, 24..34); // "  - Nested 2" line
+        assert_eq!(
+            doc.slice_to_cow(nested_item2.byte_range.clone()),
+            "- Nested 2"
+        );
     }
 
     #[test]

@@ -3,6 +3,7 @@ use crate::editing::{
     find_focused_block_in_list,
 };
 use crate::models::MarkdownFile;
+use dioxus::events::Key;
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
@@ -153,6 +154,16 @@ pub fn SnapshotMainPanel(
                                                         // Focus this block for editing
                                                         focused_block_id.set(Some(block.id));
                                                     }
+                                                },
+                                                on_command: {
+                                                    let mut document = document.clone();
+                                                    let on_document_changed = on_document_changed;
+                                                    move |cmd: Cmd| {
+                                                        // Apply command to document
+                                                        let _patch = document.apply(cmd);
+                                                        // Notify parent of document change
+                                                        on_document_changed.call(document.clone());
+                                                    }
                                                 }
                                             }
                                         }
@@ -186,6 +197,7 @@ pub fn RenderContentGroup(
     group: ContentGroup,
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
+    on_command: Callback<Cmd>,
 ) -> Element {
     match group {
         ContentGroup::SingleBlock(block) => {
@@ -206,7 +218,8 @@ pub fn RenderContentGroup(
                     items,
                     list_type: "ul",
                     on_file_select,
-                    on_focus
+                    on_focus,
+                    on_command
                 }
             }
         }
@@ -216,7 +229,8 @@ pub fn RenderContentGroup(
                     items,
                     list_type: "ol",
                     on_file_select,
-                    on_focus
+                    on_focus,
+                    on_command
                 }
             }
         }
@@ -230,6 +244,7 @@ pub fn RenderListGroup(
     list_type: &'static str,
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
+    on_command: Callback<Cmd>,
 ) -> Element {
     match list_type {
         "ol" => rsx! {
@@ -239,7 +254,8 @@ pub fn RenderListGroup(
                     RenderListItem {
                         item,
                         on_file_select,
-                        on_focus
+                        on_focus,
+                        on_command
                     }
                 }
             }
@@ -251,7 +267,8 @@ pub fn RenderListGroup(
                     RenderListItem {
                         item,
                         on_file_select,
-                        on_focus
+                        on_focus,
+                        on_command
                     }
                 }
             }
@@ -265,17 +282,63 @@ pub fn RenderListItem(
     item: ListItem,
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
+    on_command: Callback<Cmd>,
 ) -> Element {
+    // Track whether this specific list item is being edited
+    let mut is_editing = use_signal(|| false);
+
     rsx! {
         li {
-            class: "markdown-list-item clickable-block",
-            onclick: {
-                let block = item.block.clone();
-                move |_| on_focus.call(block.clone())
-            },
-            span {
-                class: "list-content",
-                "{item.block.content}"
+            class: "markdown-list-item",
+            if *is_editing.read() {
+                // Use the EditorBlock component for consistent styling and behavior
+                EditorBlock {
+                    block: item.block.clone(),
+                    content_text: {
+                        // For list items, include the markdown marker in the editable text
+                        let marker_str = match &item.block.kind {
+                            BlockKind::ListItem { marker: Marker::Dash, .. } => "- ",
+                            BlockKind::ListItem { marker: Marker::Plus, .. } => "+ ",
+                            BlockKind::ListItem { marker: Marker::Asterisk, .. } => "* ",
+                            BlockKind::ListItem { marker: Marker::Numbered, .. } => "1. ", // TODO: proper numbering
+                            _ => "",
+                        };
+                        format!("{}{}", marker_str, item.block.content)
+                    },
+                    on_command: {
+                        let on_command = on_command.clone();
+                        let block = item.block.clone();
+                        move |cmd: Cmd| {
+                            println!("List item command: {:?} for block {:?}", cmd, block.id);
+                            // Pass the command up to actually apply it to the document
+                            on_command.call(cmd);
+                        }
+                    },
+                    on_cancel: {
+                        let mut is_editing = is_editing;
+                        move |_| {
+                            // Exit edit mode
+                            is_editing.set(false);
+                        }
+                    }
+                }
+            } else {
+                // Show the list item content (clickable)
+                span {
+                    class: "list-content clickable-block",
+                    onclick: {
+                        let block = item.block.clone();
+                        move |evt: MouseEvent| {
+                            evt.stop_propagation();
+                            // Enter edit mode for this list item
+                            is_editing.set(true);
+
+                            // Debug logging
+                            println!("Clicked list item: {:?}", block.content);
+                        }
+                    },
+                    "{item.block.content}"
+                }
             }
             if !item.children.is_empty() {
                 {
@@ -295,7 +358,8 @@ pub fn RenderListItem(
                             items: item.children,
                             list_type: child_list_type,
                             on_file_select,
-                            on_focus
+                            on_focus,
+                            on_command
                         }
                     }
                 }
