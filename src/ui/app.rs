@@ -144,30 +144,34 @@ pub fn App(notes_path: PathBuf) -> Element {
                                 }
                             }
                         },
-                        on_document_changed: {
+                        on_command: {
                             let mut current_document = current_document;
                             let mut current_snapshot = current_snapshot;
                             let notes_path = notes_path.clone();
                             let selected_file = selected_file.read().clone();
-                            move |updated_document: Document| {
-                                // Update the document state
-                                let new_snapshot = updated_document.snapshot();
+                            move |cmd: crate::editing::Cmd| {
+                                // Apply the command to the current document
+                                let document_opt = current_document.read().clone();
+                                if let Some(mut updated_document) = document_opt {
+                                    let _patch = updated_document.apply(cmd);
+                                    let new_snapshot = updated_document.snapshot();
 
-                                // Auto-save the document to disk
-                                if let Some(file) = &selected_file {
-                                    let content = updated_document.text();
-                                    match io::write_file(file.relative_path(), &notes_path, &content) {
-                                        Ok(()) => {
-                                            // File saved successfully
-                                        }
-                                        Err(e) => {
-                                            eprintln!("Error auto-saving file {:?}: {e}", file.relative_path());
+                                    // Auto-save the document to disk
+                                    if let Some(file) = &selected_file {
+                                        let content = updated_document.text();
+                                        match io::write_file(file.relative_path(), &notes_path, &content) {
+                                            Ok(()) => {
+                                                // File saved successfully
+                                            }
+                                            Err(e) => {
+                                                eprintln!("Error auto-saving file {:?}: {e}", file.relative_path());
+                                            }
                                         }
                                     }
-                                }
 
-                                *current_document.write() = Some(updated_document);
-                                *current_snapshot.write() = Some(new_snapshot);
+                                    *current_document.write() = Some(updated_document);
+                                    *current_snapshot.write() = Some(new_snapshot);
+                                }
                             }
                         }
                     }

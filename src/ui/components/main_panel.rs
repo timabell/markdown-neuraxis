@@ -11,10 +11,10 @@ use std::path::PathBuf;
 pub fn SnapshotMainPanel(
     file: MarkdownFile,
     snapshot: Snapshot,
-    mut document: Document,
+    document: Document,
     on_file_select: Option<Callback<PathBuf>>,
     on_save: Callback<()>,
-    on_document_changed: Callback<Document>,
+    on_command: Callback<Cmd>,
 ) -> Element {
     // Focus state management - track which block is currently focused for editing
     let mut focused_block_id = use_signal(|| None::<AnchorId>);
@@ -118,20 +118,7 @@ pub fn SnapshotMainPanel(
                                                 key: "{group_index}-editor",
                                                 block: focused_block.clone(),
                                                 content_text: document.slice_to_cow(focused_block.byte_range.clone()).to_string(),
-                                                on_command: {
-                                                    let mut document = document.clone();
-                                                    let on_document_changed = on_document_changed;
-                                                    move |cmd: Cmd| {
-                                                        // Apply command to document
-                                                        let _patch = document.apply(cmd);
-
-                                                        // Notify parent of document change
-                                                        on_document_changed.call(document.clone());
-
-                                                        // Important: Keep the block focused to stay in edit mode
-                                                        // The focused_block_id is maintained, so editing continues
-                                                    }
-                                                },
+                                                on_command: on_command.clone(),
                                                 on_cancel: {
                                                     let mut focused_block_id = focused_block_id;
                                                     move |_| {
@@ -155,16 +142,7 @@ pub fn SnapshotMainPanel(
                                                         focused_block_id.set(Some(block.id));
                                                     }
                                                 },
-                                                on_command: {
-                                                    let mut document = document.clone();
-                                                    let on_document_changed = on_document_changed;
-                                                    move |cmd: Cmd| {
-                                                        // Apply command to document
-                                                        let _patch = document.apply(cmd);
-                                                        // Notify parent of document change
-                                                        on_document_changed.call(document.clone());
-                                                    }
-                                                }
+                                                on_command: on_command.clone()
                                             }
                                         }
                                     }
