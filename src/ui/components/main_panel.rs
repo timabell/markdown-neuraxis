@@ -118,7 +118,7 @@ pub fn MainPanel(
                                                 key: "{group_index}-editor",
                                                 block: focused_block.clone(),
                                                 content_text: document.slice_to_cow(focused_block.byte_range.clone()).to_string(),
-                                                on_command: on_command.clone(),
+                                                on_command: on_command,
                                                 on_cancel: {
                                                     let mut focused_block_id = focused_block_id;
                                                     move |_| {
@@ -142,7 +142,7 @@ pub fn MainPanel(
                                                         focused_block_id.set(Some(block.id));
                                                     }
                                                 },
-                                                on_command: on_command.clone()
+                                                on_command: on_command
                                             }
                                         }
                                     }
@@ -284,7 +284,7 @@ pub fn RenderListItem(
                         format!("{}{}", marker_str, item.block.content)
                     },
                     on_command: {
-                        let on_command = on_command.clone();
+                        let on_command = on_command;
                         let block = item.block.clone();
                         move |cmd: Cmd| {
                             println!("List item command: {:?} for block {:?}", cmd, block.id);

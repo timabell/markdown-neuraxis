@@ -1332,4 +1332,27 @@ mod tests {
         let result = find_focused_block_in_list(&list_items, &None);
         assert!(result.is_none());
     }
+
+    #[test]
+    fn test_snapshot_after_replace_range_stale_tree() {
+        // Reproduce the xi-rope panic when tree-sitter has stale ranges
+        let initial_text = "- item 1\n- item 2";
+        let mut doc = Document::from_bytes(initial_text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        // Initial snapshot should work fine
+        let snapshot1 = doc.snapshot();
+        assert!(!snapshot1.blocks.is_empty());
+
+        // Apply a ReplaceRange command to modify text - make longer replacement
+        let _patch = doc.apply(Cmd::ReplaceRange {
+            range: 0..8, // Replace "- item 1" with longer text
+            text: "- this is a much longer item 1".to_string(),
+        });
+
+        // This snapshot creation should trigger the xi-rope panic
+        // because tree-sitter nodes have stale byte ranges
+        let snapshot2 = doc.snapshot();
+        assert!(!snapshot2.blocks.is_empty());
+    }
 }

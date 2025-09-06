@@ -82,23 +82,12 @@ impl Document {
             }
         }
 
-        // Update tree-sitter with incremental parse using proper tree.edit() calls
-        let old_buffer = self.buffer.clone();
+        // Apply delta to buffer first
+        self.buffer = delta.apply(&self.buffer);
 
-        if let Some(ref mut tree) = self.tree {
-            // Apply incremental edits to the tree based on the delta
-            apply_tree_edits_to_tree(tree, &delta, &old_buffer);
-
-            // Apply delta to buffer
-            self.buffer = delta.apply(&self.buffer);
-
-            // Incremental parse only the changed regions
-            self.tree = self.parser.parse(self.buffer.to_string(), Some(tree));
-        } else {
-            // Apply delta to buffer
-            self.buffer = delta.apply(&self.buffer);
-            self.tree = self.parser.parse(self.buffer.to_string(), None);
-        }
+        // Re-parse the entire document for now to avoid incremental parsing bugs
+        // TODO: Implement proper incremental parsing per ADR-0004
+        self.tree = self.parser.parse(self.buffer.to_string(), None);
 
         // Transform anchors through the delta
         self.transform_anchors(&delta);
@@ -230,70 +219,7 @@ impl Document {
     }
 }
 
-/// Apply incremental edits to the tree-sitter parse tree based on rope delta
-/// This implements proper ADR-0004 incremental parsing instead of re-parsing everything  
-fn apply_tree_edits_to_tree(
-    tree: &mut tree_sitter::Tree,
-    delta: &Delta<RopeInfo>,
-    old_buffer: &xi_rope::Rope,
-) {
-    use tree_sitter::InputEdit;
-    use xi_rope::delta::DeltaElement;
-
-    let mut old_position = 0; // Position in the old buffer
-    let mut _new_position = 0; // Position in the new buffer after delta is applied
-
-    for element in &delta.els {
-        match element {
-            DeltaElement::Copy(from, to) => {
-                // Copy operation - text was preserved from old to new buffer
-                let copy_len = to - from;
-                old_position = *to;
-                _new_position += copy_len;
-            }
-            DeltaElement::Insert(rope) => {
-                // Insert operation - pure insertion or replacement of deleted content
-                let inserted_text = rope.to_string();
-                let inserted_len = inserted_text.len();
-
-                // For insertions in xi-rope deltas, old_end_byte == start_byte (pure insertion)
-                // The key insight is that xi-rope represents both insertions and deletions as inserts
-
-                // Convert byte positions to line/column positions for tree-sitter
-                let (start_row, start_col) =
-                    byte_to_point_in_text(&old_buffer.to_string(), old_position);
-                let (old_end_row, old_end_col) =
-                    byte_to_point_in_text(&old_buffer.to_string(), old_position);
-
-                // For new position, calculate from the new buffer position
-                let (new_end_row, new_end_col) =
-                    byte_to_point_in_text(&inserted_text, inserted_len);
-
-                let edit = InputEdit {
-                    start_byte: old_position,
-                    old_end_byte: old_position, // Pure insertion
-                    new_end_byte: old_position + inserted_len,
-                    start_position: tree_sitter::Point::new(start_row, start_col),
-                    old_end_position: tree_sitter::Point::new(old_end_row, old_end_col),
-                    new_end_position: tree_sitter::Point::new(
-                        start_row + new_end_row,
-                        if new_end_row > 0 {
-                            new_end_col
-                        } else {
-                            start_col + new_end_col
-                        },
-                    ),
-                };
-
-                tree.edit(&edit);
-                _new_position += inserted_len;
-            }
-        }
-    }
-}
-
 /// Convert byte offset to (row, column) position in given text
-/// Helper function used by tree-sitter InputEdit construction
 fn byte_to_point_in_text(text: &str, byte_offset: usize) -> (usize, usize) {
     let text_bytes = text.as_bytes();
     let offset = byte_offset.min(text_bytes.len());

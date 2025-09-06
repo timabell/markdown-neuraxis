@@ -100,6 +100,7 @@ pub(crate) fn rebind_anchors_in_changed_regions(
     changed: &[std::ops::Range<usize>],
 ) {
     if changed.is_empty() || doc.tree.is_none() {
+        // Nothing to process
         return;
     }
 
@@ -143,7 +144,7 @@ pub(crate) fn rebind_anchors_in_changed_regions(
     doc.anchors
         .retain(|anchor| anchor.range.start < anchor.range.end && anchor.range.end <= doc_len);
 
-    // Create anchors for new block-level nodes in changed regions
+    // Create new anchors for any new blocks that appear in changed regions
     if let Some(ref tree) = doc.tree {
         let root_node = tree.root_node();
         let mut new_nodes = Vec::new();
@@ -571,6 +572,151 @@ mod tests {
     }
 
     #[test]
+    fn test_anchor_ids_remain_stable_after_edits() {
+        // FIRST: Create a document with some initial content
+        let text = "# Heading One\n\nA paragraph here.\n\n- List item 1\n- List item 2";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+
+        // Create anchors from the initial tree (this should be done ONCE)
+        doc.create_anchors_from_tree();
+
+        // Store the original anchor IDs and their content for verification
+        let original_anchors: Vec<(AnchorId, String)> = doc
+            .anchors
+            .iter()
+            .map(|a| {
+                let content = doc.slice_to_cow(a.range.clone()).to_string();
+                (a.id, content)
+            })
+            .collect();
+
+        assert!(!original_anchors.is_empty(), "Should have initial anchors");
+
+        // SECOND: Apply an edit that inserts text at the beginning
+        doc.apply(Cmd::InsertText {
+            at: 0,
+            text: "PREPENDED: ".to_string(),
+        });
+
+        // THIRD: Verify the original anchor IDs still exist
+        for (original_id, original_content) in &original_anchors {
+            let anchor = doc
+                .anchors
+                .iter()
+                .find(|a| a.id == *original_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Anchor with ID {:?} should still exist after insertion",
+                        original_id
+                    )
+                });
+
+            // The content should still be findable (though at a different position)
+            let current_content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            assert_eq!(
+                current_content.trim(),
+                original_content.trim(),
+                "Anchor content should remain the same, just shifted"
+            );
+        }
+
+        // FOURTH: Apply a deletion that removes part of the prepended text
+        doc.apply(Cmd::DeleteRange { range: 0..5 }); // Remove "PREPE"
+
+        // FIFTH: Verify the original anchor IDs STILL exist
+        for (original_id, _) in &original_anchors {
+            assert!(
+                doc.anchors.iter().any(|a| a.id == *original_id),
+                "Anchor with ID {:?} should still exist after deletion",
+                original_id
+            );
+        }
+
+        // SIXTH: Insert text in the middle of the document
+        let middle_pos = doc.text().len() / 2;
+        doc.apply(Cmd::InsertText {
+            at: middle_pos,
+            text: "\n\n## New Section\n\nMore content here.\n\n".to_string(),
+        });
+
+        // SEVENTH: Verify original anchors STILL have stable IDs
+        for (original_id, _) in &original_anchors {
+            assert!(
+                doc.anchors.iter().any(|a| a.id == *original_id),
+                "Original anchor with ID {:?} should still exist after middle insertion",
+                original_id
+            );
+        }
+
+        // New anchors may have been created for the new content, but that's OK
+        // The key requirement is that EXISTING anchor IDs remain stable
+    }
+
+    #[test]
+    fn test_anchor_deletion_overlapping_ranges() {
+        // Test that anchor IDs remain stable even when deletions overlap their ranges
+        let text = "# First Heading\n\nParagraph content.\n\n## Second Heading\n\nMore content.";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+
+        doc.create_anchors_from_tree();
+
+        let original_ids: std::collections::HashSet<AnchorId> =
+            doc.anchors.iter().map(|a| a.id).collect();
+
+        assert!(!original_ids.is_empty(), "Should have initial anchors");
+
+        // Delete a range that overlaps with multiple anchors
+        // This deletes from middle of first heading to middle of paragraph
+        doc.apply(Cmd::DeleteRange { range: 8..25 }); // Delete "Heading\n\nParagraph"
+
+        // Original anchor IDs should still exist (ranges may be adjusted)
+        let current_ids: std::collections::HashSet<AnchorId> =
+            doc.anchors.iter().map(|a| a.id).collect();
+
+        // Most of the original IDs should still exist
+        // Note: Some anchors might be removed if they become invalid/empty
+        // but the transformation process should preserve IDs where possible
+        for original_id in &original_ids {
+            if current_ids.contains(original_id) {
+                // If the anchor still exists, verify it has a valid range
+                let anchor = doc.anchors.iter().find(|a| a.id == *original_id).unwrap();
+                assert!(
+                    anchor.range.start <= anchor.range.end,
+                    "Anchor should have valid range"
+                );
+                assert!(
+                    anchor.range.end <= doc.text().len(),
+                    "Anchor should be within document"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_anchors_created_for_new_blocks() {
+        // Test that anchors ARE created automatically when new blocks appear
+        let mut doc = Document::from_bytes(b"").unwrap();
+        assert_eq!(
+            doc.anchors.len(),
+            0,
+            "Empty document should have no anchors"
+        );
+
+        // Apply an edit that creates a block
+        doc.apply(Cmd::InsertText {
+            at: 0,
+            text: "- Item 1".to_string(),
+        });
+
+        // Anchors should be created for the new block
+        // This ensures blocks have stable IDs even when created dynamically
+        assert!(
+            !doc.anchors.is_empty(),
+            "Apply should create anchors for new blocks"
+        );
+    }
+
+    #[test]
     fn test_anchor_transform_through_multiple_commands() {
         let mut doc = Document::from_bytes(b"# Heading\n\n- Item 1").unwrap();
         doc.create_anchors_from_tree();
@@ -611,5 +757,95 @@ mod tests {
         let text = doc.text();
         assert!(text.contains("# Heading"));
         assert!(text.contains("- Item 1"));
+    }
+
+    #[test]
+    fn test_anchor_creation_for_empty_document_after_edit() {
+        // Test the bug fix: anchors should be created for new blocks even if document started empty
+
+        // Start with an empty document (no anchors initially)
+        let mut doc = Document::from_bytes(b"").unwrap();
+        assert_eq!(
+            doc.anchors.len(),
+            0,
+            "Empty document should have no anchors"
+        );
+
+        // Initialize anchors (this should work even for empty documents)
+        doc.create_anchors_from_tree();
+        assert_eq!(
+            doc.anchors.len(),
+            0,
+            "Empty document should still have no anchors after initialization"
+        );
+
+        // Insert text that creates a block (should get an anchor)
+        doc.apply(Cmd::InsertText {
+            at: 0,
+            text: "- first item".to_string(),
+        });
+
+        // The document now has content and should have created an anchor for the new block
+        assert!(
+            !doc.anchors.is_empty(),
+            "After inserting a list item into initialized empty document, should have anchors created"
+        );
+
+        // Verify the anchor covers the new content
+        let anchor = &doc.anchors[0];
+        let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+        assert!(
+            content.trim().contains("first item"),
+            "Anchor should cover the new list item content"
+        );
+    }
+
+    #[test]
+    fn test_anchor_creation_after_deleting_all_content() {
+        // Test edge case: document with anchors becomes empty, then gets content again
+
+        // Start with a document that has content
+        let mut doc = Document::from_bytes(b"# Heading\n\n- Item").unwrap();
+        doc.create_anchors_from_tree();
+
+        let initial_anchor_count = doc.anchors.len();
+        assert!(initial_anchor_count > 0, "Should have initial anchors");
+
+        // Delete all content
+        doc.apply(Cmd::DeleteRange {
+            range: 0..doc.text().len(),
+        });
+
+        // Should have no anchors now (they get cleaned up)
+        assert_eq!(
+            doc.anchors.len(),
+            0,
+            "Should have no anchors after deleting all content"
+        );
+
+        // Add new content - should get new anchors because anchors were initialized
+        doc.apply(Cmd::InsertText {
+            at: 0,
+            text: "## New heading\n\n- New item".to_string(),
+        });
+
+        // Should have created anchors for the new content
+        assert!(
+            !doc.anchors.is_empty(),
+            "Should create anchors for new content even after all content was deleted"
+        );
+
+        // Verify anchors cover the new content
+        let text = doc.text();
+        assert!(text.contains("## New heading"));
+        assert!(text.contains("- New item"));
+
+        for anchor in &doc.anchors {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            assert!(
+                content.contains("New heading") || content.contains("New item"),
+                "Anchor should cover some part of the new content"
+            );
+        }
     }
 }
