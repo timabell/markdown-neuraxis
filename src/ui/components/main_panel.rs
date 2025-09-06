@@ -429,7 +429,13 @@ pub fn EditorBlock(
     use dioxus::prelude::*;
 
     // Local state for textarea content - only commit changes on specific events
-    let local_content = use_signal(|| content_text.clone());
+    // Strip trailing newline from the content for cleaner editing experience
+    let local_content = use_signal(|| {
+        content_text
+            .strip_suffix('\n')
+            .unwrap_or(&content_text)
+            .to_string()
+    });
 
     // Helper to commit current changes to the document
     let commit_changes = {
