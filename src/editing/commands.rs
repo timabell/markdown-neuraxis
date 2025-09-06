@@ -309,26 +309,27 @@ fn modify_line_starts(
         let line = &text[line_start..line_end];
 
         // Check if this line overlaps with the range
-        if line_start < range.end && line_end >= range.start {
-            if let Some(prefix) = modifier(line) {
-                if prefix.is_empty() {
-                    // Removing indentation - delete some characters at line start
-                    let skip_len = if line.starts_with("  ") {
-                        2
-                    } else if line.starts_with(" ") {
-                        1
-                    } else {
-                        0
-                    };
-
-                    if skip_len > 0 {
-                        builder.delete(line_start..(line_start + skip_len));
-                    }
+        if line_start < range.end
+            && line_end >= range.start
+            && let Some(prefix) = modifier(line)
+        {
+            if prefix.is_empty() {
+                // Removing indentation - delete some characters at line start
+                let skip_len = if line.starts_with("  ") {
+                    2
+                } else if line.starts_with(" ") {
+                    1
                 } else {
-                    // Adding indentation - insert at line start
-                    let prefix_rope = Rope::from(prefix);
-                    builder.replace(line_start..line_start, prefix_rope);
+                    0
+                };
+
+                if skip_len > 0 {
+                    builder.delete(line_start..(line_start + skip_len));
                 }
+            } else {
+                // Adding indentation - insert at line start
+                let prefix_rope = Rope::from(prefix);
+                builder.replace(line_start..line_start, prefix_rope);
             }
         }
     }

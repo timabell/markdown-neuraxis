@@ -67,10 +67,10 @@ fn scan_directory_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), 
 
         if path.is_dir() {
             scan_directory_recursive(&path, files)?;
-        } else if let Some(ext) = path.extension() {
-            if ext == "md" {
-                files.push(path);
-            }
+        } else if let Some(ext) = path.extension()
+            && ext == "md"
+        {
+            files.push(path);
         }
     }
 

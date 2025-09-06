@@ -1,14 +1,33 @@
 use crate::editing::{AnchorId, Document, anchors::find_anchor_for_range, document::Marker};
 
+/// Represents a grouped content structure for proper HTML ul/ol rendering
+#[derive(Debug, Clone, PartialEq)]
+pub enum ContentGroup {
+    /// A single non-list block
+    SingleBlock(RenderBlock),
+    /// A group of consecutive bullet list items that should be rendered as ul/li
+    BulletListGroup { items: Vec<ListItem> },
+    /// A group of consecutive numbered list items that should be rendered as ol/li
+    NumberedListGroup { items: Vec<ListItem> },
+}
+
+/// A list item that can contain nested sub-lists
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListItem {
+    pub block: RenderBlock,
+    pub children: Vec<ListItem>,
+}
+
 /// Snapshot of the document for rendering
 #[derive(Clone, PartialEq)]
 pub struct Snapshot {
     pub version: u64,
-    pub blocks: Vec<RenderBlock>,
+    pub blocks: Vec<RenderBlock>, // Keep for backward compatibility during migration
+    pub content_groups: Vec<ContentGroup>,
 }
 
 /// A renderable block in the document
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RenderBlock {
     pub id: AnchorId,
     pub kind: BlockKind,
@@ -36,9 +55,12 @@ pub(crate) fn create_snapshot(doc: &Document) -> Snapshot {
         collect_render_blocks_recursive(doc, root_node, &mut blocks, 0);
     }
 
+    let content_groups = group_blocks_for_rendering(&blocks);
+
     Snapshot {
         version: doc.version,
         blocks,
+        content_groups,
     }
 }
 
@@ -226,14 +248,25 @@ fn extract_list_marker(doc: &Document, node: &tree_sitter::Node) -> Marker {
 
 /// Calculate the depth of a list item based on indentation
 fn calculate_list_depth(doc: &Document, node: &tree_sitter::Node) -> usize {
-    let byte_range = node.byte_range();
-    let text = doc.slice_to_cow(byte_range);
+    // Get the start of the line this list item is on
+    let start_byte = node.start_byte();
 
-    // Count leading spaces/tabs
-    let indent_chars = text.chars().take_while(|&c| c == ' ' || c == '\t').count();
+    // Find the beginning of the line
+    let full_text = doc.slice_to_cow(0..doc.len());
+    let line_start = full_text[..start_byte]
+        .rfind('\n')
+        .map(|pos| pos + 1)
+        .unwrap_or(0);
+    let line_text = &full_text[line_start..];
 
-    // Each 2 spaces = 1 depth level (common markdown convention)
-    indent_chars / 2
+    // Count leading spaces/tabs on the actual line
+    let indent_chars = line_text
+        .chars()
+        .take_while(|&c| c == ' ' || c == '\t')
+        .count();
+
+    // Each 4 spaces = 1 depth level (standard markdown convention)
+    indent_chars / 4
 }
 
 /// Extract content range for a list item (after the marker and space)
@@ -330,6 +363,122 @@ fn extract_code_fence_content_range(
     content_start..content_end
 }
 
+/// Groups consecutive list items into proper nested HTML structure
+/// This is the core data layer function that should handle grouping, not the UI
+fn group_blocks_for_rendering(blocks: &[RenderBlock]) -> Vec<ContentGroup> {
+    let mut groups = Vec::new();
+    let mut i = 0;
+
+    while i < blocks.len() {
+        let block = &blocks[i];
+
+        match &block.kind {
+            BlockKind::ListItem { marker, .. } => {
+                // Start a new list group - collect all consecutive list items
+                let list_start = i;
+                let first_marker = marker.clone();
+                while i < blocks.len() {
+                    if let BlockKind::ListItem { marker, .. } = &blocks[i].kind {
+                        // Only group items with the same marker type (numbered vs bullet)
+                        if is_same_list_type(&first_marker, marker) {
+                            i += 1;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                // Group the list items into a nested structure
+                let list_blocks = &blocks[list_start..i];
+                let list_items = build_nested_list_structure(list_blocks);
+
+                // Create the appropriate list group based on marker type
+                let group = match first_marker {
+                    Marker::Numbered => ContentGroup::NumberedListGroup { items: list_items },
+                    _ => ContentGroup::BulletListGroup { items: list_items },
+                };
+
+                groups.push(group);
+            }
+            _ => {
+                // Single non-list block
+                groups.push(ContentGroup::SingleBlock(block.clone()));
+                i += 1;
+            }
+        }
+    }
+
+    groups
+}
+
+/// Check if two markers represent the same list type (numbered vs bullet)
+fn is_same_list_type(marker1: &Marker, marker2: &Marker) -> bool {
+    matches!(
+        (marker1, marker2),
+        (Marker::Numbered, Marker::Numbered)
+            | (
+                Marker::Dash | Marker::Asterisk | Marker::Plus,
+                Marker::Dash | Marker::Asterisk | Marker::Plus,
+            )
+    )
+}
+
+/// Builds a nested list structure from flat list blocks
+fn build_nested_list_structure(blocks: &[RenderBlock]) -> Vec<ListItem> {
+    let mut result = Vec::new();
+
+    for block in blocks {
+        if let BlockKind::ListItem { .. } = &block.kind {
+            let item_depth = block.depth; // Use RenderBlock.depth, not BlockKind depth
+
+            let new_item = ListItem {
+                block: block.clone(),
+                children: Vec::new(),
+            };
+
+            // Insert at the appropriate nesting level
+            insert_list_item_at_depth(&mut result, new_item, item_depth);
+        }
+    }
+
+    result
+}
+
+/// Helper function to insert a list item at the correct depth
+fn insert_list_item_at_depth(items: &mut Vec<ListItem>, new_item: ListItem, target_depth: usize) {
+    if target_depth == 0 {
+        // Insert at root level
+        items.push(new_item);
+    } else if let Some(last_item) = items.last_mut() {
+        // Try to insert as a child of the last item at the previous depth
+        insert_list_item_at_depth(&mut last_item.children, new_item, target_depth - 1);
+    } else {
+        // No parent exists, insert at root level anyway (fallback)
+        items.push(new_item);
+    }
+}
+
+/// Helper function to find a focused block within a list group
+pub fn find_focused_block_in_list<'a>(
+    items: &'a [ListItem],
+    focused_id: &Option<AnchorId>,
+) -> Option<&'a RenderBlock> {
+    if let Some(target_id) = focused_id {
+        for item in items {
+            if item.block.id == *target_id {
+                return Some(&item.block);
+            }
+            // Recursively check children
+            if let Some(found) = find_focused_block_in_list(&item.children, focused_id) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +493,7 @@ mod tests {
 
         assert_eq!(snapshot.version, 0);
         assert_eq!(snapshot.blocks.len(), 0);
+        assert_eq!(snapshot.content_groups.len(), 0);
     }
 
     #[test]
@@ -643,5 +793,504 @@ mod tests {
         assert!(matches!(block.kind, BlockKind::Heading { level: 1 }));
         assert_eq!(block.content_range, 2..18); // Should include the extended text
         assert_eq!(&doc.text()[block.content_range.clone()], "Heading Extended");
+    }
+
+    // ============ Content Grouping tests ============
+
+    #[test]
+    fn test_group_blocks_simple_bullet_list() {
+        // Create mock blocks for a simple bullet list
+        let blocks = vec![
+            RenderBlock {
+                id: AnchorId(1),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 0..8,
+                content_range: 2..8,
+                depth: 0,
+                content: "Item 1".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(2),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 9..17,
+                content_range: 11..17,
+                depth: 0,
+                content: "Item 2".to_string(),
+            },
+        ];
+
+        let groups = group_blocks_for_rendering(&blocks);
+
+        assert_eq!(groups.len(), 1);
+        match &groups[0] {
+            ContentGroup::BulletListGroup { items } => {
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].block.content, "Item 1");
+                assert_eq!(items[1].block.content, "Item 2");
+                assert!(items[0].children.is_empty());
+                assert!(items[1].children.is_empty());
+            }
+            _ => panic!("Expected BulletListGroup"),
+        }
+    }
+
+    #[test]
+    fn test_group_blocks_simple_numbered_list() {
+        // Create mock blocks for a simple numbered list
+        let blocks = vec![
+            RenderBlock {
+                id: AnchorId(1),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Numbered,
+                    depth: 0,
+                },
+                byte_range: 0..8,
+                content_range: 3..8,
+                depth: 0,
+                content: "Item 1".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(2),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Numbered,
+                    depth: 0,
+                },
+                byte_range: 9..17,
+                content_range: 12..17,
+                depth: 0,
+                content: "Item 2".to_string(),
+            },
+        ];
+
+        let groups = group_blocks_for_rendering(&blocks);
+
+        assert_eq!(groups.len(), 1);
+        match &groups[0] {
+            ContentGroup::NumberedListGroup { items } => {
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].block.content, "Item 1");
+                assert_eq!(items[1].block.content, "Item 2");
+                assert!(items[0].children.is_empty());
+                assert!(items[1].children.is_empty());
+            }
+            _ => panic!("Expected NumberedListGroup"),
+        }
+    }
+
+    #[test]
+    fn test_group_blocks_mixed_list_types() {
+        // Create mock blocks with bullet list followed by numbered list
+        let blocks = vec![
+            RenderBlock {
+                id: AnchorId(1),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 0..8,
+                content_range: 2..8,
+                depth: 0,
+                content: "Bullet 1".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(2),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 9..17,
+                content_range: 11..17,
+                depth: 0,
+                content: "Bullet 2".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(3),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Numbered,
+                    depth: 0,
+                },
+                byte_range: 18..26,
+                content_range: 21..26,
+                depth: 0,
+                content: "Number 1".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(4),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Numbered,
+                    depth: 0,
+                },
+                byte_range: 27..35,
+                content_range: 30..35,
+                depth: 0,
+                content: "Number 2".to_string(),
+            },
+        ];
+
+        let groups = group_blocks_for_rendering(&blocks);
+
+        assert_eq!(groups.len(), 2);
+
+        // First group: Bullet list
+        match &groups[0] {
+            ContentGroup::BulletListGroup { items } => {
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].block.content, "Bullet 1");
+                assert_eq!(items[1].block.content, "Bullet 2");
+            }
+            _ => panic!("Expected BulletListGroup"),
+        }
+
+        // Second group: Numbered list
+        match &groups[1] {
+            ContentGroup::NumberedListGroup { items } => {
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].block.content, "Number 1");
+                assert_eq!(items[1].block.content, "Number 2");
+            }
+            _ => panic!("Expected NumberedListGroup"),
+        }
+    }
+
+    #[test]
+    fn test_group_blocks_nested_list() {
+        // Create mock blocks for nested list
+        let blocks = vec![
+            RenderBlock {
+                id: AnchorId(1),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 0..8,
+                content_range: 2..8,
+                depth: 0,
+                content: "Item 1".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(2),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 1,
+                },
+                byte_range: 9..19,
+                content_range: 13..19,
+                depth: 1,
+                content: "Nested 1".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(3),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 1,
+                },
+                byte_range: 20..30,
+                content_range: 24..30,
+                depth: 1,
+                content: "Nested 2".to_string(),
+            },
+        ];
+
+        let groups = group_blocks_for_rendering(&blocks);
+
+        assert_eq!(groups.len(), 1);
+        match &groups[0] {
+            ContentGroup::BulletListGroup { items } => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].block.content, "Item 1");
+                assert_eq!(items[0].children.len(), 2);
+                assert_eq!(items[0].children[0].block.content, "Nested 1");
+                assert_eq!(items[0].children[1].block.content, "Nested 2");
+            }
+            _ => panic!("Expected BulletListGroup"),
+        }
+    }
+
+    #[test]
+    fn test_group_blocks_mixed_content() {
+        // Create mock blocks with mixed content types
+        let blocks = vec![
+            RenderBlock {
+                id: AnchorId(1),
+                kind: BlockKind::Heading { level: 1 },
+                byte_range: 0..10,
+                content_range: 2..10,
+                depth: 0,
+                content: "Heading".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(2),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 11..19,
+                content_range: 13..19,
+                depth: 0,
+                content: "Item 1".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(3),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 20..28,
+                content_range: 22..28,
+                depth: 0,
+                content: "Item 2".to_string(),
+            },
+            RenderBlock {
+                id: AnchorId(4),
+                kind: BlockKind::Paragraph,
+                byte_range: 29..39,
+                content_range: 29..39,
+                depth: 0,
+                content: "Paragraph".to_string(),
+            },
+        ];
+
+        let groups = group_blocks_for_rendering(&blocks);
+
+        assert_eq!(groups.len(), 3);
+
+        // First group: Heading
+        match &groups[0] {
+            ContentGroup::SingleBlock(block) => {
+                assert!(matches!(block.kind, BlockKind::Heading { level: 1 }));
+                assert_eq!(block.content, "Heading");
+            }
+            _ => panic!("Expected SingleBlock"),
+        }
+
+        // Second group: List with two items
+        match &groups[1] {
+            ContentGroup::BulletListGroup { items } => {
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].block.content, "Item 1");
+                assert_eq!(items[1].block.content, "Item 2");
+            }
+            _ => panic!("Expected BulletListGroup"),
+        }
+
+        // Third group: Paragraph
+        match &groups[2] {
+            ContentGroup::SingleBlock(block) => {
+                assert!(matches!(block.kind, BlockKind::Paragraph));
+                assert_eq!(block.content, "Paragraph");
+            }
+            _ => panic!("Expected SingleBlock"),
+        }
+    }
+
+    #[test]
+    fn test_end_to_end_bullet_list_grouping() {
+        // Test the full pipeline: markdown text -> Document -> Snapshot -> grouped structure
+        let markdown_text = r#"
+- indented 1
+    - indented 1.1
+    - indented 1.2
+- indented 2
+    - indented 2.1
+    - indented 2.2"#;
+
+        // Parse markdown into Document
+        let mut doc =
+            Document::from_bytes(markdown_text.as_bytes()).expect("Should parse markdown");
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Should have 1 group (the bullet list group)
+        assert_eq!(
+            snapshot.content_groups.len(),
+            1,
+            "Should have 1 content group"
+        );
+
+        match &snapshot.content_groups[0] {
+            ContentGroup::BulletListGroup { items: list_items } => {
+                // Should have 2 top-level items
+                assert_eq!(list_items.len(), 2, "Should have exactly 2 top-level items");
+
+                // First item: "indented 1" with 2 children
+                assert_eq!(list_items[0].block.content, "indented 1");
+                assert_eq!(
+                    list_items[0].children.len(),
+                    2,
+                    "indented 1 should have 2 children"
+                );
+                assert_eq!(list_items[0].children[0].block.content, "indented 1.1");
+                assert_eq!(list_items[0].children[1].block.content, "indented 1.2");
+
+                // Second item: "indented 2" with 2 children
+                assert_eq!(list_items[1].block.content, "indented 2");
+                assert_eq!(
+                    list_items[1].children.len(),
+                    2,
+                    "indented 2 should have 2 children"
+                );
+                assert_eq!(list_items[1].children[0].block.content, "indented 2.1");
+                assert_eq!(list_items[1].children[1].block.content, "indented 2.2");
+
+                // Verify depths are correct
+                assert_eq!(list_items[0].block.depth, 0, "indented 1 should be depth 0");
+                assert_eq!(
+                    list_items[0].children[0].block.depth, 1,
+                    "indented 1.1 should be depth 1"
+                );
+                assert_eq!(
+                    list_items[0].children[1].block.depth, 1,
+                    "indented 1.2 should be depth 1"
+                );
+                assert_eq!(list_items[1].block.depth, 0, "indented 2 should be depth 0");
+                assert_eq!(
+                    list_items[1].children[0].block.depth, 1,
+                    "indented 2.1 should be depth 1"
+                );
+                assert_eq!(
+                    list_items[1].children[1].block.depth, 1,
+                    "indented 2.2 should be depth 1"
+                );
+            }
+            _ => panic!(
+                "Expected BulletListGroup, got {:?}",
+                snapshot.content_groups[0]
+            ),
+        }
+    }
+
+    #[test]
+    fn test_end_to_end_numbered_list_grouping() {
+        // Test the full pipeline: markdown text -> Document -> Snapshot -> grouped structure for numbered lists
+        let markdown_text = r#"
+1. First item
+    1. Nested first
+    2. Nested second  
+2. Second item
+    1. Another nested first
+    2. Another nested second"#;
+
+        // Parse markdown into Document
+        let mut doc =
+            Document::from_bytes(markdown_text.as_bytes()).expect("Should parse markdown");
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Should have 1 group (the numbered list group)
+        assert_eq!(
+            snapshot.content_groups.len(),
+            1,
+            "Should have 1 content group"
+        );
+
+        match &snapshot.content_groups[0] {
+            ContentGroup::NumberedListGroup { items: list_items } => {
+                // Should have 2 top-level items
+                assert_eq!(list_items.len(), 2, "Should have exactly 2 top-level items");
+
+                // First item: "First item" with 2 children
+                assert_eq!(list_items[0].block.content, "First item");
+                assert_eq!(
+                    list_items[0].children.len(),
+                    2,
+                    "First item should have 2 children"
+                );
+                assert_eq!(list_items[0].children[0].block.content, "Nested first");
+                assert_eq!(list_items[0].children[1].block.content, "Nested second");
+
+                // Second item: "Second item" with 2 children
+                assert_eq!(list_items[1].block.content, "Second item");
+                assert_eq!(
+                    list_items[1].children.len(),
+                    2,
+                    "Second item should have 2 children"
+                );
+                assert_eq!(
+                    list_items[1].children[0].block.content,
+                    "Another nested first"
+                );
+                assert_eq!(
+                    list_items[1].children[1].block.content,
+                    "Another nested second"
+                );
+            }
+            _ => panic!(
+                "Expected NumberedListGroup, got {:?}",
+                snapshot.content_groups[0]
+            ),
+        }
+    }
+
+    #[test]
+    fn test_is_same_list_type() {
+        // Test numbered lists
+        assert!(is_same_list_type(&Marker::Numbered, &Marker::Numbered));
+
+        // Test bullet lists
+        assert!(is_same_list_type(&Marker::Dash, &Marker::Dash));
+        assert!(is_same_list_type(&Marker::Dash, &Marker::Asterisk));
+        assert!(is_same_list_type(&Marker::Asterisk, &Marker::Plus));
+        assert!(is_same_list_type(&Marker::Plus, &Marker::Dash));
+
+        // Test different types
+        assert!(!is_same_list_type(&Marker::Numbered, &Marker::Dash));
+        assert!(!is_same_list_type(&Marker::Dash, &Marker::Numbered));
+        assert!(!is_same_list_type(&Marker::Asterisk, &Marker::Numbered));
+        assert!(!is_same_list_type(&Marker::Plus, &Marker::Numbered));
+    }
+
+    #[test]
+    fn test_find_focused_block_in_list() {
+        let list_items = vec![ListItem {
+            block: RenderBlock {
+                id: AnchorId(1),
+                kind: BlockKind::ListItem {
+                    marker: Marker::Dash,
+                    depth: 0,
+                },
+                byte_range: 0..8,
+                content_range: 2..8,
+                depth: 0,
+                content: "Item 1".to_string(),
+            },
+            children: vec![ListItem {
+                block: RenderBlock {
+                    id: AnchorId(2),
+                    kind: BlockKind::ListItem {
+                        marker: Marker::Dash,
+                        depth: 1,
+                    },
+                    byte_range: 9..17,
+                    content_range: 13..17,
+                    depth: 1,
+                    content: "Nested".to_string(),
+                },
+                children: vec![],
+            }],
+        }];
+
+        // Test finding root item
+        let result = find_focused_block_in_list(&list_items, &Some(AnchorId(1)));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().content, "Item 1");
+
+        // Test finding nested item
+        let result = find_focused_block_in_list(&list_items, &Some(AnchorId(2)));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().content, "Nested");
+
+        // Test not finding item
+        let result = find_focused_block_in_list(&list_items, &Some(AnchorId(99)));
+        assert!(result.is_none());
+
+        // Test with None
+        let result = find_focused_block_in_list(&list_items, &None);
+        assert!(result.is_none());
     }
 }

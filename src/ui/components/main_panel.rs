@@ -1,4 +1,7 @@
-use crate::editing::{AnchorId, BlockKind, Cmd, Document, Marker, RenderBlock, Snapshot};
+use crate::editing::{
+    AnchorId, BlockKind, Cmd, ContentGroup, Document, ListItem, Marker, RenderBlock, Snapshot,
+    find_focused_block_in_list,
+};
 use crate::models::MarkdownFile;
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -84,50 +87,75 @@ pub fn SnapshotMainPanel(
             h1 { "📝 {display_name}" }
             hr {}
             if !snapshot.blocks.is_empty() {
-                div {
-                    class: "document-content",
-                    for (index, block) in snapshot.blocks.iter().enumerate() {
-                        // Switch between pretty rendering and raw editing based on focus state
-                        if focused_block_id.read().as_ref() == Some(&block.id) {
-                            // Block is focused - show raw markdown editor
-                            EditorBlock {
-                                key: "{index}-editor",
-                                block: block.clone(),
-                                content_text: document.slice_to_cow(block.byte_range.clone()).to_string(),
-                                on_command: {
-                                    let mut document = document.clone();
-                                    let on_document_changed = on_document_changed;
-                                    move |cmd: Cmd| {
-                                        // Apply command to document
-                                        let _patch = document.apply(cmd);
+                {
+                    // Use the pre-grouped content from the snapshot
+                    let grouped_content = &snapshot.content_groups;
 
-                                        // Notify parent of document change
-                                        on_document_changed.call(document.clone());
+                    rsx! {
+                        div {
+                            class: "document-content",
+                            for (group_index, group) in grouped_content.iter().enumerate() {
+                                {
+                                    // Check if any block in this group is focused
+                                    let focused_block = match group {
+                                        ContentGroup::SingleBlock(block) => {
+                                            if focused_block_id.read().as_ref() == Some(&block.id) {
+                                                Some(block)
+                                            } else {
+                                                None
+                                            }
+                                        },
+                                        ContentGroup::BulletListGroup { items } | ContentGroup::NumberedListGroup { items } => {
+                                            find_focused_block_in_list(items, &focused_block_id.read())
+                                        }
+                                    };
 
-                                        // Important: Keep the block focused to stay in edit mode
-                                        // The focused_block_id is maintained, so editing continues
-                                    }
-                                },
-                                on_cancel: {
-                                    let mut focused_block_id = focused_block_id;
-                                    move |_| {
-                                        // Cancel editing - return to pretty view
-                                        focused_block_id.set(None);
-                                    }
-                                }
-                            }
-                        } else {
-                            // Block is not focused - show pretty rendering
-                            RenderBlockComponent {
-                                key: "{index}-render",
-                                block: block.clone(),
-                                on_file_select: on_file_select,
-                                on_focus: {
-                                    let mut focused_block_id = focused_block_id;
-                                    let block_id = block.id;
-                                    move |_| {
-                                        // Focus this block for editing
-                                        focused_block_id.set(Some(block_id));
+                                    if let Some(focused_block) = focused_block {
+                                        // A block in this group is focused - show raw markdown editor
+                                        rsx! {
+                                            EditorBlock {
+                                                key: "{group_index}-editor",
+                                                block: focused_block.clone(),
+                                                content_text: document.slice_to_cow(focused_block.byte_range.clone()).to_string(),
+                                                on_command: {
+                                                    let mut document = document.clone();
+                                                    let on_document_changed = on_document_changed;
+                                                    move |cmd: Cmd| {
+                                                        // Apply command to document
+                                                        let _patch = document.apply(cmd);
+
+                                                        // Notify parent of document change
+                                                        on_document_changed.call(document.clone());
+
+                                                        // Important: Keep the block focused to stay in edit mode
+                                                        // The focused_block_id is maintained, so editing continues
+                                                    }
+                                                },
+                                                on_cancel: {
+                                                    let mut focused_block_id = focused_block_id;
+                                                    move |_| {
+                                                        // Cancel editing - return to pretty view
+                                                        focused_block_id.set(None);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // No block in this group is focused - show pretty rendering
+                                        rsx! {
+                                            RenderContentGroup {
+                                                key: "{group_index}-render",
+                                                group: group.clone(),
+                                                on_file_select: on_file_select,
+                                                on_focus: {
+                                                    let mut focused_block_id = focused_block_id;
+                                                    move |block: RenderBlock| {
+                                                        // Focus this block for editing
+                                                        focused_block_id.set(Some(block.id));
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -145,6 +173,130 @@ pub fn SnapshotMainPanel(
                             // todo!("Add block functionality using editing core not yet implemented");
                         },
                         "Add first block +"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Component to render a content group (either a single block or a list group)
+#[component]
+pub fn RenderContentGroup(
+    group: ContentGroup,
+    on_file_select: Option<Callback<PathBuf>>,
+    on_focus: Callback<RenderBlock>,
+) -> Element {
+    match group {
+        ContentGroup::SingleBlock(block) => {
+            let block_clone = block.clone();
+            rsx! {
+                RenderBlockComponent {
+                    block,
+                    on_file_select,
+                    on_focus: {
+                        move |_| on_focus.call(block_clone.clone())
+                    }
+                }
+            }
+        }
+        ContentGroup::BulletListGroup { items } => {
+            rsx! {
+                RenderListGroup {
+                    items,
+                    list_type: "ul",
+                    on_file_select,
+                    on_focus
+                }
+            }
+        }
+        ContentGroup::NumberedListGroup { items } => {
+            rsx! {
+                RenderListGroup {
+                    items,
+                    list_type: "ol",
+                    on_file_select,
+                    on_focus
+                }
+            }
+        }
+    }
+}
+
+/// Component to render a nested list group as proper HTML ul/ol structure
+#[component]
+pub fn RenderListGroup(
+    items: Vec<ListItem>,
+    list_type: &'static str,
+    on_file_select: Option<Callback<PathBuf>>,
+    on_focus: Callback<RenderBlock>,
+) -> Element {
+    match list_type {
+        "ol" => rsx! {
+            ol {
+                class: "markdown-list",
+                for item in items {
+                    RenderListItem {
+                        item,
+                        on_file_select,
+                        on_focus
+                    }
+                }
+            }
+        },
+        _ => rsx! {
+            ul {
+                class: "markdown-list",
+                for item in items {
+                    RenderListItem {
+                        item,
+                        on_file_select,
+                        on_focus
+                    }
+                }
+            }
+        },
+    }
+}
+
+/// Component to render a single list item with potential nested children
+#[component]
+pub fn RenderListItem(
+    item: ListItem,
+    on_file_select: Option<Callback<PathBuf>>,
+    on_focus: Callback<RenderBlock>,
+) -> Element {
+    rsx! {
+        li {
+            class: "markdown-list-item clickable-block",
+            onclick: {
+                let block = item.block.clone();
+                move |_| on_focus.call(block.clone())
+            },
+            span {
+                class: "list-content",
+                "{item.block.content}"
+            }
+            if !item.children.is_empty() {
+                {
+                    // Determine list type for children based on the first child's marker
+                    let child_list_type = if let Some(first_child) = item.children.first() {
+                        if let BlockKind::ListItem { marker: Marker::Numbered, .. } = &first_child.block.kind {
+                            "ol"
+                        } else {
+                            "ul"
+                        }
+                    } else {
+                        "ul"
+                    };
+
+                    rsx! {
+                        RenderListGroup {
+                            items: item.children,
+                            list_type: child_list_type,
+                            on_file_select,
+                            on_focus
+                        }
                     }
                 }
             }
@@ -191,26 +343,10 @@ pub fn RenderBlockComponent(
                 }
             }
         }
-        BlockKind::ListItem { marker, depth } => {
-            let marker_text = match marker {
-                Marker::Dash => "-",
-                Marker::Asterisk => "*",
-                Marker::Plus => "+",
-                Marker::Numbered => "1.", // TODO: Get actual number
-            };
-
-            rsx! {
-                div {
-                    class: "list-item clickable-block",
-                    onclick: move |_| on_focus.call(()),
-                    // Render indent blocks for proper CSS-based indentation
-                    for _ in 0..depth {
-                        div { class: "indent-block" }
-                    }
-                    span { class: "list-marker", "{marker_text} " }
-                    span { class: "list-content", "{block.content}" }
-                }
-            }
+        BlockKind::ListItem { .. } => {
+            panic!(
+                "ListItem blocks should be grouped into proper ul/ol structure, not rendered individually"
+            )
         }
         BlockKind::CodeFence { lang } => {
             let code_class = if let Some(ref lang_str) = lang {

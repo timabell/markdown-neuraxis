@@ -61,10 +61,10 @@ pub fn TreeView(
                 focused_index.set(new_index);
 
                 let item = &items_list[new_index];
-                if !item.node.is_folder {
-                    if let Some(ref markdown_file) = item.node.markdown_file {
-                        on_file_select.call(markdown_file.clone());
-                    }
+                if !item.node.is_folder
+                    && let Some(ref markdown_file) = item.node.markdown_file
+                {
+                    on_file_select.call(markdown_file.clone());
                 }
             }
             Key::ArrowUp => {
@@ -73,10 +73,10 @@ pub fn TreeView(
                 focused_index.set(new_index);
 
                 let item = &items_list[new_index];
-                if !item.node.is_folder {
-                    if let Some(ref markdown_file) = item.node.markdown_file {
-                        on_file_select.call(markdown_file.clone());
-                    }
+                if !item.node.is_folder
+                    && let Some(ref markdown_file) = item.node.markdown_file
+                {
+                    on_file_select.call(markdown_file.clone());
                 }
             }
             Key::ArrowRight => {

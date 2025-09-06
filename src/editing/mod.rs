@@ -10,7 +10,9 @@ pub use anchors::{Anchor, AnchorId};
 pub use commands::Cmd;
 pub use document::{Document, Marker};
 pub use patch::Patch;
-pub use snapshot::{BlockKind, RenderBlock, Snapshot};
+pub use snapshot::{
+    BlockKind, ContentGroup, ListItem, RenderBlock, Snapshot, find_focused_block_in_list,
+};
 
 /// Point description for ADR-0004 selection/caret transformation
 /// Maps global document positions to local textarea coordinates
