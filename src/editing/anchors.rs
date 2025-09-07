@@ -11,6 +11,7 @@ use crate::editing::Document;
 pub struct Anchor {
     pub id: AnchorId,
     pub range: std::ops::Range<usize>, // byte range in the rope
+    pub node_id: Option<usize>,        // tree-sitter node ID for direct mapping
                                        // TODO v2: add bias/stickiness and kind hints
 }
 
@@ -28,17 +29,54 @@ pub(crate) fn calculate_range_overlap(
     end.saturating_sub(start)
 }
 
+/// Find the anchor ID for a specific tree-sitter node
+pub(crate) fn find_anchor_for_node(doc: &Document, node: &tree_sitter::Node) -> AnchorId {
+    let node_id = node.id();
+
+    // First try to find by node ID (fast path for incremental parsing)
+    for anchor in &doc.anchors {
+        if anchor.node_id == Some(node_id) {
+            return anchor.id;
+        }
+    }
+
+    // Fallback to range-based lookup (for full reparse or new nodes)
+    find_anchor_for_range(doc, &node.byte_range())
+}
+
 /// Find the anchor ID that best matches the given byte range
 pub(crate) fn find_anchor_for_range(doc: &Document, range: &std::ops::Range<usize>) -> AnchorId {
-    // Find the anchor that has the best overlap with this range
+    // First try to find an exact match
+    for anchor in &doc.anchors {
+        if anchor.range == *range {
+            return anchor.id;
+        }
+    }
+
+    // If no exact match, find the anchor with the smallest range that fully contains this range
     let mut best_anchor = None;
-    let mut best_overlap = 0;
+    let mut smallest_containing_size = usize::MAX;
 
     for anchor in &doc.anchors {
-        let overlap = calculate_range_overlap(range, &anchor.range);
-        if overlap > best_overlap {
-            best_overlap = overlap;
-            best_anchor = Some(anchor.id);
+        // Check if anchor fully contains the requested range
+        if anchor.range.start <= range.start && anchor.range.end >= range.end {
+            let anchor_size = anchor.range.len();
+            if anchor_size < smallest_containing_size {
+                smallest_containing_size = anchor_size;
+                best_anchor = Some(anchor.id);
+            }
+        }
+    }
+
+    // Fallback to largest overlap if no containing anchor found
+    if best_anchor.is_none() {
+        let mut best_overlap = 0;
+        for anchor in &doc.anchors {
+            let overlap = calculate_range_overlap(range, &anchor.range);
+            if overlap > best_overlap {
+                best_overlap = overlap;
+                best_anchor = Some(anchor.id);
+            }
         }
     }
 
@@ -164,6 +202,7 @@ pub(crate) fn rebind_anchors_in_changed_regions(
                 let anchor = Anchor {
                     id: anchor_id,
                     range: node_range,
+                    node_id: None, // Dynamic anchors don't have static node mapping
                 };
                 doc.anchors.push(anchor);
             }
@@ -275,10 +314,14 @@ fn collect_anchors_recursive(node: tree_sitter::Node, anchors: &mut Vec<Anchor>)
 
     if should_create_anchor && !node.byte_range().is_empty() {
         let anchor_id = generate_static_anchor_id(anchors.len());
+        let node_id = node.id();
+
         let anchor = Anchor {
             id: anchor_id,
             range: node.byte_range(),
+            node_id: Some(node_id),
         };
+
         anchors.push(anchor);
     }
 

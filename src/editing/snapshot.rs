@@ -1,4 +1,4 @@
-use crate::editing::{AnchorId, Document, anchors::find_anchor_for_range, document::Marker};
+use crate::editing::{AnchorId, Document, anchors::find_anchor_for_node, document::Marker};
 
 /// Represents a grouped content structure for proper HTML ul/ol rendering
 #[derive(Debug, Clone, PartialEq)]
@@ -83,7 +83,7 @@ fn collect_render_blocks_recursive(
         "atx_heading" => {
             let level = extract_heading_level(doc, &node);
             let content_range = extract_heading_content_range(doc, &node);
-            let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let anchor_id = find_anchor_for_node(doc, &node);
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
             blocks.push(RenderBlock {
@@ -100,7 +100,8 @@ fn collect_render_blocks_recursive(
             let list_depth = calculate_list_depth(doc, &node);
             let content_range = extract_list_item_content_range(doc, &node);
             let own_byte_range = extract_list_item_own_range(doc, &node);
-            let anchor_id = find_anchor_for_range(doc, &own_byte_range);
+            let anchor_id = find_anchor_for_node(doc, &node);
+
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
             blocks.push(RenderBlock {
@@ -129,7 +130,7 @@ fn collect_render_blocks_recursive(
             if !is_inside_list_item {
                 // Top-level paragraph
                 let content_range = extract_paragraph_content_range(doc, &node);
-                let anchor_id = find_anchor_for_range(doc, &byte_range);
+                let anchor_id = find_anchor_for_node(doc, &node);
                 let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
                 blocks.push(RenderBlock {
@@ -147,7 +148,7 @@ fn collect_render_blocks_recursive(
         "fenced_code_block" => {
             let lang = extract_code_fence_language(doc, &node);
             let content_range = extract_code_fence_content_range(doc, &node);
-            let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let anchor_id = find_anchor_for_node(doc, &node);
             let content = doc.slice_to_cow(content_range.clone()).to_string();
 
             blocks.push(RenderBlock {
@@ -160,7 +161,7 @@ fn collect_render_blocks_recursive(
             });
         }
         "indented_code_block" => {
-            let anchor_id = find_anchor_for_range(doc, &byte_range);
+            let anchor_id = find_anchor_for_node(doc, &node);
             let content = doc.slice_to_cow(byte_range.clone()).to_string();
 
             blocks.push(RenderBlock {
@@ -524,6 +525,43 @@ pub fn find_focused_block_in_list<'a>(
 mod tests {
     use super::*;
     use crate::editing::{Document, commands::Cmd};
+
+    #[test]
+    fn test_nested_list_anchor_uniqueness() {
+        let mut doc = Document::from_bytes(
+            b"- asdf\n  - asdf\n  - indented 1\n    - indented 1.1 hoooooray\n    - indented 1.2\n      - indented 1.2.1\n        - indented 1.2.1.1 yay fixed\n    - indented 1.3\n- indented 2 well\n  - indented 2.1\n  - indented 2.2\n"
+        ).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+
+        // Collect all list item blocks (including nested ones)
+        let mut all_list_blocks = Vec::new();
+        fn collect_list_blocks<'a>(items: &'a [ListItem], blocks: &mut Vec<&'a RenderBlock>) {
+            for item in items {
+                blocks.push(&item.block);
+                collect_list_blocks(&item.children, blocks);
+            }
+        }
+
+        for group in &snapshot.content_groups {
+            if let ContentGroup::BulletListGroup { items } = group {
+                collect_list_blocks(items, &mut all_list_blocks);
+            }
+        }
+
+        // Check that all anchor IDs are unique
+        let anchor_ids: Vec<_> = all_list_blocks.iter().map(|block| block.id).collect();
+        let unique_ids: std::collections::HashSet<_> = anchor_ids.iter().collect();
+
+        assert_eq!(
+            anchor_ids.len(),
+            unique_ids.len(),
+            "All list items should have unique anchor IDs. Found {} total, {} unique",
+            anchor_ids.len(),
+            unique_ids.len()
+        );
+    }
 
     // ============ Snapshot API tests ============
 

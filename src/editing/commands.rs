@@ -236,7 +236,7 @@ fn calculate_split_insert_length(doc: &Document, at: usize) -> usize {
 
 /// Find the start of the line containing the given offset
 pub(crate) fn find_line_start(doc: &Document, offset: usize) -> usize {
-    let text = doc.slice_to_cow(..offset);
+    let text = doc.slice_to_cow(0..offset);
     if let Some(newline_pos) = text.rfind('\n') {
         newline_pos + 1
     } else {
@@ -246,7 +246,7 @@ pub(crate) fn find_line_start(doc: &Document, offset: usize) -> usize {
 
 /// Get the text of the line starting at the given offset
 pub(crate) fn get_line_at(doc: &Document, line_start: usize) -> String {
-    let text = doc.slice_to_cow(line_start..);
+    let text = doc.slice_to_cow(line_start..doc.len());
     if let Some(newline_pos) = text.find('\n') {
         text[..newline_pos].to_string()
     } else {

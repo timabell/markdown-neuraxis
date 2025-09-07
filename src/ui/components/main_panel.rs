@@ -1,6 +1,5 @@
 use crate::editing::{
     AnchorId, BlockKind, Cmd, ContentGroup, Document, ListItem, Marker, RenderBlock, Snapshot,
-    find_focused_block_in_list,
 };
 use crate::models::MarkdownFile;
 use dioxus::events::Key;
@@ -16,22 +15,22 @@ pub fn MainPanel(
     on_save: Callback<()>,
     on_command: Callback<Cmd>,
 ) -> Element {
-    // Focus state management - track which block is currently focused for editing
-    let mut focused_block_id = use_signal(|| None::<AnchorId>);
+    // Focus state management - track which anchor is currently focused for editing
+    let mut focused_anchor_id = use_signal(|| None::<AnchorId>);
 
     // Helper to navigate to next/previous block
     let mut navigate_to_block = {
-        let mut focused_block_id = focused_block_id;
+        let mut focused_anchor_id = focused_anchor_id;
         let snapshot = snapshot.clone();
         move |direction: i32| {
-            let current_focus = *focused_block_id.read();
+            let current_focus = *focused_anchor_id.read();
             if let Some(current_id) = current_focus {
                 // Find current block index and navigate
                 if let Some(current_index) = snapshot.blocks.iter().position(|b| b.id == current_id)
                 {
                     let next_index = (current_index as i32 + direction).max(0) as usize;
                     if next_index < snapshot.blocks.len() {
-                        focused_block_id.set(Some(snapshot.blocks[next_index].id));
+                        focused_anchor_id.set(Some(snapshot.blocks[next_index].id));
                     }
                 }
             } else if !snapshot.blocks.is_empty() {
@@ -41,7 +40,7 @@ pub fn MainPanel(
                 } else {
                     snapshot.blocks.len() - 1
                 };
-                focused_block_id.set(Some(snapshot.blocks[index].id));
+                focused_anchor_id.set(Some(snapshot.blocks[index].id));
             }
         }
     };
@@ -56,7 +55,7 @@ pub fn MainPanel(
             // Handle keyboard navigation when not in editing mode
             onkeydown: move |event| {
                 // Only handle navigation when no block is being edited
-                if focused_block_id.read().is_none() {
+                if focused_anchor_id.read().is_none() {
                     match event.key() {
                         Key::Tab => {
                             event.prevent_default();
@@ -69,7 +68,7 @@ pub fn MainPanel(
                         Key::Enter => {
                             // Enter focuses the first block if none are focused
                             if !snapshot.blocks.is_empty() {
-                                focused_block_id.set(Some(snapshot.blocks[0].id));
+                                focused_anchor_id.set(Some(snapshot.blocks[0].id));
                             }
                         },
                         Key::ArrowDown => {
@@ -97,52 +96,61 @@ pub fn MainPanel(
                             class: "document-content",
                             for (group_index, group) in grouped_content.iter().enumerate() {
                                 {
-                                    // Check if any block in this group is focused
-                                    let focused_block = match group {
+                                    match group {
                                         ContentGroup::SingleBlock(block) => {
-                                            if focused_block_id.read().as_ref() == Some(&block.id) {
-                                                Some(block)
+                                            // For single blocks, check if focused and render EditorBlock or pretty view
+                                            if focused_anchor_id.read().as_ref() == Some(&block.id) {
+                                                rsx! {
+                                                    EditorBlock {
+                                                        key: "{group_index}-editor",
+                                                        block: block.clone(),
+                                                        content_text: document.slice_to_cow(block.byte_range.clone()).to_string(),
+                                                        on_command: on_command,
+                                                        on_cancel: {
+                                                            let mut focused_anchor_id = focused_anchor_id;
+                                                            move |_| {
+                                                                // Cancel editing - return to pretty view
+                                                                focused_anchor_id.set(None);
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             } else {
-                                                None
-                                            }
-                                        },
-                                        ContentGroup::BulletListGroup { items } | ContentGroup::NumberedListGroup { items } => {
-                                            find_focused_block_in_list(items, &focused_block_id.read())
-                                        }
-                                    };
-
-                                    if let Some(focused_block) = focused_block {
-                                        // A block in this group is focused - show raw markdown editor
-                                        rsx! {
-                                            EditorBlock {
-                                                key: "{group_index}-editor",
-                                                block: focused_block.clone(),
-                                                content_text: document.slice_to_cow(focused_block.byte_range.clone()).to_string(),
-                                                on_command: on_command,
-                                                on_cancel: {
-                                                    let mut focused_block_id = focused_block_id;
-                                                    move |_| {
-                                                        // Cancel editing - return to pretty view
-                                                        focused_block_id.set(None);
+                                                rsx! {
+                                                    RenderBlockComponent {
+                                                        key: "{group_index}-render",
+                                                        block: block.clone(),
+                                                        on_file_select: on_file_select,
+                                                        on_focus: {
+                                                            let mut focused_anchor_id = focused_anchor_id;
+                                                            let block_id = block.id;
+                                                            move |_| {
+                                                                // Focus this block for editing
+                                                                focused_anchor_id.set(Some(block_id));
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                    } else {
-                                        // No block in this group is focused - show pretty rendering
-                                        rsx! {
-                                            RenderContentGroup {
-                                                key: "{group_index}-render",
-                                                group: group.clone(),
-                                                on_file_select: on_file_select,
-                                                on_focus: {
-                                                    let mut focused_block_id = focused_block_id;
-                                                    move |block: RenderBlock| {
-                                                        // Focus this block for editing
-                                                        focused_block_id.set(Some(block.id));
-                                                    }
-                                                },
-                                                on_command: on_command
+                                        },
+                                        ContentGroup::BulletListGroup { items: _ } | ContentGroup::NumberedListGroup { items: _ } => {
+                                            // For list groups, always render the list - individual items handle their own editing
+                                            rsx! {
+                                                RenderContentGroup {
+                                                    key: "{group_index}-render",
+                                                    group: group.clone(),
+                                                    on_file_select: on_file_select,
+                                                    on_focus: {
+                                                        let mut focused_anchor_id = focused_anchor_id;
+                                                        move |block: RenderBlock| {
+                                                            // Focus this list item for editing
+                                                            focused_anchor_id.set(Some(block.id));
+                                                        }
+                                                    },
+                                                    on_command: on_command,
+                                                    focused_anchor_id,
+                                                    document: document.clone()
+                                                }
                                             }
                                         }
                                     }
@@ -176,6 +184,8 @@ pub fn RenderContentGroup(
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
+    focused_anchor_id: Signal<Option<AnchorId>>,
+    document: Document,
 ) -> Element {
     match group {
         ContentGroup::SingleBlock(block) => {
@@ -197,7 +207,9 @@ pub fn RenderContentGroup(
                     list_type: "ul",
                     on_file_select,
                     on_focus,
-                    on_command
+                    on_command,
+                    focused_anchor_id,
+                    document
                 }
             }
         }
@@ -208,7 +220,9 @@ pub fn RenderContentGroup(
                     list_type: "ol",
                     on_file_select,
                     on_focus,
-                    on_command
+                    on_command,
+                    focused_anchor_id,
+                    document
                 }
             }
         }
@@ -223,6 +237,8 @@ pub fn RenderListGroup(
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
+    focused_anchor_id: Signal<Option<AnchorId>>,
+    document: Document,
 ) -> Element {
     match list_type {
         "ol" => rsx! {
@@ -233,7 +249,9 @@ pub fn RenderListGroup(
                         item,
                         on_file_select,
                         on_focus,
-                        on_command
+                        on_command,
+                        focused_anchor_id,
+                        document: document.clone()
                     }
                 }
             }
@@ -246,7 +264,9 @@ pub fn RenderListGroup(
                         item,
                         on_file_select,
                         on_focus,
-                        on_command
+                        on_command,
+                        focused_anchor_id,
+                        document: document.clone()
                     }
                 }
             }
@@ -261,42 +281,25 @@ pub fn RenderListItem(
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
+    focused_anchor_id: Signal<Option<AnchorId>>,
+    document: Document,
 ) -> Element {
-    // Track whether this specific list item is being edited
-    let mut is_editing = use_signal(|| false);
+    let is_focused = focused_anchor_id.read().as_ref() == Some(&item.block.id);
 
     rsx! {
         li {
             class: "markdown-list-item",
-            if *is_editing.read() {
-                // Use the EditorBlock component for consistent styling and behavior
+            if is_focused {
+                // This list item is focused - show editor
                 EditorBlock {
                     block: item.block.clone(),
-                    content_text: {
-                        // For list items, include the markdown marker in the editable text
-                        let marker_str = match &item.block.kind {
-                            BlockKind::ListItem { marker: Marker::Dash, .. } => "- ",
-                            BlockKind::ListItem { marker: Marker::Plus, .. } => "+ ",
-                            BlockKind::ListItem { marker: Marker::Asterisk, .. } => "* ",
-                            BlockKind::ListItem { marker: Marker::Numbered, .. } => "1. ", // TODO: proper numbering
-                            _ => "",
-                        };
-                        format!("{}{}", marker_str, item.block.content)
-                    },
-                    on_command: {
-                        let on_command = on_command;
-                        let block = item.block.clone();
-                        move |cmd: Cmd| {
-                            println!("List item command: {:?} for block {:?}", cmd, block.id);
-                            // Pass the command up to actually apply it to the document
-                            on_command.call(cmd);
-                        }
-                    },
+                    content_text: document.slice_to_cow(item.block.byte_range.clone()).to_string(),
+                    on_command: on_command,
                     on_cancel: {
-                        let mut is_editing = is_editing;
+                        let mut focused_anchor_id = focused_anchor_id;
                         move |_| {
-                            // Exit edit mode
-                            is_editing.set(false);
+                            // Clear focus to exit editing mode
+                            focused_anchor_id.set(None);
                         }
                     }
                 }
@@ -308,11 +311,8 @@ pub fn RenderListItem(
                         let block = item.block.clone();
                         move |evt: MouseEvent| {
                             evt.stop_propagation();
-                            // Enter edit mode for this list item
-                            is_editing.set(true);
-
-                            // Debug logging
-                            println!("Clicked list item: {:?}", block.content);
+                            // Use the centralized focus system
+                            on_focus.call(block.clone());
                         }
                     },
                     "{item.block.content}"
@@ -337,7 +337,9 @@ pub fn RenderListItem(
                             list_type: child_list_type,
                             on_file_select,
                             on_focus,
-                            on_command
+                            on_command,
+                            focused_anchor_id,
+                            document: document.clone()
                         }
                     }
                 }

@@ -25,3 +25,9 @@ rstest = "0.26"
 insta = { version = "1.43", features = ["yaml"] }
 pretty_assertions = "1.4"
 tempfile = "3.21"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
