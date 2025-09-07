@@ -128,14 +128,15 @@ fn collect_render_blocks_recursive(
 
             if !is_inside_list_item {
                 // Top-level paragraph
+                let content_range = extract_paragraph_content_range(doc, &node);
                 let anchor_id = find_anchor_for_range(doc, &byte_range);
-                let content = doc.slice_to_cow(byte_range.clone()).trim().to_string();
+                let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
                 blocks.push(RenderBlock {
                     id: anchor_id,
                     kind: BlockKind::Paragraph,
-                    byte_range: byte_range.clone(),
-                    content_range: byte_range.clone(), // For paragraphs, content equals byte range
+                    byte_range: content_range.clone(), // Use content_range for byte_range to exclude trailing newlines
+                    content_range,
                     depth: current_depth,
                     content,
                 });
@@ -219,6 +220,30 @@ fn extract_heading_content_range(
     let mut content_end = byte_range.end;
     if text.ends_with('\n') {
         content_end -= 1;
+    }
+
+    content_start..content_end
+}
+
+/// Extract content range for a paragraph (excluding trailing newlines)
+fn extract_paragraph_content_range(
+    doc: &Document,
+    node: &tree_sitter::Node,
+) -> std::ops::Range<usize> {
+    let byte_range = node.byte_range();
+    let text = doc.slice_to_cow(byte_range.clone());
+
+    // Content starts at the beginning of the paragraph
+    let content_start = byte_range.start;
+
+    // Content ends at the end, but exclude any trailing newlines
+    let mut content_end = byte_range.end;
+    if text.ends_with('\n') {
+        content_end -= 1;
+        // Also check for \r\n (though we're focusing on LF for now)
+        if text.len() > 1 && text.as_bytes()[text.len() - 2] == b'\r' {
+            content_end -= 1;
+        }
     }
 
     content_start..content_end
