@@ -502,25 +502,6 @@ fn insert_list_item_at_depth(items: &mut Vec<ListItem>, new_item: ListItem, targ
     }
 }
 
-/// Helper function to find a focused block within a list group
-pub fn find_focused_block_in_list<'a>(
-    items: &'a [ListItem],
-    focused_id: &Option<AnchorId>,
-) -> Option<&'a RenderBlock> {
-    if let Some(target_id) = focused_id {
-        for item in items {
-            if item.block.id == *target_id {
-                return Some(&item.block);
-            }
-            // Recursively check children
-            if let Some(found) = find_focused_block_in_list(&item.children, focused_id) {
-                return Some(found);
-            }
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1345,55 +1326,6 @@ mod tests {
         assert!(!is_same_list_type(&Marker::Dash, &Marker::Numbered));
         assert!(!is_same_list_type(&Marker::Asterisk, &Marker::Numbered));
         assert!(!is_same_list_type(&Marker::Plus, &Marker::Numbered));
-    }
-
-    #[test]
-    fn test_find_focused_block_in_list() {
-        let list_items = vec![ListItem {
-            block: RenderBlock {
-                id: AnchorId(1),
-                kind: BlockKind::ListItem {
-                    marker: Marker::Dash,
-                    depth: 0,
-                },
-                byte_range: 0..8,
-                content_range: 2..8,
-                depth: 0,
-                content: "Item 1".to_string(),
-            },
-            children: vec![ListItem {
-                block: RenderBlock {
-                    id: AnchorId(2),
-                    kind: BlockKind::ListItem {
-                        marker: Marker::Dash,
-                        depth: 1,
-                    },
-                    byte_range: 9..17,
-                    content_range: 13..17,
-                    depth: 1,
-                    content: "Nested".to_string(),
-                },
-                children: vec![],
-            }],
-        }];
-
-        // Test finding root item
-        let result = find_focused_block_in_list(&list_items, &Some(AnchorId(1)));
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().content, "Item 1");
-
-        // Test finding nested item
-        let result = find_focused_block_in_list(&list_items, &Some(AnchorId(2)));
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().content, "Nested");
-
-        // Test not finding item
-        let result = find_focused_block_in_list(&list_items, &Some(AnchorId(99)));
-        assert!(result.is_none());
-
-        // Test with None
-        let result = find_focused_block_in_list(&list_items, &None);
-        assert!(result.is_none());
     }
 
     #[test]

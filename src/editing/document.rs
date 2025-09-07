@@ -688,7 +688,7 @@ mod tests {
 
         // My implementation creates separate insertion and deletion edits for replacements
         // This is actually correct behavior for tree-sitter
-        assert!(edits.len() >= 1);
+        assert!(!edits.is_empty());
 
         // Find the edit that covers the replacement range
         let replacement_edit = edits
