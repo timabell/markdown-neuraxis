@@ -143,6 +143,9 @@ pub fn MainPanel(
                                                     on_focus: {
                                                         let mut focused_anchor_id = focused_anchor_id;
                                                         move |block: RenderBlock| {
+                                                            // DIAGNOSTIC: Track focus signal changes
+                                                            eprintln!("SIGNAL SET: '{}' id={:?} depth={}",
+                                                                    block.content, block.id, block.depth);
                                                             // Focus this list item for editing
                                                             focused_anchor_id.set(Some(block.id));
                                                         }
@@ -286,6 +289,18 @@ pub fn RenderListItem(
 ) -> Element {
     let is_focused = focused_anchor_id.read().as_ref() == Some(&item.block.id);
 
+    // SURGICAL DIAGNOSTIC: Only log when component thinks it's focused
+    if is_focused {
+        eprintln!(
+            "FOCUSED RENDER: '{}' id={:?} depth={} signal={:?}",
+            item.block.content,
+            item.block.id,
+            item.block.depth,
+            focused_anchor_id.read().as_ref()
+        );
+        eprintln!("TEXTAREA RENDER: {}", item.block.content);
+    }
+
     rsx! {
         li {
             class: "markdown-list-item",
@@ -311,6 +326,9 @@ pub fn RenderListItem(
                         let block = item.block.clone();
                         move |evt: MouseEvent| {
                             evt.stop_propagation();
+                            // DIAGNOSTIC: Track click events with full context
+                            eprintln!("CLICK: '{}' id={:?} depth={}",
+                                    block.content, block.id, block.depth);
                             // Use the centralized focus system
                             on_focus.call(block.clone());
                         }
