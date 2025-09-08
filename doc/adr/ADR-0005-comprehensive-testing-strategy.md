@@ -12,7 +12,7 @@ The project aims to support multiple UI frontends (Dioxus desktop, web, TUI, mob
 
 ### Current Challenge: The Multiple Textarea Bug
 
-A persistent bug demonstrates the core testing challenge: clicking on nested list items causes multiple textareas to appear simultaneously, indicating an editing state management issue likely rooted in anchor ID collision. This bug manifests identically across Dioxus desktop and would appear in any frontend using the same core document logic.
+A persistent bug demonstrates the core testing challenge: clicking on nested list items causes multiple textareas to appear simultaneously, indicating an editing state management issue likely rooted in anchor ID collision. This bug manifests in the Dioxus desktop and would appear in any frontend using the same core document logic.
 
 ### Research: Dioxus Testing Recommendations
 
@@ -46,23 +46,23 @@ We will implement a **Core-First Testing Strategy** with targeted integration bo
 ```
 ┌─────────────────────────────────────┐
 │ COMPREHENSIVE CORE TESTING (95%)    │
-│ - Document manipulation logic       │ 
-│ - Anchor ID management             │
-│ - Markdown parsing & rendering     │
-│ - File system operations           │
-│ - Property-based testing (future)  │
+│ - Document manipulation logic       │
+│ - Anchor ID management              │
+│ - Markdown parsing & rendering      │
+│ - File system operations            │
+│ - Property-based testing (future)   │
 └─────────────────────────────────────┘
 ┌─────────────────────────────────────┐
 │ UI CONTRACT TESTING (Interface)     │
-│ - Core ↔ UI command boundaries     │
-│ - State synchronization            │
-│ - Mock-based integration tests     │
+│ - Core ↔ UI command boundaries      │
+│ - State synchronization             │
+│ - Mock-based integration tests      │
 └─────────────────────────────────────┘
 ┌─────────────────────────────────────┐
 │ FRONTEND-SPECIFIC TESTING (Minimal) │
 │ - Input method differences          │
-│ - Platform-specific behaviors      │
-│ - Critical path smoke tests        │
+│ - Platform-specific behaviors       │
+│ - Critical path smoke tests         │
 └─────────────────────────────────────┘
 ```
 
