@@ -13,6 +13,34 @@ pub enum Marker {
     Numbered, // "1.", "2.", etc.
 }
 
+/// Indentation style detected in the document
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndentStyle {
+    Spaces(usize), // Number of spaces per indent level
+    Tabs,          // Tab characters
+}
+
+impl IndentStyle {
+    /// Convert an indentation string to depth level
+    pub fn calculate_depth(&self, indent_str: &str) -> usize {
+        match self {
+            IndentStyle::Tabs => {
+                // Count tab characters for depth
+                indent_str.chars().take_while(|&c| c == '\t').count()
+            }
+            IndentStyle::Spaces(spaces_per_level) => {
+                // Count spaces and divide by spaces per level
+                let space_count = indent_str.chars().take_while(|&c| c == ' ').count();
+                if space_count == 0 {
+                    0
+                } else {
+                    space_count / spaces_per_level
+                }
+            }
+        }
+    }
+}
+
 /// Core document structure that holds the text buffer and provides editing operations.
 /// Uses xi-rope for efficient text manipulation and preserves exact byte representation.
 pub struct Document {
@@ -28,6 +56,8 @@ pub struct Document {
     pub(crate) tree: Option<Tree>,
     /// Anchors for stable block IDs that survive edits
     pub(crate) anchors: Vec<Anchor>,
+    /// Detected indentation style for this document
+    pub(crate) indent_style: IndentStyle,
 }
 
 impl Document {
@@ -37,6 +67,9 @@ impl Document {
         let text = std::str::from_utf8(bytes)?;
         let buffer = Rope::from(text);
         let len = buffer.len();
+
+        // Detect indent style BEFORE tree-sitter parsing
+        let indent_style = detect_indent_style(&buffer);
 
         // Initialize tree-sitter parser with markdown block grammar
         let mut parser = Parser::new();
@@ -52,6 +85,7 @@ impl Document {
             parser,
             tree,
             anchors: Vec::new(),
+            indent_style,
         })
     }
 
@@ -380,6 +414,38 @@ impl Document {
     }
 }
 
+/// Detect the indent style (tabs vs spaces and size) by finding the first non-zero indentation
+fn detect_indent_style(buffer: &Rope) -> IndentStyle {
+    // Convert the rope to string to iterate over lines
+    // This is acceptable during document loading as it's a one-time operation
+    let text = buffer.to_string();
+    let lines = text.lines();
+
+    for line in lines {
+        // Skip empty lines
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        // Check for tab indentation first
+        if line.starts_with('\t') {
+            return IndentStyle::Tabs;
+        }
+
+        // Check for space indentation
+        if line.starts_with(' ') {
+            // Count leading spaces
+            let spaces = line.chars().take_while(|&c| c == ' ').count();
+            if spaces > 0 {
+                return IndentStyle::Spaces(spaces);
+            }
+        }
+    }
+
+    // Default to 2 spaces if we couldn't detect
+    IndentStyle::Spaces(2)
+}
+
 /// Convert byte offset to (row, column) position in given text
 fn byte_to_point_in_text(text: &str, byte_offset: usize) -> (usize, usize) {
     let text_bytes = text.as_bytes();
@@ -415,6 +481,7 @@ impl Clone for Document {
             parser,
             tree,
             anchors: self.anchors.clone(),
+            indent_style: self.indent_style.clone(),
         }
     }
 }
@@ -427,6 +494,7 @@ impl PartialEq for Document {
             && self.selection == other.selection
             && self.version == other.version
             && self.anchors == other.anchors
+            && self.indent_style == other.indent_style
         // Note: We don't compare parser or tree as they are derived from buffer
     }
 }
@@ -700,5 +768,171 @@ mod tests {
 
         // Verify it's a proper replacement or insertion
         assert_eq!(replacement_edit.start_byte, 6);
+    }
+
+    // ============ IndentStyle tests ============
+
+    #[test]
+    fn test_indent_style_calculate_depth_spaces() {
+        let style = IndentStyle::Spaces(2);
+
+        assert_eq!(style.calculate_depth(""), 0);
+        assert_eq!(style.calculate_depth("  "), 1); // 2 spaces = 1 level
+        assert_eq!(style.calculate_depth("    "), 2); // 4 spaces = 2 levels
+        assert_eq!(style.calculate_depth("      "), 3); // 6 spaces = 3 levels
+
+        let style4 = IndentStyle::Spaces(4);
+        assert_eq!(style4.calculate_depth(""), 0);
+        assert_eq!(style4.calculate_depth("    "), 1); // 4 spaces = 1 level
+        assert_eq!(style4.calculate_depth("        "), 2); // 8 spaces = 2 levels
+    }
+
+    #[test]
+    fn test_indent_style_calculate_depth_tabs() {
+        let style = IndentStyle::Tabs;
+
+        assert_eq!(style.calculate_depth(""), 0);
+        assert_eq!(style.calculate_depth("\t"), 1);
+        assert_eq!(style.calculate_depth("\t\t"), 2);
+        assert_eq!(style.calculate_depth("\t\t\t"), 3);
+    }
+
+    #[test]
+    fn test_indent_style_calculate_depth_full_lines() {
+        // Test that calculate_depth works with full lines, not just indentation strings
+        let style2 = IndentStyle::Spaces(2);
+        assert_eq!(style2.calculate_depth("- item"), 0);
+        assert_eq!(style2.calculate_depth("  - nested item"), 1);
+        assert_eq!(style2.calculate_depth("    - deeply nested"), 2);
+        assert_eq!(style2.calculate_depth("      - very deep"), 3);
+
+        let style4 = IndentStyle::Spaces(4);
+        assert_eq!(style4.calculate_depth("- item"), 0);
+        assert_eq!(style4.calculate_depth("    - nested item"), 1);
+        assert_eq!(style4.calculate_depth("        - deeply nested"), 2);
+
+        let tab_style = IndentStyle::Tabs;
+        assert_eq!(tab_style.calculate_depth("- item"), 0);
+        assert_eq!(tab_style.calculate_depth("\t- nested item"), 1);
+        assert_eq!(tab_style.calculate_depth("\t\t- deeply nested"), 2);
+        assert_eq!(tab_style.calculate_depth("\t\t\t- very deep"), 3);
+    }
+
+    #[test]
+    fn test_detect_indent_style_4_space() {
+        let rope = Rope::from("- item 1\n    - nested with 4 spaces\n    - another nested\n");
+        let style = detect_indent_style(&rope);
+
+        assert_eq!(style, IndentStyle::Spaces(4));
+    }
+
+    #[test]
+    fn test_detect_indent_style_2_space() {
+        let rope = Rope::from("- item 1\n  - nested with 2 spaces\n  - another nested\n");
+        let style = detect_indent_style(&rope);
+
+        assert_eq!(style, IndentStyle::Spaces(2));
+    }
+
+    #[test]
+    fn test_detect_indent_style_first_wins() {
+        let rope =
+            Rope::from("- item 1\n  - 2 space indent\n  - another 2 space\n    - one 4 space\n");
+        let style = detect_indent_style(&rope);
+
+        // Should use first indentation found (2 spaces)
+        assert_eq!(style, IndentStyle::Spaces(2));
+    }
+
+    #[test]
+    fn test_detect_indent_style_no_indented_items() {
+        let rope = Rope::from("- item 1\n- item 2\n- no nested items\n");
+        let style = detect_indent_style(&rope);
+
+        // Should default to 2 when no indented items found
+        assert_eq!(style, IndentStyle::Spaces(2));
+    }
+
+    #[test]
+    fn test_detect_indent_style_tab_characters() {
+        let rope = Rope::from("- item 1\n\t- nested with tab\n\t- another tab\n");
+        let style = detect_indent_style(&rope);
+
+        // Should detect tabs
+        assert_eq!(style, IndentStyle::Tabs);
+    }
+
+    #[test]
+    fn test_detect_indent_style_mixed_tabs_and_spaces() {
+        let rope = Rope::from("- item 1\n\t- tab first\n  - then spaces\n");
+        let style = detect_indent_style(&rope);
+
+        // First indentation wins (tabs)
+        assert_eq!(style, IndentStyle::Tabs);
+    }
+
+    #[test]
+    fn test_document_stores_indent_style() {
+        let doc = Document::from_bytes(b"- item\n    - 4-space indent").unwrap();
+        assert_eq!(doc.indent_style, IndentStyle::Spaces(4));
+
+        let doc_tabs = Document::from_bytes(b"- item\n\t- tab indent").unwrap();
+        assert_eq!(doc_tabs.indent_style, IndentStyle::Tabs);
+    }
+
+    #[test]
+    fn test_end_to_end_indent_detection_and_list_depth() {
+        // Integration test: verify the complete workflow from document creation
+        // through snapshot generation uses the new indent detection architecture
+
+        let markdown =
+            "- Top level\n  - 2-space indented\n    - 4-space indented\n      - 6-space indented";
+        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+
+        // Verify indent style was detected before tree-sitter parsing
+        assert_eq!(
+            doc.indent_style,
+            IndentStyle::Spaces(2),
+            "Should detect 2-space indent style"
+        );
+
+        // Create anchors and snapshot to verify the depth calculation works
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Should have 4 list items with depths 0, 1, 2, 3
+        assert_eq!(snapshot.blocks.len(), 4, "Should have 4 list items");
+        assert_eq!(snapshot.blocks[0].depth, 0, "First item should be depth 0");
+        assert_eq!(snapshot.blocks[1].depth, 1, "Second item should be depth 1");
+        assert_eq!(snapshot.blocks[2].depth, 2, "Third item should be depth 2");
+        assert_eq!(snapshot.blocks[3].depth, 3, "Fourth item should be depth 3");
+
+        // Now test with tab-based document
+        let tab_markdown = "- Top level\n\t- Tab indented\n\t\t- Double tab";
+        let mut tab_doc = Document::from_bytes(tab_markdown.as_bytes()).unwrap();
+
+        // Verify tab detection
+        assert_eq!(
+            tab_doc.indent_style,
+            IndentStyle::Tabs,
+            "Should detect tab indent style"
+        );
+
+        tab_doc.create_anchors_from_tree();
+        let tab_snapshot = tab_doc.snapshot();
+
+        assert_eq!(tab_snapshot.blocks.len(), 3, "Should have 3 list items");
+        assert_eq!(
+            tab_snapshot.blocks[0].depth, 0,
+            "First tab item should be depth 0"
+        );
+        assert_eq!(
+            tab_snapshot.blocks[1].depth, 1,
+            "Second tab item should be depth 1"
+        );
+        assert_eq!(
+            tab_snapshot.blocks[2].depth, 2,
+            "Third tab item should be depth 2"
+        );
     }
 }

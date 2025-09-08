@@ -1,4 +1,8 @@
-use crate::editing::{AnchorId, Document, anchors::find_anchor_for_node, document::Marker};
+use crate::editing::{
+    AnchorId, Document,
+    anchors::{find_anchor_for_node, find_anchor_for_range},
+    document::Marker,
+};
 
 /// Represents a grouped content structure for proper HTML ul/ol rendering
 #[derive(Debug, Clone, PartialEq)]
@@ -100,7 +104,8 @@ fn collect_render_blocks_recursive(
             let list_depth = calculate_list_depth(doc, &node);
             let content_range = extract_list_item_content_range(doc, &node);
             let own_byte_range = extract_list_item_own_range(doc, &node);
-            let anchor_id = find_anchor_for_node(doc, &node);
+            // Use the own_byte_range to find the correct anchor, not the full node range
+            let anchor_id = find_anchor_for_range(doc, &own_byte_range);
 
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
 
@@ -286,14 +291,14 @@ fn calculate_list_depth(doc: &Document, node: &tree_sitter::Node) -> usize {
         .unwrap_or(0);
     let line_text = &full_text[line_start..];
 
-    // Count leading spaces/tabs on the actual line
-    let indent_chars = line_text
+    // Extract just the indentation part
+    let indent_str = line_text
         .chars()
         .take_while(|&c| c == ' ' || c == '\t')
-        .count();
+        .collect::<String>();
 
-    // Each 4 spaces = 1 depth level (standard markdown convention)
-    indent_chars / 4
+    // Use the document's indent style to calculate depth
+    doc.indent_style.calculate_depth(&indent_str)
 }
 
 /// Extract the byte range for just the list item's own line (excluding children)
@@ -506,6 +511,147 @@ fn insert_list_item_at_depth(items: &mut Vec<ListItem>, new_item: ListItem, targ
 mod tests {
     use super::*;
     use crate::editing::{Document, commands::Cmd};
+
+    #[test]
+    fn test_calculate_list_depth_with_detected_indent() {
+        let mut doc =
+            Document::from_bytes(b"- item 1\n  - 2-space nested\n    - 4-space nested\n").unwrap();
+        doc.create_anchors_from_tree();
+
+        let tree = doc.tree.as_ref().unwrap();
+        let root = tree.root_node();
+
+        // Find the list items manually by iterating through children
+        let mut list_items = Vec::new();
+
+        fn find_list_items<'a>(
+            node: tree_sitter::Node<'a>,
+            items: &mut Vec<tree_sitter::Node<'a>>,
+        ) {
+            if node.kind() == "list_item" {
+                items.push(node);
+            }
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                find_list_items(child, items);
+            }
+        }
+
+        find_list_items(root, &mut list_items);
+
+        assert!(list_items.len() >= 3, "Should have at least 3 list items");
+
+        // With 2-space detection, depths should be 0, 1, 2
+        assert_eq!(
+            calculate_list_depth(&doc, &list_items[0]),
+            0,
+            "First item should be depth 0"
+        );
+        assert_eq!(
+            calculate_list_depth(&doc, &list_items[1]),
+            1,
+            "Second item should be depth 1 (2 spaces)"
+        );
+        assert_eq!(
+            calculate_list_depth(&doc, &list_items[2]),
+            2,
+            "Third item should be depth 2 (4 spaces)"
+        );
+    }
+
+    #[test]
+    fn test_nested_list_items_get_correct_anchor_ids() {
+        // Test that nested list items get their own anchor IDs, not their parent's
+        let mut doc = Document::from_bytes(
+            b"- parent item\n  - child item 1\n  - child item 2\n    - grandchild item\n",
+        )
+        .unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+
+        // Verify blocks have correct depth values
+        assert_eq!(snapshot.blocks.len(), 4);
+        assert_eq!(snapshot.blocks[0].depth, 0, "parent item should be depth 0");
+        assert_eq!(
+            snapshot.blocks[1].depth, 1,
+            "child item 1 should be depth 1"
+        );
+        assert_eq!(
+            snapshot.blocks[2].depth, 1,
+            "child item 2 should be depth 1"
+        );
+        assert_eq!(
+            snapshot.blocks[3].depth, 2,
+            "grandchild item should be depth 2"
+        );
+
+        // Find the list group
+        let list_group = snapshot
+            .content_groups
+            .iter()
+            .find_map(|g| {
+                if let ContentGroup::BulletListGroup { items } = g {
+                    Some(items)
+                } else {
+                    None
+                }
+            })
+            .expect("Should have a bullet list group");
+
+        // The parent item should have its own unique anchor ID
+        assert_eq!(list_group.len(), 1, "Should have one top-level item");
+        let parent_item = &list_group[0];
+        let parent_id = parent_item.block.id;
+
+        // Verify nesting structure
+        assert_eq!(
+            parent_item.children.len(),
+            2,
+            "Parent should have 2 children"
+        );
+        assert_eq!(
+            parent_item.children[1].children.len(),
+            1,
+            "Second child should have 1 grandchild"
+        );
+
+        // Collect all anchor IDs to check uniqueness
+        let mut all_ids = vec![parent_id];
+
+        // Child items should have different anchor IDs from parent
+        for child in &parent_item.children {
+            assert_ne!(
+                child.block.id, parent_id,
+                "Child '{}' should not have same anchor ID as parent '{}'",
+                child.block.content, parent_item.block.content
+            );
+            all_ids.push(child.block.id);
+
+            // Grandchildren should also have unique IDs
+            for grandchild in &child.children {
+                assert_ne!(
+                    grandchild.block.id, parent_id,
+                    "Grandchild '{}' should not have parent's anchor ID",
+                    grandchild.block.content
+                );
+                assert_ne!(
+                    grandchild.block.id, child.block.id,
+                    "Grandchild '{}' should not have its parent's anchor ID",
+                    grandchild.block.content
+                );
+                all_ids.push(grandchild.block.id);
+            }
+        }
+
+        // Verify all IDs are unique
+        let unique_ids: std::collections::HashSet<_> = all_ids.iter().collect();
+        assert_eq!(
+            unique_ids.len(),
+            all_ids.len(),
+            "All anchor IDs should be unique"
+        );
+    }
 
     #[test]
     fn test_nested_list_anchor_uniqueness() {
