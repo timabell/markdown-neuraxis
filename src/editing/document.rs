@@ -167,6 +167,16 @@ impl Document {
         self.selection = selection;
     }
 
+    /// Get reference to anchors for testing
+    pub fn anchors(&self) -> &[crate::editing::Anchor] {
+        &self.anchors
+    }
+
+    /// Get reference to tree for testing  
+    pub fn tree(&self) -> Option<&tree_sitter::Tree> {
+        self.tree.as_ref()
+    }
+
     /// Get the current version
     pub fn version(&self) -> u64 {
         self.version
@@ -363,7 +373,35 @@ impl Document {
     }
 
     pub fn snapshot(&self) -> crate::editing::Snapshot {
-        crate::editing::snapshot::create_snapshot(self)
+        // DIAGNOSTIC: Check anchor state before snapshot creation
+        eprintln!(
+            "SNAPSHOT: Before creating snapshot, document has {} anchors:",
+            self.anchors.len()
+        );
+        for (i, anchor) in self.anchors.iter().enumerate() {
+            eprintln!(
+                "  [{}] anchor_id={} range={:?}",
+                i, anchor.id.0, anchor.range
+            );
+        }
+
+        let snapshot = crate::editing::snapshot::create_snapshot(self);
+
+        // DIAGNOSTIC: Check blocks in created snapshot
+        eprintln!(
+            "SNAPSHOT: Created snapshot with {} blocks:",
+            snapshot.blocks.len()
+        );
+        for (i, block) in snapshot.blocks.iter().enumerate() {
+            if block.content == "indented 1.1" || block.content == "indented 1" {
+                eprintln!(
+                    "  [{}] '{}' anchor_id={} depth={} byte_range={:?}",
+                    i, block.content, block.id.0, block.depth, block.byte_range
+                );
+            }
+        }
+
+        snapshot
     }
 
     /// Hit-testing helper: Find which block contains the given byte position
@@ -474,15 +512,20 @@ impl Clone for Document {
         // Re-parse the document for the cloned version
         let tree = parser.parse(self.buffer.to_string(), None);
 
-        Self {
+        let mut cloned_doc = Self {
             buffer: self.buffer.clone(),
             selection: self.selection.clone(),
             version: self.version,
             parser,
             tree,
-            anchors: self.anchors.clone(),
+            anchors: Vec::new(), // Start with empty anchors
             indent_style: self.indent_style.clone(),
-        }
+        };
+
+        // FIX: Regenerate anchors for the new tree to fix stale node_id references
+        cloned_doc.create_anchors_from_tree();
+
+        cloned_doc
     }
 }
 

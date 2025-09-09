@@ -313,7 +313,7 @@ fn collect_anchors_recursive(node: tree_sitter::Node, anchors: &mut Vec<Anchor>)
         || (node_kind == "paragraph" && node.parent().map(|p| p.kind()) != Some("list_item"));
 
     if should_create_anchor && !node.byte_range().is_empty() {
-        let anchor_id = generate_static_anchor_id(anchors.len());
+        let anchor_id = generate_static_anchor_id(anchors.len(), node.byte_range());
         let node_id = node.id();
 
         let anchor = Anchor {
@@ -353,7 +353,7 @@ fn generate_anchor_id(doc: &Document) -> AnchorId {
 }
 
 /// Generate a static anchor ID for initial tree creation
-fn generate_static_anchor_id(index: usize) -> AnchorId {
+fn generate_static_anchor_id(index: usize, byte_range: std::ops::Range<usize>) -> AnchorId {
     let mut hasher = DefaultHasher::new();
 
     // Include a magic number to differentiate from dynamic IDs
@@ -362,6 +362,10 @@ fn generate_static_anchor_id(index: usize) -> AnchorId {
 
     // Include index to ensure uniqueness within this generation
     index.hash(&mut hasher);
+
+    // Include byte range to ensure uniqueness across different content
+    byte_range.start.hash(&mut hasher);
+    byte_range.end.hash(&mut hasher);
 
     AnchorId(hasher.finish() as u128)
 }

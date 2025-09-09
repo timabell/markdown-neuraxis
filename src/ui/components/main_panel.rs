@@ -142,12 +142,25 @@ pub fn MainPanel(
                                                     on_file_select: on_file_select,
                                                     on_focus: {
                                                         let mut focused_anchor_id = focused_anchor_id;
+                                                        let document_anchors = document.anchors.clone();
                                                         move |block: RenderBlock| {
                                                             // DIAGNOSTIC: Track focus signal changes
                                                             eprintln!("SIGNAL SET: '{}' id={:?} depth={}",
                                                                     block.content, block.id, block.depth);
+                                                            // DIAGNOSTIC: Check document state before focus change
+                                                            eprintln!("BEFORE FOCUS CHANGE: Checking anchor IDs in document");
+                                                            for (i, anchor) in document_anchors.iter().enumerate() {
+                                                                eprintln!("  [{}] anchor_id={} range={:?}", i, anchor.id.0, anchor.range);
+                                                            }
+
                                                             // Focus this list item for editing
                                                             focused_anchor_id.set(Some(block.id));
+
+                                                            // DIAGNOSTIC: Check document state after focus change
+                                                            eprintln!("AFTER FOCUS CHANGE: Checking anchor IDs in document");
+                                                            for (i, anchor) in document_anchors.iter().enumerate() {
+                                                                eprintln!("  [{}] anchor_id={} range={:?}", i, anchor.id.0, anchor.range);
+                                                            }
                                                         }
                                                     },
                                                     on_command: on_command,
@@ -287,6 +300,21 @@ pub fn RenderListItem(
     focused_anchor_id: Signal<Option<AnchorId>>,
     document: Document,
 ) -> Element {
+    // DIAGNOSTIC: Check document anchor state at component entry
+    if item.block.content == "indented 1.1" || item.block.content == "indented 1" {
+        eprintln!(
+            "RENDER COMPONENT: '{}' thinks its id={:?}",
+            item.block.content, item.block.id
+        );
+        eprintln!("  Document has {} anchors:", document.anchors.len());
+        for (i, anchor) in document.anchors.iter().enumerate() {
+            eprintln!(
+                "    [{}] anchor_id={} range={:?}",
+                i, anchor.id.0, anchor.range
+            );
+        }
+    }
+
     let is_focused = focused_anchor_id.read().as_ref() == Some(&item.block.id);
 
     // SURGICAL DIAGNOSTIC: Only log when component thinks it's focused
