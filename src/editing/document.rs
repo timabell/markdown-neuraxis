@@ -137,11 +137,22 @@ impl Document {
             self.tree = self.parser.parse(self.buffer.to_string(), None);
         }
 
+        // Check if we need to create anchors for a completely new document
+        let was_empty = self.anchors.is_empty();
+        let inserting_at_start = changed.iter().any(|range| range.start == 0);
+
         // Transform anchors through the delta
         self.transform_anchors(&delta);
 
         // Rebind anchors in changed regions after incremental parse
         self.rebind_anchors_in_changed_regions(&changed);
+
+        // Create anchors for any new blocks that don't have anchors yet
+        // Only do this if we started with no anchors (empty document case)
+        if was_empty && inserting_at_start {
+            // This handles the case of inserting the first content into an empty document
+            self.create_anchors_for_new_blocks();
+        }
 
         // Transform selection through command
         let new_selection = self.transform_selection_for_command(&self.selection, &cmd);
@@ -234,6 +245,12 @@ impl Document {
 
     pub fn create_anchors_from_tree(&mut self) {
         crate::editing::anchors::create_anchors_from_tree(self)
+    }
+
+    /// Create anchors for any new blocks that don't have anchors yet
+    /// This is called automatically after edits to ensure all blocks have stable identifiers
+    fn create_anchors_for_new_blocks(&mut self) {
+        crate::editing::anchors::create_anchors_for_new_blocks(self)
     }
 
     /// Convert xi-rope delta to tree-sitter InputEdits

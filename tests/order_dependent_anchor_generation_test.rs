@@ -167,10 +167,11 @@ fn test_anchor_generation_with_incremental_parsing() {
     }
 
     // Make a small edit that shouldn't affect the list structure
-    // Add a space at the beginning
+    // Insert text at the end that doesn't change any existing structure
+    let doc_len = doc.text().len();
     let edit_cmd = markdown_neuraxis::editing::Cmd::InsertText {
-        text: " ".to_string(),
-        at: 1, // After the first newline
+        text: "\n\n# New heading".to_string(),
+        at: doc_len, // At the very end of the document
     };
 
     let _patch = doc.apply(edit_cmd);

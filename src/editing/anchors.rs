@@ -1,6 +1,5 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::time::{SystemTime, UNIX_EPOCH};
 use xi_rope::delta::Transformer;
 use xi_rope::{Delta, RopeInfo};
 
@@ -20,6 +19,8 @@ pub struct Anchor {
 pub struct AnchorId(pub u128);
 
 /// Calculate the overlap between two byte ranges
+/// Returns the overlapping portion length, or 0 if they don't overlap
+#[cfg(test)]
 pub(crate) fn calculate_range_overlap(
     range1: &std::ops::Range<usize>,
     range2: &std::ops::Range<usize>,
@@ -27,76 +28,6 @@ pub(crate) fn calculate_range_overlap(
     let start = range1.start.max(range2.start);
     let end = range1.end.min(range2.end);
     end.saturating_sub(start)
-}
-
-/// Find the anchor ID for a specific tree-sitter node
-pub(crate) fn find_anchor_for_node(doc: &Document, node: &tree_sitter::Node) -> AnchorId {
-    let node_id = node.id();
-
-    // First try to find by node ID (fast path for incremental parsing)
-    for anchor in &doc.anchors {
-        if anchor.node_id == Some(node_id) {
-            return anchor.id;
-        }
-    }
-
-    // Fallback to range-based lookup (for full reparse or new nodes)
-    find_anchor_for_range(doc, &node.byte_range())
-}
-
-/// Find the anchor ID that best matches the given byte range
-pub(crate) fn find_anchor_for_range(doc: &Document, range: &std::ops::Range<usize>) -> AnchorId {
-    // First try to find an exact match
-    for anchor in &doc.anchors {
-        if anchor.range == *range {
-            return anchor.id;
-        }
-    }
-
-    // If no exact match, find the anchor with the smallest range that fully contains this range
-    let mut best_anchor = None;
-    let mut smallest_containing_size = usize::MAX;
-
-    for anchor in &doc.anchors {
-        // Check if anchor fully contains the requested range
-        if anchor.range.start <= range.start && anchor.range.end >= range.end {
-            let anchor_size = anchor.range.len();
-            if anchor_size < smallest_containing_size {
-                smallest_containing_size = anchor_size;
-                best_anchor = Some(anchor.id);
-            }
-        }
-    }
-
-    // Fallback to largest overlap if no containing anchor found
-    if best_anchor.is_none() {
-        let mut best_overlap = 0;
-        for anchor in &doc.anchors {
-            let overlap = calculate_range_overlap(range, &anchor.range);
-            if overlap > best_overlap {
-                best_overlap = overlap;
-                best_anchor = Some(anchor.id);
-            }
-        }
-    }
-
-    // If no anchor found, generate a temporary one
-    // This shouldn't happen in normal operation since anchors should be created for all block nodes
-    best_anchor.unwrap_or_else(|| generate_temp_anchor_id(doc, range))
-}
-
-/// Generate a temporary anchor ID for a range (fallback)
-fn generate_temp_anchor_id(doc: &Document, range: &std::ops::Range<usize>) -> AnchorId {
-    let mut hasher = DefaultHasher::new();
-
-    // Hash the range to create a stable temporary ID
-    range.start.hash(&mut hasher);
-    range.end.hash(&mut hasher);
-
-    // Include document version to ensure uniqueness
-    doc.version.hash(&mut hasher);
-
-    AnchorId(hasher.finish() as u128)
 }
 
 /// Transform anchors through a delta operation
@@ -133,157 +64,155 @@ pub(crate) fn transform_anchors(doc: &mut Document, delta: &Delta<RopeInfo>) {
 }
 
 /// Rebind anchors in changed regions to maintain stable block associations
+/// Applies deterministic rebinding when needed to prevent anchor confusion
 pub(crate) fn rebind_anchors_in_changed_regions(
     doc: &mut Document,
     changed: &[std::ops::Range<usize>],
 ) {
-    if changed.is_empty() || doc.tree.is_none() {
-        // Nothing to process
+    if doc.tree.is_none() || changed.is_empty() {
         return;
     }
 
-    // Collect anchors that overlap with changed regions
-    let mut anchors_to_rebind = Vec::new();
-    for (index, anchor) in doc.anchors.iter().enumerate() {
-        for changed_range in changed {
-            // Check if anchor significantly overlaps with changed region
-            // Only rebind if there's substantial overlap, not just touching boundaries
-            let overlap = calculate_range_overlap(&anchor.range, changed_range);
-            if overlap > 0 && overlap > changed_range.len() / 4 {
-                anchors_to_rebind.push(index);
-                break;
+    let tree = doc.tree.as_ref().unwrap();
+    let root_node = tree.root_node();
+
+    // Collect what the new anchor structure would be
+    let mut new_anchor_data = Vec::new();
+    collect_anchor_ranges_recursive(root_node, &mut new_anchor_data);
+
+    // Check if changes affect existing anchor ranges
+    // This catches the anchor confusion case where list items are edited
+    let affects_anchor_content = changed.iter().any(|change_range| {
+        doc.anchors.iter().any(|anchor| {
+            // Check if the change is within an anchor's range (not at the boundaries)
+            change_range.start > anchor.range.start && change_range.start < anchor.range.end
+        })
+    });
+
+    // Check if changes are at the boundaries or outside existing anchors
+    let changes_outside_anchors = changed.iter().all(|change_range| {
+        // Changes that are completely before, after, or at boundaries of all anchors
+        doc.anchors.iter().all(|anchor| {
+            change_range.end <= anchor.range.start || // Before anchor
+            change_range.start >= anchor.range.end || // After anchor  
+            change_range.start == anchor.range.start || // At start boundary
+            change_range.start == anchor.range.end // At end boundary
+        })
+    });
+
+    if affects_anchor_content {
+        // Changes within existing anchors - apply deterministic rebinding
+        apply_deterministic_rebinding(doc, new_anchor_data);
+    } else if new_anchor_data.len() != doc.anchors.len() && !changes_outside_anchors {
+        // Anchor count changed AND changes affect anchor positions - this indicates structural changes
+        apply_deterministic_rebinding(doc, new_anchor_data);
+    }
+    // Otherwise, changes are outside anchors (like inserting before document)
+    // Trust transform_anchors - it already handled the position shifts
+}
+
+/// Apply deterministic rebinding when structural changes have occurred
+fn apply_deterministic_rebinding(
+    doc: &mut Document,
+    new_anchor_data: Vec<(std::ops::Range<usize>, Option<usize>, String)>,
+) {
+    let old_anchors = doc.anchors.clone();
+    doc.anchors.clear();
+
+    // Sort both by position for deterministic processing
+    let mut old_anchors_by_position = old_anchors.clone();
+    old_anchors_by_position.sort_by_key(|a| a.range.start);
+    let mut sorted_new_data = new_anchor_data;
+    sorted_new_data.sort_by_key(|(range, _, _)| range.start);
+
+    // For stable rebinding, keep track of which old anchor IDs have been used
+    let mut used_old_ids = std::collections::HashSet::new();
+
+    // Create new anchors, preserving IDs where possible
+    for (new_index, (new_range, new_node_id, semantic_type)) in
+        sorted_new_data.into_iter().enumerate()
+    {
+        let anchor_id = determine_anchor_id_deterministic(
+            new_node_id,
+            new_index,
+            &old_anchors,
+            &old_anchors_by_position,
+            &new_range,
+            &semantic_type,
+            &mut used_old_ids,
+        );
+
+        let anchor = Anchor {
+            id: anchor_id,
+            range: new_range,
+            node_id: new_node_id,
+        };
+        doc.anchors.push(anchor);
+    }
+}
+
+/// Determine anchor ID using completely deterministic rules
+fn determine_anchor_id_deterministic(
+    new_node_id: Option<usize>,
+    position_index: usize,
+    old_anchors: &[Anchor],
+    old_anchors_by_position: &[Anchor],
+    new_range: &std::ops::Range<usize>,
+    _semantic_type: &str,
+    used_old_ids: &mut std::collections::HashSet<AnchorId>,
+) -> AnchorId {
+    // Rule 1: If we have a node_id, try to find an old anchor with the same node_id
+    if let Some(node_id) = new_node_id {
+        for old_anchor in old_anchors {
+            if old_anchor.node_id == Some(node_id) && !used_old_ids.contains(&old_anchor.id) {
+                used_old_ids.insert(old_anchor.id);
+                return old_anchor.id;
             }
         }
     }
 
-    // For each anchor that needs rebinding, find the best matching node
-    // We need to do this separately to avoid borrowing issues
-    let ranges_to_update: Vec<(usize, Option<std::ops::Range<usize>>)> = {
-        let tree = doc.tree.as_ref().unwrap();
-        let root_node = tree.root_node();
-        anchors_to_rebind
-            .iter()
-            .map(|&anchor_index| {
-                let new_range = find_best_node_for_anchor(doc, root_node, anchor_index);
-                (anchor_index, new_range)
-            })
-            .collect()
-    };
-
-    // Apply the range updates
-    for (anchor_index, new_range) in ranges_to_update {
-        if let Some(range) = new_range {
-            doc.anchors[anchor_index].range = range;
+    // Rule 2: Use positional mapping for unmatched anchors (when node IDs change)
+    // This handles the common case where tree-sitter changes node IDs for unmodified content
+    if position_index < old_anchors_by_position.len() {
+        let candidate_anchor = &old_anchors_by_position[position_index];
+        if !used_old_ids.contains(&candidate_anchor.id) {
+            used_old_ids.insert(candidate_anchor.id);
+            return candidate_anchor.id;
         }
     }
 
-    // Remove anchors that couldn't be rebound properly
-    let doc_len = doc.len();
-    doc.anchors
-        .retain(|anchor| anchor.range.start < anchor.range.end && anchor.range.end <= doc_len);
-
-    // Create new anchors for any new blocks that appear in changed regions
-    if let Some(ref tree) = doc.tree {
-        let root_node = tree.root_node();
-        let mut new_nodes = Vec::new();
-        collect_new_block_nodes_in_regions(root_node, changed, &mut new_nodes);
-
-        for node in new_nodes {
-            let node_range = node.byte_range();
-
-            // Check if we already have an anchor for this range
-            let has_existing_anchor = doc.anchors.iter().any(|anchor| {
-                // Consider ranges that substantially overlap as already covered
-                calculate_range_overlap(&anchor.range, &node_range) > node_range.len() / 2
-            });
-
-            if !has_existing_anchor {
-                let anchor_id = generate_anchor_id(doc);
-                let anchor = Anchor {
-                    id: anchor_id,
-                    range: node_range,
-                    node_id: None, // Dynamic anchors don't have static node mapping
-                };
-                doc.anchors.push(anchor);
-            }
-        }
-    }
+    // Rule 3: Generate new ID if no good match found
+    generate_dynamic_anchor_id(position_index, new_range.clone())
 }
 
-/// Find the best node to rebind an anchor to
-fn find_best_node_for_anchor(
-    doc: &Document,
-    root_node: tree_sitter::Node,
-    anchor_index: usize,
-) -> Option<std::ops::Range<usize>> {
-    let anchor = &doc.anchors[anchor_index];
-    let mut best_node = None;
-    let mut best_overlap = 0;
-
-    // Search for the node that best overlaps with the anchor's current range
-    find_best_overlap_recursive(root_node, &anchor.range, &mut best_node, &mut best_overlap);
-
-    best_node.map(|node| node.byte_range())
-}
-
-/// Recursively search for the node with the best overlap with a given range
-fn find_best_overlap_recursive<'a>(
-    node: tree_sitter::Node<'a>,
-    target_range: &std::ops::Range<usize>,
-    best_node: &mut Option<tree_sitter::Node<'a>>,
-    best_overlap: &mut usize,
+/// Collect anchor ranges, node IDs, and semantic type from the tree
+fn collect_anchor_ranges_recursive(
+    node: tree_sitter::Node,
+    ranges: &mut Vec<(std::ops::Range<usize>, Option<usize>, String)>,
 ) {
     let node_kind = node.kind();
-    let is_block_node = matches!(
+    let should_create_anchor = matches!(
         node_kind,
-        "atx_heading" | "list_item" | "paragraph" | "fenced_code_block" | "indented_code_block"
+        "atx_heading" | "list_item" | "fenced_code_block" | "indented_code_block"
     );
 
-    if is_block_node {
-        let node_range = node.byte_range();
-        let overlap = calculate_range_overlap(target_range, &node_range);
+    // Don't create anchors for paragraphs - they're too generic and cause issues
+    // Only create anchors for explicit structural elements
 
-        if overlap > *best_overlap {
-            *best_overlap = overlap;
-            *best_node = Some(node);
-        }
+    if should_create_anchor && !node.byte_range().is_empty() {
+        let anchor_range = if node_kind == "list_item" {
+            calculate_list_item_own_range(&node)
+        } else {
+            node.byte_range()
+        };
+
+        ranges.push((anchor_range, Some(node.id()), node_kind.to_string()));
     }
 
-    // Search children
+    // Recursively process children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        find_best_overlap_recursive(child, target_range, best_node, best_overlap);
-    }
-}
-
-/// Recursively collect new block nodes that appear in changed regions
-fn collect_new_block_nodes_in_regions<'a>(
-    node: tree_sitter::Node<'a>,
-    changed: &[std::ops::Range<usize>],
-    new_nodes: &mut Vec<tree_sitter::Node<'a>>,
-) {
-    let node_kind = node.kind();
-    let is_block_node = matches!(
-        node_kind,
-        "atx_heading" | "list_item" | "paragraph" | "fenced_code_block" | "indented_code_block"
-    );
-
-    if is_block_node {
-        let node_range = node.byte_range();
-
-        // Check if this node is in a changed region
-        for changed_range in changed {
-            if node_range.start < changed_range.end && node_range.end > changed_range.start {
-                new_nodes.push(node);
-                break;
-            }
-        }
-    }
-
-    // Process children
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_new_block_nodes_in_regions(child, changed, new_nodes);
+        collect_anchor_ranges_recursive(child, ranges);
     }
 }
 
@@ -299,26 +228,64 @@ pub fn create_anchors_from_tree(doc: &mut Document) {
     }
 }
 
-/// Recursively collect anchors for block-level nodes in the tree
+/// Create anchors for any new blocks that don't have anchors yet
+pub fn create_anchors_for_new_blocks(doc: &mut Document) {
+    if doc.tree.is_none() {
+        return;
+    }
+
+    let tree = doc.tree.as_ref().unwrap();
+    let root_node = tree.root_node();
+    let mut new_block_anchors = Vec::new();
+    collect_anchors_recursive(root_node, &mut new_block_anchors);
+
+    // Find blocks that don't have anchors yet
+    for new_anchor in new_block_anchors {
+        // Check if this range already has an anchor - be more sophisticated about overlap detection
+        let has_anchor = doc.anchors.iter().any(|existing_anchor| {
+            // Check for node ID match (most reliable)
+            if existing_anchor.node_id.is_some() && existing_anchor.node_id == new_anchor.node_id {
+                return true;
+            }
+
+            // Check for overlapping ranges (handles cases where ranges shift slightly)
+            existing_anchor.range.start < new_anchor.range.end
+                && new_anchor.range.start < existing_anchor.range.end
+        });
+
+        if !has_anchor {
+            // Add this new anchor
+            doc.anchors.push(new_anchor);
+        }
+    }
+}
+
+/// Recursively collect anchors for block-level nodes in the tree  
 fn collect_anchors_recursive(node: tree_sitter::Node, anchors: &mut Vec<Anchor>) {
-    // Only create anchors for block-level markdown elements that will appear in render blocks
     let node_kind = node.kind();
     let should_create_anchor = matches!(
         node_kind,
         "atx_heading" | "list_item" | "fenced_code_block" | "indented_code_block"
     );
 
-    // For paragraphs, only create anchors if they are not inside list items
-    let should_create_anchor = should_create_anchor
-        || (node_kind == "paragraph" && node.parent().map(|p| p.kind()) != Some("list_item"));
+    // Don't create anchors for paragraphs - they're too generic and cause issues
+    // Only create anchors for explicit structural elements
 
     if should_create_anchor && !node.byte_range().is_empty() {
-        let anchor_id = generate_static_anchor_id(anchors.len(), node.byte_range());
+        // CRITICAL FIX: For list_item nodes, only use the range of the first line
+        // to avoid overlapping with child list items
+        let anchor_range = if node_kind == "list_item" {
+            calculate_list_item_own_range(&node)
+        } else {
+            node.byte_range()
+        };
+
+        let anchor_id = generate_static_anchor_id(anchors.len(), anchor_range.clone());
         let node_id = node.id();
 
         let anchor = Anchor {
             id: anchor_id,
-            range: node.byte_range(),
+            range: anchor_range,
             node_id: Some(node_id),
         };
 
@@ -332,24 +299,24 @@ fn collect_anchors_recursive(node: tree_sitter::Node, anchors: &mut Vec<Anchor>)
     }
 }
 
-/// Generate a unique anchor ID
-fn generate_anchor_id(doc: &Document) -> AnchorId {
-    let mut hasher = DefaultHasher::new();
+/// Calculate the range for just the list item's own content (excluding children)
+fn calculate_list_item_own_range(node: &tree_sitter::Node) -> std::ops::Range<usize> {
+    let full_range = node.byte_range();
 
-    // Include current time to ensure uniqueness
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    timestamp.hash(&mut hasher);
+    // For a list_item, find the first child list (if any) and stop there
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "list" {
+            // The list item's own content ends where the child list begins
+            return full_range.start..child.byte_range().start;
+        }
+    }
 
-    // Include current anchor count to avoid collisions within same timestamp
-    doc.anchors.len().hash(&mut hasher);
-
-    // Include current document version
-    doc.version.hash(&mut hasher);
-
-    AnchorId(hasher.finish() as u128)
+    // No child list found - but still need to be careful about newlines
+    // Look for the end of the first line
+    // This is a simplified version - ideally we'd parse the actual text
+    // but for now, assume the list item content is just the first part
+    full_range
 }
 
 /// Generate a static anchor ID for initial tree creation
@@ -364,6 +331,22 @@ fn generate_static_anchor_id(index: usize, byte_range: std::ops::Range<usize>) -
     index.hash(&mut hasher);
 
     // Include byte range to ensure uniqueness across different content
+    byte_range.start.hash(&mut hasher);
+    byte_range.end.hash(&mut hasher);
+
+    AnchorId(hasher.finish() as u128)
+}
+
+/// Generate a dynamic anchor ID for new blocks created during editing
+fn generate_dynamic_anchor_id(index: usize, byte_range: std::ops::Range<usize>) -> AnchorId {
+    let mut hasher = DefaultHasher::new();
+
+    // Include a different magic number to differentiate from static IDs
+    let magic = 0xfedcba0987654321u64;
+    magic.hash(&mut hasher);
+
+    // Include index and range for uniqueness
+    index.hash(&mut hasher);
     byte_range.start.hash(&mut hasher);
     byte_range.end.hash(&mut hasher);
 
@@ -405,21 +388,46 @@ mod tests {
 
         let original_anchors = doc.anchors.clone();
 
+        // Debug: print original anchors
+        eprintln!("Original anchors:");
+        for (i, anchor) in original_anchors.iter().enumerate() {
+            let content = doc.slice_to_cow(anchor.range.clone());
+            eprintln!(
+                "  [{}] id={:?} range={:?} content={:?}",
+                i, anchor.id, anchor.range, content
+            );
+        }
+
         // Insert text at the beginning
         doc.apply(Cmd::InsertText {
             at: 0,
             text: "Prefix: ".to_string(),
         });
 
-        // Check that the original anchors still exist and have been transformed correctly
-        let insert_len = "Prefix: ".len();
-        for original in &original_anchors {
-            let current = doc
-                .anchors
-                .iter()
-                .find(|a| a.id == original.id)
-                .expect("Original anchor ID should still exist");
+        // Debug: print anchors after transformation
+        eprintln!("After transformation:");
+        for (i, anchor) in doc.anchors.iter().enumerate() {
+            let content = doc.slice_to_cow(anchor.range.clone());
+            eprintln!(
+                "  [{}] id={:?} range={:?} content={:?}",
+                i, anchor.id, anchor.range, content
+            );
+        }
 
+        // Check correct anchor preservation behavior:
+        // When inserting at the beginning, all existing anchors should be shifted by the insert length
+        let insert_len = "Prefix: ".len();
+
+        assert_eq!(
+            doc.anchors.len(),
+            original_anchors.len(),
+            "Should preserve all original anchors"
+        );
+
+        // All anchors should be shifted by the insertion length
+        for (i, original) in original_anchors.iter().enumerate() {
+            let current = &doc.anchors[i];
+            assert_eq!(current.id, original.id, "Anchor ID should be preserved");
             assert_eq!(
                 current.range.start,
                 original.range.start + insert_len,
@@ -893,6 +901,383 @@ mod tests {
                 content.contains("New heading") || content.contains("New item"),
                 "Anchor should cover some part of the new content"
             );
+        }
+    }
+
+    #[test]
+    fn test_anchor_generation_with_complex_list_items_no_overlaps() {
+        // CRITICAL TEST: Anchors must never overlap, even with complex list content
+        // This test covers multiline list items, nested lists, and ensures proper anchor coverage
+        let text = r#"- Simple item
+- Multi-line item that has
+  a hard wrap in the middle
+  - Nested item under multiline parent
+  - Another nested item
+- Another simple item
+- Final item with
+  multiple lines and
+  even more content
+  - Deep nested item"#;
+
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        // Debug: print all anchors for inspection
+        println!("Document text:\n{}", doc.text());
+        println!("Generated anchors:");
+        for (i, anchor) in doc.anchors.iter().enumerate() {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            println!("  Anchor {}: {:?} -> {:?}", i, anchor.range, content);
+        }
+
+        // REQUIREMENT 1: No two anchors should ever overlap
+        for (i, anchor_a) in doc.anchors.iter().enumerate() {
+            for (j, anchor_b) in doc.anchors.iter().enumerate() {
+                if i != j {
+                    let overlap = calculate_range_overlap(&anchor_a.range, &anchor_b.range);
+                    assert_eq!(
+                        overlap, 0,
+                        "Anchors must never overlap! Anchor {} {:?} overlaps with anchor {} {:?} by {} bytes",
+                        i, anchor_a.range, j, anchor_b.range, overlap
+                    );
+                }
+            }
+        }
+
+        // REQUIREMENT 2: Each list item should get exactly one anchor covering only its own content
+        // We should have anchors for:
+        // - Simple item
+        // - Multi-line item that has (but NOT its nested children)
+        // - Nested item under multiline parent
+        // - Another nested item
+        // - Another simple item
+        // - Final item with (but NOT its nested children)
+        // - Deep nested item
+        assert!(
+            doc.anchors.len() >= 7,
+            "Should have at least 7 anchors for the distinct list items, got {}",
+            doc.anchors.len()
+        );
+
+        // REQUIREMENT 3: Each anchor should contain content from only one logical block
+        for (i, anchor) in doc.anchors.iter().enumerate() {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            let content_lines: Vec<&str> = content.lines().collect();
+
+            // For list items, the anchor should not contain nested list markers
+            if content.trim_start().starts_with('-') {
+                // Count how many list markers are in this anchor's content
+                let list_marker_count = content_lines
+                    .iter()
+                    .filter(|line| line.trim_start().starts_with('-'))
+                    .count();
+
+                assert_eq!(
+                    list_marker_count, 1,
+                    "Anchor {} should contain exactly one list marker (its own), but found {} in content: {:?}",
+                    i, list_marker_count, content
+                );
+            }
+        }
+
+        // REQUIREMENT 4: Multiline list items should have anchors covering all their lines
+        // (but stopping before any nested content)
+        let multiline_anchors: Vec<_> = doc
+            .anchors
+            .iter()
+            .filter(|anchor| {
+                let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+                content.contains("Multi-line item") || content.contains("Final item with")
+            })
+            .collect();
+
+        assert!(
+            !multiline_anchors.is_empty(),
+            "Should have anchors for multiline list items"
+        );
+
+        for anchor in multiline_anchors {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            if content.contains("Multi-line item") {
+                // Should contain the multiline content but not nested items
+                assert!(content.contains("a hard wrap in the middle"));
+                assert!(!content.contains("Nested item under"));
+            }
+            if content.contains("Final item with") {
+                // Should contain the multiline content but not nested items
+                assert!(content.contains("multiple lines"));
+                assert!(content.contains("even more content"));
+                assert!(!content.contains("Deep nested item"));
+            }
+        }
+
+        // REQUIREMENT 5: All anchors should be within document bounds and non-empty
+        for (i, anchor) in doc.anchors.iter().enumerate() {
+            assert!(
+                anchor.range.start < anchor.range.end,
+                "Anchor {} should have valid range",
+                i
+            );
+            assert!(
+                anchor.range.end <= doc.text().len(),
+                "Anchor {} should be within document bounds",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn test_anchor_generation_raw_node_ranges_show_overlap_problem() {
+        // This test demonstrates what would happen if we used raw node.byte_range()
+        // It shows the fundamental flaw we're trying to fix
+        let text = r#"- Parent item with content
+  - Child item
+- Another parent"#;
+
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+
+        // Parse the document to get tree-sitter nodes
+        if let Some(ref tree) = doc.tree {
+            let root_node = tree.root_node();
+            let mut raw_ranges = Vec::new();
+
+            // Collect what the raw node ranges would be for list_item nodes
+            collect_raw_list_item_ranges(root_node, &mut raw_ranges);
+
+            println!("Raw list_item node ranges (demonstrating the overlap problem):");
+            for (i, range) in raw_ranges.iter().enumerate() {
+                let content = doc.slice_to_cow(range.clone()).to_string();
+                println!("  Raw range {}: {:?} -> {:?}", i, range, content);
+            }
+
+            // Show that raw ranges would overlap
+            if raw_ranges.len() >= 2 {
+                let parent_range = &raw_ranges[0]; // "- Parent item with content\n  - Child item\n"
+                let child_range = &raw_ranges[1]; // "- Child item\n"
+
+                let overlap = calculate_range_overlap(parent_range, child_range);
+                println!("Overlap between parent and child: {} bytes", overlap);
+
+                // This would be the problem we're solving - raw ranges DO overlap
+                assert!(
+                    overlap > 0,
+                    "Raw node ranges should overlap (this demonstrates the problem we're fixing)"
+                );
+            }
+        }
+
+        // Now test that our actual anchor generation fixes this
+        doc.create_anchors_from_tree();
+
+        println!("Fixed anchor ranges (non-overlapping):");
+        for (i, anchor) in doc.anchors.iter().enumerate() {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            println!("  Anchor {}: {:?} -> {:?}", i, anchor.range, content);
+        }
+
+        // Verify our fix produces non-overlapping anchors
+        for (i, anchor_a) in doc.anchors.iter().enumerate() {
+            for (j, anchor_b) in doc.anchors.iter().enumerate() {
+                if i != j {
+                    let overlap = calculate_range_overlap(&anchor_a.range, &anchor_b.range);
+                    assert_eq!(
+                        overlap, 0,
+                        "Fixed anchors must not overlap! Anchor {} {:?} overlaps with anchor {} {:?}",
+                        i, anchor_a.range, j, anchor_b.range
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_anchor_generation_edge_cases() {
+        // Test edge cases for list item anchor generation
+        let text = r#"- Simple item
+- Item with inline `code` and **bold** text
+  More content on second line
+  
+  Even a paragraph break
+  - Nested after paragraph
+- Item ending with spaces   
+- Item with trailing newlines
+
+  - Nested after blank line"#;
+
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        println!("Edge cases anchor ranges:");
+        for (i, anchor) in doc.anchors.iter().enumerate() {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            println!(
+                "  Anchor {}: {:?} -> {:?}",
+                i,
+                anchor.range,
+                content.replace('\n', "\\n")
+            );
+        }
+
+        // Verify no overlaps
+        for (i, anchor_a) in doc.anchors.iter().enumerate() {
+            for (j, anchor_b) in doc.anchors.iter().enumerate() {
+                if i != j {
+                    let overlap = calculate_range_overlap(&anchor_a.range, &anchor_b.range);
+                    assert_eq!(
+                        overlap, 0,
+                        "Anchors must not overlap! Anchor {} {:?} overlaps with anchor {} {:?}",
+                        i, anchor_a.range, j, anchor_b.range
+                    );
+                }
+            }
+        }
+
+        // Verify that multiline items include all their content up to nested items
+        let multiline_anchors: Vec<_> = doc
+            .anchors
+            .iter()
+            .filter(|anchor| {
+                let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+                content.contains("inline `code`") || content.contains("trailing newlines")
+            })
+            .collect();
+
+        for anchor in multiline_anchors {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            if content.contains("inline `code`") {
+                // Should include formatted text and multiple lines but not nested items
+                assert!(content.contains("**bold** text"));
+                assert!(content.contains("More content on second line"));
+                assert!(content.contains("Even a paragraph break"));
+                assert!(!content.contains("Nested after paragraph"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_list_item_own_range_calculation_robustness() {
+        // Test the robustness of calculate_list_item_own_range with tricky cases
+        let text = r#"- Item without nested content
+- Item with nested content
+  - Child 1
+  - Child 2
+- Item with multiple nested lists
+  - First nested list
+    - Deep nest
+  - Second item in first list
+  
+  - Second nested list after gap
+    - Another deep nest
+- Final simple item"#;
+
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+
+        // Test the raw ranges to see the problem space
+        if let Some(ref tree) = doc.tree {
+            let root_node = tree.root_node();
+            let mut raw_ranges = Vec::new();
+            collect_raw_list_item_ranges(root_node, &mut raw_ranges);
+
+            println!("Raw list_item ranges (showing overlap problem):");
+            for (i, range) in raw_ranges.iter().enumerate() {
+                let content = doc.slice_to_cow(range.clone()).to_string();
+                println!(
+                    "  Raw {}: {:?} -> {:?}",
+                    i,
+                    range,
+                    content.replace('\n', "\\n")
+                );
+            }
+
+            // Find overlaps in raw ranges
+            let mut overlap_found = false;
+            for (i, range_a) in raw_ranges.iter().enumerate() {
+                for (j, range_b) in raw_ranges.iter().enumerate() {
+                    if i != j {
+                        let overlap = calculate_range_overlap(range_a, range_b);
+                        if overlap > 0 {
+                            overlap_found = true;
+                            println!(
+                                "  Raw overlap: {} and {} overlap by {} bytes",
+                                i, j, overlap
+                            );
+                        }
+                    }
+                }
+            }
+            assert!(overlap_found, "Raw ranges should show overlap problem");
+        }
+
+        // Now test that our anchors fix the overlaps
+        doc.create_anchors_from_tree();
+
+        println!("Fixed anchor ranges:");
+        for (i, anchor) in doc.anchors.iter().enumerate() {
+            let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+            println!(
+                "  Anchor {}: {:?} -> {:?}",
+                i,
+                anchor.range,
+                content.replace('\n', "\\n")
+            );
+        }
+
+        // Verify no overlaps in fixed anchors
+        for (i, anchor_a) in doc.anchors.iter().enumerate() {
+            for (j, anchor_b) in doc.anchors.iter().enumerate() {
+                if i != j {
+                    let overlap = calculate_range_overlap(&anchor_a.range, &anchor_b.range);
+                    assert_eq!(
+                        overlap, 0,
+                        "Fixed anchors must not overlap! Anchor {} and {} overlap by {} bytes",
+                        i, j, overlap
+                    );
+                }
+            }
+        }
+
+        // Verify that parent items stop before their first nested list
+        // The second item should include "Item with nested content\n  " but not the children
+        let parent_with_nested: Vec<_> = doc
+            .anchors
+            .iter()
+            .filter(|anchor| {
+                let content = doc.slice_to_cow(anchor.range.clone()).to_string();
+                content.contains("Item with nested content")
+            })
+            .collect();
+
+        assert_eq!(
+            parent_with_nested.len(),
+            1,
+            "Should find exactly one anchor for 'Item with nested content'"
+        );
+        let parent_content = doc
+            .slice_to_cow(parent_with_nested[0].range.clone())
+            .to_string();
+        assert!(
+            !parent_content.contains("Child 1"),
+            "Parent anchor should not contain child content"
+        );
+        assert!(
+            !parent_content.contains("Child 2"),
+            "Parent anchor should not contain child content"
+        );
+    }
+
+    // Helper function for testing - shows what raw node ranges would be
+    fn collect_raw_list_item_ranges(
+        node: tree_sitter::Node,
+        ranges: &mut Vec<std::ops::Range<usize>>,
+    ) {
+        if node.kind() == "list_item" {
+            // This is what would happen if we used raw node.byte_range() - it includes children!
+            ranges.push(node.byte_range());
+        }
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            collect_raw_list_item_ranges(child, ranges);
         }
     }
 }

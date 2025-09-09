@@ -7,9 +7,27 @@ fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
     // This test MUST FAIL initially - it reproduces the exact bug from diagnostic output:
     // "indented 1" and "indented 1.2" both getting anchor ID 10032346120884770342
 
-    // Use the actual runtime file that shows the collision
-    let actual_file_content = std::fs::read_to_string("/home/tim/tmp/neuraxis-debug/bullets.md")
-        .expect("Should be able to read the actual runtime file that shows the bug");
+    // Use embedded test data that reproduces the collision scenario
+    // This represents the content that previously caused the collision
+    let actual_file_content = r#"# fresh tab indents
+
+- indented 1
+	- indented 1.1
+	- indented 1.2
+
+# indented 2
+
+- indented 2
+    - indented 2.1
+    - indented 2.2
+
+# other content
+
+- indented 1
+    - indented 1.1 hoooooray  
+    - indented 1.2
+        - indented 1.2.1 - then clicked this
+"#;
 
     let mut doc = Document::from_bytes(actual_file_content.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
