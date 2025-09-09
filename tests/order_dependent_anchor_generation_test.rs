@@ -270,13 +270,13 @@ fn test_specific_collision_scenario() {
     // The key test: No two different contents should share an anchor ID
     let mut id_to_content = std::collections::HashMap::new();
     for block in &snapshot.blocks {
-        if let Some(existing_content) = id_to_content.get(&block.id.0) {
-            if existing_content != &block.content {
-                panic!(
-                    "SPECIFIC COLLISION REPRODUCED: Anchor ID {} shared by '{}' and '{}'",
-                    block.id.0, existing_content, block.content
-                );
-            }
+        if let Some(existing_content) = id_to_content.get(&block.id.0)
+            && existing_content != &block.content
+        {
+            panic!(
+                "SPECIFIC COLLISION REPRODUCED: Anchor ID {} shared by '{}' and '{}'",
+                block.id.0, existing_content, block.content
+            );
         }
         id_to_content.insert(block.id.0, block.content.clone());
     }

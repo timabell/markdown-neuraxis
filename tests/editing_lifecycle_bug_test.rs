@@ -24,7 +24,7 @@ fn test_editing_lifecycle_causes_anchor_instability() {
     // Step 2: Simulate UI interactions that might trigger anchor regeneration
     // This mimics what happens when you click on different items
 
-    let target_contents = vec!["indented 1", "indented 1.2", "indented 1.1"];
+    let target_contents = ["indented 1", "indented 1.2", "indented 1.1"];
 
     for (cycle, target_content) in target_contents.iter().enumerate() {
         println!(
@@ -55,7 +55,7 @@ fn test_editing_lifecycle_causes_anchor_instability() {
         for block in &cycle_snapshot.blocks {
             anchor_to_contents
                 .entry(block.id.0)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(block.content.clone());
         }
 
@@ -84,13 +84,13 @@ fn test_editing_lifecycle_causes_anchor_instability() {
 
         for (cycle_name, cycle_mapping) in anchor_history.iter().skip(1) {
             for (content, initial_id) in initial {
-                if let Some(current_id) = cycle_mapping.get(content) {
-                    if initial_id != current_id {
-                        panic!(
-                            "ANCHOR INSTABILITY DETECTED: '{}' had anchor_id {} initially but {} in {}",
-                            content, initial_id, current_id, cycle_name
-                        );
-                    }
+                if let Some(current_id) = cycle_mapping.get(content)
+                    && initial_id != current_id
+                {
+                    panic!(
+                        "ANCHOR INSTABILITY DETECTED: '{}' had anchor_id {} initially but {} in {}",
+                        content, initial_id, current_id, cycle_name
+                    );
                 }
             }
         }

@@ -197,7 +197,7 @@ fn test_document_clone_preserves_functionality() {
 
     // TEST: The edit should work without crashing
     assert!(
-        modified_snapshot.blocks.len() > 0,
+        !modified_snapshot.blocks.is_empty(),
         "Modified document should have blocks"
     );
 

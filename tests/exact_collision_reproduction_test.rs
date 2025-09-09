@@ -166,7 +166,7 @@ fn test_combined_document_collision_reproduction() {
     for block in &snapshot.blocks {
         anchor_to_blocks
             .entry(block.id.0)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(block.content.clone());
     }
 

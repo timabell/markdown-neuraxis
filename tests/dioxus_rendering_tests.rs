@@ -1,7 +1,5 @@
 //! Dioxus Component Rendering Tests - Testing actual UI component behavior
 
-use dioxus::prelude::*;
-use dioxus_ssr::render_element;
 use markdown_neuraxis::editing::Document;
 
 /// Test helper to create nested list document

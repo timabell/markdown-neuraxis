@@ -18,7 +18,7 @@ fn test_different_content_same_anchor_id_bug() {
     for block in &snapshot.blocks {
         anchor_to_contents
             .entry(block.id.0)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(block.content.clone());
     }
 

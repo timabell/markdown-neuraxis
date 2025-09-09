@@ -1,8 +1,6 @@
 //! UI Component TDD Tests - Narrowing down textarea bug location
 
-use dioxus::prelude::*;
 use markdown_neuraxis::editing::{AnchorId, Document};
-use markdown_neuraxis::ui::components::main_panel::RenderListItem;
 use std::collections::HashSet;
 
 /// Test helper to create a nested list document
