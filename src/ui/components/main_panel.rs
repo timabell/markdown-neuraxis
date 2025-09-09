@@ -300,33 +300,24 @@ pub fn RenderListItem(
     focused_anchor_id: Signal<Option<AnchorId>>,
     document: Document,
 ) -> Element {
-    // DIAGNOSTIC: Check document anchor state at component entry
-    if item.block.content == "indented 1.1" || item.block.content == "indented 1" {
+    // SURGICAL DIAGNOSTIC: Track just the problematic items
+    if item.block.content.contains("indented 1") {
         eprintln!(
-            "RENDER COMPONENT: '{}' thinks its id={:?}",
-            item.block.content, item.block.id
+            "RENDER: '{}' id={:?} depth={}",
+            item.block.content, item.block.id, item.block.depth
         );
-        eprintln!("  Document has {} anchors:", document.anchors.len());
-        for (i, anchor) in document.anchors.iter().enumerate() {
-            eprintln!(
-                "    [{}] anchor_id={} range={:?}",
-                i, anchor.id.0, anchor.range
-            );
-        }
     }
 
     let is_focused = focused_anchor_id.read().as_ref() == Some(&item.block.id);
 
-    // SURGICAL DIAGNOSTIC: Only log when component thinks it's focused
-    if is_focused {
+    // SURGICAL DIAGNOSTIC: Only log focused items
+    if is_focused && item.block.content.contains("indented 1") {
         eprintln!(
-            "FOCUSED RENDER: '{}' id={:?} depth={} signal={:?}",
+            "FOCUSED: '{}' id={:?} signal={:?}",
             item.block.content,
             item.block.id,
-            item.block.depth,
             focused_anchor_id.read().as_ref()
         );
-        eprintln!("TEXTAREA RENDER: {}", item.block.content);
     }
 
     rsx! {
@@ -354,9 +345,10 @@ pub fn RenderListItem(
                         let block = item.block.clone();
                         move |evt: MouseEvent| {
                             evt.stop_propagation();
-                            // DIAGNOSTIC: Track click events with full context
-                            eprintln!("CLICK: '{}' id={:?} depth={}",
-                                    block.content, block.id, block.depth);
+                            // DIAGNOSTIC: Track clicks on problematic items
+                            if block.content.contains("indented 1") {
+                                eprintln!("CLICK: '{}' id={:?}", block.content, block.id);
+                            }
                             // Use the centralized focus system
                             on_focus.call(block.clone());
                         }
