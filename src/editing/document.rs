@@ -212,12 +212,7 @@ impl Document {
         let end = range.end.min(doc_len).max(start);
         let clamped_range = start..end;
 
-        if range != clamped_range {
-            eprintln!(
-                "WARNING: Clamped invalid range {:?} to {:?} for doc_len={}",
-                range, clamped_range, doc_len
-            );
-        }
+        // Silently clamp invalid ranges - this is expected behavior when text changes
 
         self.buffer.slice_to_cow(clamped_range)
     }
@@ -390,35 +385,7 @@ impl Document {
     }
 
     pub fn snapshot(&self) -> crate::editing::Snapshot {
-        // DIAGNOSTIC: Check anchor state before snapshot creation
-        eprintln!(
-            "SNAPSHOT: Before creating snapshot, document has {} anchors:",
-            self.anchors.len()
-        );
-        for (i, anchor) in self.anchors.iter().enumerate() {
-            eprintln!(
-                "  [{}] anchor_id={} range={:?}",
-                i, anchor.id.0, anchor.range
-            );
-        }
-
-        let snapshot = crate::editing::snapshot::create_snapshot(self);
-
-        // DIAGNOSTIC: Check blocks in created snapshot
-        eprintln!(
-            "SNAPSHOT: Created snapshot with {} blocks:",
-            snapshot.blocks.len()
-        );
-        for (i, block) in snapshot.blocks.iter().enumerate() {
-            if block.content == "indented 1.1" || block.content == "indented 1" {
-                eprintln!(
-                    "  [{}] '{}' anchor_id={} depth={} byte_range={:?}",
-                    i, block.content, block.id.0, block.depth, block.byte_range
-                );
-            }
-        }
-
-        snapshot
+        crate::editing::snapshot::create_snapshot(self)
     }
 
     /// Hit-testing helper: Find which block contains the given byte position

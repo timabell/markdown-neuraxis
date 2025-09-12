@@ -6,6 +6,7 @@
       "Bash(cat:*)",
       "Bash(mkdir:*)",
       "Bash(grep:*)",
+      "Bash(git diff:*)",
       "Bash(./lint.sh)",
       "Bash(cargo build)",
       "Bash(cargo test)",

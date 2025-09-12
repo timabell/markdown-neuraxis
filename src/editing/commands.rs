@@ -3,6 +3,9 @@ use xi_rope::{Delta, Rope, RopeInfo};
 
 use crate::editing::{Document, document::Marker};
 
+/// Indentation string for list items (2 spaces)
+const INDENT_STR: &str = "  ";
+
 /// Commands that can be applied to the document
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cmd {
@@ -36,25 +39,37 @@ pub enum Cmd {
 pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
     match cmd {
         Cmd::InsertText { at, text } => {
-            let mut builder = Builder::new(doc.len());
+            let doc_len = doc.len();
+            let clamped_at = (*at).min(doc_len);
+            let mut builder = Builder::new(doc_len);
             let insert_rope = Rope::from(text);
-            builder.replace(*at..*at, insert_rope);
+            builder.replace(clamped_at..clamped_at, insert_rope);
             builder.build()
         }
         Cmd::DeleteRange { range } => {
-            let mut builder = Builder::new(doc.len());
-            builder.delete(range.clone());
+            let doc_len = doc.len();
+            let clamped_start = range.start.min(doc_len);
+            let clamped_end = range.end.min(doc_len).max(clamped_start);
+            let clamped_range = clamped_start..clamped_end;
+            let mut builder = Builder::new(doc_len);
+            builder.delete(clamped_range);
             builder.build()
         }
         Cmd::ReplaceRange { range, text } => {
-            let mut builder = Builder::new(doc.len());
+            let doc_len = doc.len();
+            let clamped_start = range.start.min(doc_len);
+            let clamped_end = range.end.min(doc_len).max(clamped_start);
+            let clamped_range = clamped_start..clamped_end;
+            let mut builder = Builder::new(doc_len);
             let replace_rope = Rope::from(text);
-            builder.replace(range.clone(), replace_rope);
+            builder.replace(clamped_range, replace_rope);
             builder.build()
         }
         Cmd::SplitListItem { at } => {
+            let doc_len = doc.len();
+            let clamped_at = (*at).min(doc_len);
             // Find the start of the current line
-            let line_start = find_line_start(doc, *at);
+            let line_start = find_line_start(doc, clamped_at);
             let line_text = get_line_at(doc, line_start);
 
             // Extract indent and marker from current line
@@ -71,19 +86,18 @@ pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
             }
 
             // Create insertion delta
-            let mut builder = Builder::new(doc.len());
+            let mut builder = Builder::new(doc_len);
             let insert_rope = Rope::from(insert_text);
-            builder.replace(*at..*at, insert_rope);
+            builder.replace(clamped_at..clamped_at, insert_rope);
             builder.build()
         }
         Cmd::IndentLines { range } => {
-            let indent_str = "  "; // 2 spaces for indent
-            modify_line_starts(doc, range, |_line| Some(indent_str.to_string()))
+            modify_line_starts(doc, range, |_line| Some(INDENT_STR.to_string()))
         }
         Cmd::OutdentLines { range } => {
             modify_line_starts(doc, range, |line| {
                 // Remove up to 2 spaces from the start
-                if line.starts_with("  ") || line.starts_with(" ") {
+                if line.starts_with(INDENT_STR) || line.starts_with(" ") {
                     Some(String::new()) // Will remove leading space(s)
                 } else {
                     None // No change
@@ -315,8 +329,8 @@ fn modify_line_starts(
         {
             if prefix.is_empty() {
                 // Removing indentation - delete some characters at line start
-                let skip_len = if line.starts_with("  ") {
-                    2
+                let skip_len = if line.starts_with(INDENT_STR) {
+                    INDENT_STR.len()
                 } else if line.starts_with(" ") {
                     1
                 } else {

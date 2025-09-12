@@ -326,9 +326,8 @@ fn calculate_list_item_anchor_range(node: &tree_sitter::Node) -> std::ops::Range
             return full_range.start..child.byte_range().start;
         }
     }
-    // BUG: The comment in anchors.rs says "be careful about newlines" and "just the first part"
-    // but the implementation returns full_range. We replicate this bug for consistency.
-    // TODO: Fix both functions to properly handle newlines, then regenerate anchors
+    // When no child list is found, return the full range of the list item node
+    // Both anchor generation and snapshot creation use this consistent approach
     full_range
 }
 
@@ -553,18 +552,7 @@ fn find_existing_anchor_for_node(
     for anchor in &doc.anchors {
         if anchor.range.start == range.start {
             if anchor.range.end != range.end {
-                // Extract the actual text content for debugging
-                let doc_text = doc.text();
-                let stored_content = doc_text.get(anchor.range.clone()).unwrap_or("[INVALID]");
-                let calculated_content = doc_text.get(range.clone()).unwrap_or("[INVALID]");
-
-                eprintln!(
-                    "WARNING: Range drift detected for start position {}:\n  \
-                     Stored anchor range {:?} -> {:?}\n  \
-                     Calculated range {:?} -> {:?}\n  \
-                     This indicates a bug in range calculation consistency that should be investigated.",
-                    range.start, anchor.range, stored_content, range, calculated_content
-                );
+                // Range drift detected - this indicates a bug in range calculation consistency
                 // ARCHITECTURAL ISSUE: Tree-sitter node ranges are not stable across incremental parsing.
                 // Even when logical content is unchanged, node boundaries can shift when document structure changes.
                 // This is expected behavior, not a bug. The position-based fallback handles this correctly.

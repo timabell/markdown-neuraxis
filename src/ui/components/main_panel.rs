@@ -142,25 +142,13 @@ pub fn MainPanel(
                                                     on_file_select: on_file_select,
                                                     on_focus: {
                                                         let mut focused_anchor_id = focused_anchor_id;
-                                                        let document_anchors = document.anchors.clone();
                                                         move |block: RenderBlock| {
-                                                            // DIAGNOSTIC: Track focus signal changes
-                                                            eprintln!("SIGNAL SET: '{}' id={:?} depth={}",
-                                                                    block.content, block.id, block.depth);
-                                                            // DIAGNOSTIC: Check document state before focus change
-                                                            eprintln!("BEFORE FOCUS CHANGE: Checking anchor IDs in document");
-                                                            for (i, anchor) in document_anchors.iter().enumerate() {
-                                                                eprintln!("  [{}] anchor_id={} range={:?}", i, anchor.id.0, anchor.range);
-                                                            }
+                                                            // Track focus signal changes
 
                                                             // Focus this list item for editing
                                                             focused_anchor_id.set(Some(block.id));
 
-                                                            // DIAGNOSTIC: Check document state after focus change
-                                                            eprintln!("AFTER FOCUS CHANGE: Checking anchor IDs in document");
-                                                            for (i, anchor) in document_anchors.iter().enumerate() {
-                                                                eprintln!("  [{}] anchor_id={} range={:?}", i, anchor.id.0, anchor.range);
-                                                            }
+                                                            // Document state tracking for debugging when needed
                                                         }
                                                     },
                                                     on_command: on_command,
@@ -181,9 +169,16 @@ pub fn MainPanel(
                     p { "This document appears to be empty." }
                     button {
                         class: "add-block-button",
-                        onclick: move |_| {
-                            // TODO: Implement add block functionality using editing core
-                            // todo!("Add block functionality using editing core not yet implemented");
+                        onclick: {
+                            let on_command = on_command;
+                            move |_| {
+                                // Add a basic bullet point to start editing
+                                let cmd = crate::editing::Cmd::InsertText {
+                                    at: 0,
+                                    text: "- ".to_string(),
+                                };
+                                on_command.call(cmd);
+                            }
                         },
                         "Add first block +"
                     }
@@ -300,25 +295,11 @@ pub fn RenderListItem(
     focused_anchor_id: Signal<Option<AnchorId>>,
     document: Document,
 ) -> Element {
-    // SURGICAL DIAGNOSTIC: Track just the problematic items
-    if item.block.content.contains("indented 1") {
-        eprintln!(
-            "RENDER: '{}' id={:?} depth={}",
-            item.block.content, item.block.id, item.block.depth
-        );
-    }
+    // Track render state for debugging when needed
 
     let is_focused = focused_anchor_id.read().as_ref() == Some(&item.block.id);
 
-    // SURGICAL DIAGNOSTIC: Only log focused items
-    if is_focused && item.block.content.contains("indented 1") {
-        eprintln!(
-            "FOCUSED: '{}' id={:?} signal={:?}",
-            item.block.content,
-            item.block.id,
-            focused_anchor_id.read().as_ref()
-        );
-    }
+    // Track focused items for debugging when needed
 
     rsx! {
         li {
@@ -345,10 +326,7 @@ pub fn RenderListItem(
                         let block = item.block.clone();
                         move |evt: MouseEvent| {
                             evt.stop_propagation();
-                            // DIAGNOSTIC: Track clicks on problematic items
-                            if block.content.contains("indented 1") {
-                                eprintln!("CLICK: '{}' id={:?}", block.content, block.id);
-                            }
+                            // Track clicks for debugging when needed
                             // Use the centralized focus system
                             on_focus.call(block.clone());
                         }

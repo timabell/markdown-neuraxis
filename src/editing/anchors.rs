@@ -388,15 +388,7 @@ mod tests {
 
         let original_anchors = doc.anchors.clone();
 
-        // Debug: print original anchors
-        eprintln!("Original anchors:");
-        for (i, anchor) in original_anchors.iter().enumerate() {
-            let content = doc.slice_to_cow(anchor.range.clone());
-            eprintln!(
-                "  [{}] id={:?} range={:?} content={:?}",
-                i, anchor.id, anchor.range, content
-            );
-        }
+        // Store original anchors for comparison
 
         // Insert text at the beginning
         doc.apply(Cmd::InsertText {
@@ -404,15 +396,7 @@ mod tests {
             text: "Prefix: ".to_string(),
         });
 
-        // Debug: print anchors after transformation
-        eprintln!("After transformation:");
-        for (i, anchor) in doc.anchors.iter().enumerate() {
-            let content = doc.slice_to_cow(anchor.range.clone());
-            eprintln!(
-                "  [{}] id={:?} range={:?} content={:?}",
-                i, anchor.id, anchor.range, content
-            );
-        }
+        // Verify anchors after transformation
 
         // Check correct anchor preservation behavior:
         // When inserting at the beginning, all existing anchors should be shifted by the insert length

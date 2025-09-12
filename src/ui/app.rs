@@ -42,28 +42,8 @@ pub fn App(notes_path: PathBuf) -> Element {
                                             // Create anchors for the document blocks
                                             document.create_anchors_from_tree();
 
-                                            // DIAGNOSTIC: Dump all anchors immediately after creation
-                                            eprintln!("\n=== DOCUMENT LOADED: {:?} ===", markdown_file.relative_path());
-                                            eprintln!("Raw anchors in document:");
-                                            for (i, anchor) in document.anchors.iter().enumerate() {
-                                                eprintln!("  [{}] anchor_id={} byte_range={:?}", i, anchor.id.0, anchor.range);
-                                            }
-
                                             // Create snapshot for rendering
                                             let snapshot = document.snapshot();
-
-                                            // DIAGNOSTIC: Dump all blocks in snapshot with their content
-                                            eprintln!("Snapshot blocks:");
-                                            for (i, block) in snapshot.blocks.iter().enumerate() {
-                                                let content_preview = if block.content.len() > 50 {
-                                                    format!("{}...", &block.content[..47])
-                                                } else {
-                                                    block.content.clone()
-                                                };
-                                                eprintln!("  [{}] '{}' anchor_id={} depth={} byte_range={:?}",
-                                                    i, content_preview, block.id.0, block.depth, block.byte_range);
-                                            }
-                                            eprintln!("=== END DOCUMENT LOAD DUMP ===\n");
 
                                             *current_document.write() = Some(document);
                                             *current_snapshot.write() = Some(snapshot);
@@ -116,27 +96,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                             Ok(mut document) => {
                                                 document.create_anchors_from_tree();
 
-                                                // DIAGNOSTIC: Dump all anchors immediately after creation
-                                                eprintln!("\n=== DOCUMENT LOADED (callback): {:?} ===", markdown_file.relative_path());
-                                                eprintln!("Raw anchors in document:");
-                                                for (i, anchor) in document.anchors.iter().enumerate() {
-                                                    eprintln!("  [{}] anchor_id={} byte_range={:?}", i, anchor.id.0, anchor.range);
-                                                }
-
                                                 let snapshot = document.snapshot();
-
-                                                // DIAGNOSTIC: Dump all blocks in snapshot with their content
-                                                eprintln!("Snapshot blocks:");
-                                                for (i, block) in snapshot.blocks.iter().enumerate() {
-                                                    let content_preview = if block.content.len() > 50 {
-                                                        format!("{}...", &block.content[..47])
-                                                    } else {
-                                                        block.content.clone()
-                                                    };
-                                                    eprintln!("  [{}] '{}' anchor_id={} depth={} byte_range={:?}",
-                                                        i, content_preview, block.id.0, block.depth, block.byte_range);
-                                                }
-                                                eprintln!("=== END DOCUMENT LOAD DUMP (callback) ===\n");
 
                                                 *current_document.write() = Some(document);
                                                 *current_snapshot.write() = Some(snapshot);
@@ -153,27 +113,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                             Ok(mut document) => {
                                                 document.create_anchors_from_tree();
 
-                                                // DIAGNOSTIC: Dump all anchors immediately after creation
-                                                eprintln!("\n=== BLANK DOCUMENT CREATED: {:?} ===", markdown_file.relative_path());
-                                                eprintln!("Raw anchors in document:");
-                                                for (i, anchor) in document.anchors.iter().enumerate() {
-                                                    eprintln!("  [{}] anchor_id={} byte_range={:?}", i, anchor.id.0, anchor.range);
-                                                }
-
                                                 let snapshot = document.snapshot();
-
-                                                // DIAGNOSTIC: Dump all blocks in snapshot with their content
-                                                eprintln!("Snapshot blocks:");
-                                                for (i, block) in snapshot.blocks.iter().enumerate() {
-                                                    let content_preview = if block.content.len() > 50 {
-                                                        format!("{}...", &block.content[..47])
-                                                    } else {
-                                                        block.content.clone()
-                                                    };
-                                                    eprintln!("  [{}] '{}' anchor_id={} depth={} byte_range={:?}",
-                                                        i, content_preview, block.id.0, block.depth, block.byte_range);
-                                                }
-                                                eprintln!("=== END BLANK DOCUMENT DUMP ===\n");
 
                                                 *current_document.write() = Some(document);
                                                 *current_snapshot.write() = Some(snapshot);
