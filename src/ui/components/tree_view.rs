@@ -1,5 +1,6 @@
 use crate::models::{FileTree, FileTreeItem, MarkdownFile};
-use dioxus::events::Key;
+use crate::ui::components::tree_view_item::TreeViewItem;
+use dioxus::events::{Key, KeyboardEvent};
 use dioxus::prelude::*;
 use relative_path::RelativePathBuf;
 
@@ -44,61 +45,15 @@ pub fn TreeView(
 
     // Handle keyboard navigation (only when focused)
     let handle_keydown = move |evt: KeyboardEvent| {
-        if !*has_focus.read() {
-            return;
-        }
         let items_list = items.read();
-        if items_list.is_empty() {
-            return;
-        }
-
-        let current_index = *focused_index.read();
-
-        match evt.key() {
-            Key::ArrowDown => {
-                evt.prevent_default(); // Prevent scrolling
-                let new_index = (current_index + 1).min(items_list.len() - 1);
-                focused_index.set(new_index);
-
-                let item = &items_list[new_index];
-                if !item.node.is_folder
-                    && let Some(ref markdown_file) = item.node.markdown_file
-                {
-                    on_file_select.call(markdown_file.clone());
-                }
-            }
-            Key::ArrowUp => {
-                evt.prevent_default(); // Prevent scrolling
-                let new_index = current_index.saturating_sub(1);
-                focused_index.set(new_index);
-
-                let item = &items_list[new_index];
-                if !item.node.is_folder
-                    && let Some(ref markdown_file) = item.node.markdown_file
-                {
-                    on_file_select.call(markdown_file.clone());
-                }
-            }
-            Key::ArrowRight => {
-                evt.prevent_default(); // Prevent default behavior
-                if current_index < items_list.len() {
-                    let item = &items_list[current_index];
-                    if item.node.is_folder && !item.node.is_expanded {
-                        on_folder_toggle.call(item.node.relative_path.clone());
-                    }
-                }
-            }
-            Key::ArrowLeft => {
-                evt.prevent_default(); // Prevent default behavior
-                if current_index < items_list.len() {
-                    let item = &items_list[current_index];
-                    if item.node.is_folder && item.node.is_expanded {
-                        on_folder_toggle.call(item.node.relative_path.clone());
-                    }
-                }
-            }
-            _ => {}
-        }
+        handle_tree_navigation(
+            evt,
+            *has_focus.read(),
+            &items_list,
+            &mut focused_index,
+            &on_file_select,
+            &on_folder_toggle,
+        );
     };
 
     rsx! {
@@ -129,62 +84,64 @@ pub fn TreeView(
     }
 }
 
-#[component]
-pub fn TreeViewItem(
-    item: FileTreeItem,
-    is_selected: bool,
-    is_focused: bool,
-    on_file_select: EventHandler<MarkdownFile>,
-    on_folder_toggle: EventHandler<RelativePathBuf>,
-) -> Element {
-    let node = item.node.clone();
-    let depth = item.depth;
-    let classes = if is_selected && !node.is_folder {
-        if is_focused {
-            "tree-item file selected focused"
-        } else {
-            "tree-item file selected"
-        }
-    } else if is_focused {
-        if node.is_folder {
-            "tree-item folder focused"
-        } else {
-            "tree-item file focused"
-        }
-    } else if node.is_folder {
-        "tree-item folder"
-    } else {
-        "tree-item file"
-    };
+/// Handle keyboard navigation for the tree view
+fn handle_tree_navigation(
+    evt: KeyboardEvent,
+    has_focus: bool,
+    items: &[FileTreeItem],
+    focused_index: &mut Signal<usize>,
+    on_file_select: &EventHandler<MarkdownFile>,
+    on_folder_toggle: &EventHandler<RelativePathBuf>,
+) {
+    if !has_focus || items.is_empty() {
+        return;
+    }
 
-    rsx! {
-        div {
-            class: "{classes}",
-            style: "padding-left: {depth * 20}px;",
-            onclick: move |_| {
-                if node.is_folder {
-                    on_folder_toggle.call(node.relative_path.clone());
-                } else if let Some(ref markdown_file) = node.markdown_file {
-                    on_file_select.call(markdown_file.clone());
-                }
-            },
+    let current_index = *focused_index.read();
 
-            if node.is_folder {
-                span {
-                    class: "tree-toggle",
-                    if node.is_expanded { "- " } else { "+ " }
-                }
-            } else {
-                span {
-                    class: "tree-file-marker",
-                    "  "
-                }
-            }
+    match evt.key() {
+        Key::ArrowDown => {
+            evt.prevent_default(); // Prevent scrolling
+            let new_index = (current_index + 1).min(items.len() - 1);
+            focused_index.set(new_index);
 
-            span {
-                class: "tree-label",
-                "{node.name}"
+            let item = &items[new_index];
+            if !item.node.is_folder
+                && let Some(ref markdown_file) = item.node.markdown_file
+            {
+                on_file_select.call(markdown_file.clone());
             }
         }
+        Key::ArrowUp => {
+            evt.prevent_default(); // Prevent scrolling
+            let new_index = current_index.saturating_sub(1);
+            focused_index.set(new_index);
+
+            let item = &items[new_index];
+            if !item.node.is_folder
+                && let Some(ref markdown_file) = item.node.markdown_file
+            {
+                on_file_select.call(markdown_file.clone());
+            }
+        }
+        Key::ArrowRight => {
+            evt.prevent_default(); // Prevent default behavior
+            if current_index < items.len() {
+                let item = &items[current_index];
+                if item.node.is_folder && !item.node.is_expanded {
+                    on_folder_toggle.call(item.node.relative_path.clone());
+                }
+            }
+        }
+        Key::ArrowLeft => {
+            evt.prevent_default(); // Prevent default behavior
+            if current_index < items.len() {
+                let item = &items[current_index];
+                if item.node.is_folder && item.node.is_expanded {
+                    on_folder_toggle.call(item.node.relative_path.clone());
+                }
+            }
+        }
+        _ => {}
     }
 }
