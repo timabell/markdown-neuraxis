@@ -2,5 +2,5 @@
 - code-review must sign-off before every commit - ALWAYS show the review output
 - you will NEVER be allowed to create debug files with `cat`
 - you may not EVER create and use indivual .rs files and rustc for experiments. Use real TDD.
-- don't run `git add` if the files are already staged, check the status
+- committing: check status first, don't run `git add` if files already staged, use `git commit --no-gpg-sign`
 - when calling the implementor agent pass the verbatim original prompt list so the implementor can include it in the commit message
