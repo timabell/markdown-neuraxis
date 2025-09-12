@@ -1,6 +1,6 @@
 use crate::editing::{BlockKind, RenderBlock};
 use crate::ui::components::{
-    code_fence::CodeFence, heading::Heading, paragraph::Paragraph,
+    code_fence::CodeFence, heading::Heading, paragraph::Paragraph, thematic_break::ThematicBreak,
     unhandled_markdown::UnhandledMarkdown,
 };
 use dioxus::prelude::*;
@@ -35,6 +35,12 @@ pub fn Block(
             CodeFence {
                 block: block.clone(),
                 lang: lang.clone(),
+                on_focus
+            }
+        },
+        BlockKind::ThematicBreak => rsx! {
+            ThematicBreak {
+                block: block.clone(),
                 on_focus
             }
         },

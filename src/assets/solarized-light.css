@@ -318,6 +318,33 @@ hr {
     border-top: 2px solid var(--base1);
 }
 
+/* Thematic break styles - clickable/editable horizontal rules */
+.thematic-break {
+    margin: 24px 0;
+    border: none;
+    border-top: 2px solid var(--base1);
+    height: 2px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 1px;
+}
+
+.thematic-break:hover {
+    border-top-color: var(--blue);
+    background-color: var(--base2);
+    padding: 2px 0;
+    margin: 22px 0;
+}
+
+.thematic-break:focus {
+    border-top-color: var(--blue);
+    box-shadow: 0 0 0 2px var(--blue);
+    background-color: var(--base2);
+    padding: 2px 0;
+    margin: 22px 0;
+}
+
 /* Code block language-specific styling */
 .code-block code {
     white-space: pre;
