@@ -1,5 +1,8 @@
 use crate::editing::{BlockKind, RenderBlock};
-use crate::ui::components::{code_fence::CodeFence, heading::Heading, paragraph::Paragraph};
+use crate::ui::components::{
+    code_fence::CodeFence, heading::Heading, paragraph::Paragraph,
+    unhandled_markdown::UnhandledMarkdown,
+};
 use dioxus::prelude::*;
 use std::path::PathBuf;
 
@@ -32,6 +35,12 @@ pub fn Block(
             CodeFence {
                 block: block.clone(),
                 lang: lang.clone(),
+                on_focus
+            }
+        },
+        BlockKind::UnhandledMarkdown => rsx! {
+            UnhandledMarkdown {
+                block: block.clone(),
                 on_focus
             }
         },

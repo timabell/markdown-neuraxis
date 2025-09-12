@@ -15,6 +15,7 @@ pub mod paragraph;
 pub mod single_block;
 pub mod tree_view;
 pub mod tree_view_item;
+pub mod unhandled_markdown;
 
 pub use block::*;
 pub use code_fence::*;
@@ -33,3 +34,4 @@ pub use paragraph::*;
 pub use single_block::*;
 pub use tree_view::*;
 pub use tree_view_item::*;
+pub use unhandled_markdown::*;

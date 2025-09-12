@@ -44,6 +44,7 @@ pub enum BlockKind {
     Heading { level: u8 },
     ListItem { marker: Marker, depth: usize },
     CodeFence { lang: Option<String> },
+    UnhandledMarkdown, // Fallback for any unrecognized markdown content
 }
 
 /// Get a snapshot of the document for rendering
@@ -118,10 +119,12 @@ fn collect_render_blocks_recursive(
                 content,
             });
 
-            // Also recursively process children to find nested list items
+            // Only process nested list children, not the list item's own content
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                collect_render_blocks_recursive(doc, child, blocks, list_depth);
+                if child.kind() == "list" {
+                    collect_render_blocks_recursive(doc, child, blocks, list_depth);
+                }
             }
         }
         "paragraph" => {
@@ -175,12 +178,47 @@ fn collect_render_blocks_recursive(
                 content,
             });
         }
-        _ => {
-            // For other node types, recursively process children
+        "document" | "section" => {
+            // Container nodes - just process children
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 collect_render_blocks_recursive(doc, child, blocks, current_depth);
             }
+        }
+        "list" => {
+            // List container - process list_item children
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                collect_render_blocks_recursive(doc, child, blocks, current_depth);
+            }
+        }
+        _ => {
+            // Skip empty ranges (these are often parser artifacts)
+            if byte_range.is_empty() {
+                return;
+            }
+
+            // Unknown/unhandled node type - render as UnhandledMarkdown
+            let start_point = node.start_position();
+            let content = doc.slice_to_cow(byte_range.clone()).to_string();
+
+            eprintln!(
+                "Warning: Unknown markdown element '{}' at line {} (will render as-is): {}",
+                node.kind(),
+                start_point.row + 1, // Convert 0-based to 1-based line numbers
+                content.lines().next().unwrap_or(&content).trim()
+            );
+
+            let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
+
+            blocks.push(RenderBlock {
+                id: anchor_id,
+                kind: BlockKind::UnhandledMarkdown,
+                byte_range: byte_range.clone(),
+                content_range: byte_range,
+                depth: current_depth,
+                content,
+            });
         }
     }
 }
@@ -465,7 +503,7 @@ fn group_blocks_for_rendering(blocks: &[RenderBlock]) -> Vec<ContentGroup> {
                 groups.push(group);
             }
             _ => {
-                // Single non-list block
+                // Single non-list block (including UnhandledMarkdown)
                 groups.push(ContentGroup::SingleBlock(block.clone()));
                 i += 1;
             }

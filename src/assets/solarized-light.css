@@ -500,6 +500,24 @@ hr {
     outline: none;
 }
 
+/* Unhandled markdown styles */
+.unhandled-markdown {
+    margin: 12px 0;
+    padding: 8px 12px;
+    background-color: var(--red);
+    color: var(--base3);
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+    font-size: 0.9em;
+    border: 1px solid var(--magenta);
+    opacity: 0.9;
+}
+
+.unhandled-markdown:focus {
+    box-shadow: 0 0 0 2px var(--magenta);
+    outline: none;
+}
+
 /* Semantic CSS classes for different indent levels */
 .indent-level-0 { /* For future use if needed */ }
 .indent-level-1 { /* For future use if needed */ }
