@@ -311,6 +311,33 @@ hr {
     font-style: italic;
 }
 
+/* Block quote styles - clickable/editable blockquotes */
+.block-quote {
+    margin: 16px 0;
+    padding: 12px 16px;
+    border-left: 4px solid var(--yellow);
+    background-color: var(--base2);
+    color: var(--base01);
+    font-style: italic;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 4px;
+    white-space: pre-wrap;
+}
+
+.block-quote:hover {
+    border-left-color: var(--blue);
+    background-color: var(--base3);
+    box-shadow: 0 0 0 1px var(--base1);
+}
+
+.block-quote:focus {
+    border-left-color: var(--blue);
+    box-shadow: 0 0 0 2px var(--blue);
+    background-color: var(--base3);
+}
+
 /* Rule styles */
 .rule {
     margin: 24px 0;

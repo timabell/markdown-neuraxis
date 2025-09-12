@@ -45,6 +45,7 @@ pub enum BlockKind {
     ListItem { marker: Marker, depth: usize },
     CodeFence { lang: Option<String> },
     ThematicBreak,     // Horizontal rule (---, ***, ___)
+    BlockQuote,        // > Quoted text
     UnhandledMarkdown, // Fallback for any unrecognized markdown content
 }
 
@@ -187,6 +188,20 @@ fn collect_render_blocks_recursive(
             blocks.push(RenderBlock {
                 id: anchor_id,
                 kind: BlockKind::ThematicBreak,
+                byte_range: byte_range.clone(),
+                content_range: byte_range,
+                depth: current_depth,
+                content,
+            });
+        }
+        "block_quote" => {
+            // > Quoted text
+            let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
+            let content = doc.slice_to_cow(byte_range.clone()).to_string();
+
+            blocks.push(RenderBlock {
+                id: anchor_id,
+                kind: BlockKind::BlockQuote,
                 byte_range: byte_range.clone(),
                 content_range: byte_range,
                 depth: current_depth,

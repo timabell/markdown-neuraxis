@@ -1,4 +1,5 @@
 pub mod block;
+pub mod block_quote;
 pub mod code_fence;
 pub mod content_group;
 pub mod document_content;
@@ -19,6 +20,7 @@ pub mod tree_view_item;
 pub mod unhandled_markdown;
 
 pub use block::*;
+pub use block_quote::*;
 pub use code_fence::*;
 pub use content_group::*;
 pub use document_content::*;

@@ -1,7 +1,7 @@
 use crate::editing::{BlockKind, RenderBlock};
 use crate::ui::components::{
-    code_fence::CodeFence, heading::Heading, paragraph::Paragraph, thematic_break::ThematicBreak,
-    unhandled_markdown::UnhandledMarkdown,
+    block_quote::BlockQuote, code_fence::CodeFence, heading::Heading, paragraph::Paragraph,
+    thematic_break::ThematicBreak, unhandled_markdown::UnhandledMarkdown,
 };
 use dioxus::prelude::*;
 use std::path::PathBuf;
@@ -40,6 +40,12 @@ pub fn Block(
         },
         BlockKind::ThematicBreak => rsx! {
             ThematicBreak {
+                block: block.clone(),
+                on_focus
+            }
+        },
+        BlockKind::BlockQuote => rsx! {
+            BlockQuote {
                 block: block.clone(),
                 on_focus
             }
