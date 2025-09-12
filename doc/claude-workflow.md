@@ -63,8 +63,7 @@ The workflow emphasizes iterative development with automated code review, human 
 - Each iteration should show measurable improvement
 
 ### 7. Pre-commit Checks
-- Run `cargo fmt` to format code
-- Run `cargo clippy` to check for linting issues
+- run ./lint.sh - which run cargo fmt, cargo clippy, and yamllint
 - Ensure all tests pass with `cargo test`
 - Address any issues before proceeding
 

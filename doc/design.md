@@ -143,6 +143,16 @@ If you want tabs for more complex tasks, you can still use VSCode with your note
 - Load `.md` files from a selected folder root
 - Parse headings, bullet lists, code blocks, metadata
 
+### Editing Philosophy: Raw Markdown, Not WYSIWYG
+
+This is **NOT** a WYSIWYG editor. All WYSIWYG markdown editors have fundamental compromises that degrade the editing experience in some way. We believe that editing raw markdown is an excellent user experience for those willing to learn and work with the simple syntax.
+
+When a user enters editing mode for any block or bullet point, they will always see and edit the raw markdown text. This provides:
+- Complete control over the exact markdown syntax
+- No ambiguity about what will be saved to disk
+- Consistency with editing in any other text editor
+- No fighting with auto-formatting or smart quotes
+
 ### Outliner UI
 
 - Collapsible bullets (Multiple styles supported: `-`, `*`, `+`, mvp will read all, but only write `-` bullets)

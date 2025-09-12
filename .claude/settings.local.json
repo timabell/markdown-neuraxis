@@ -2,6 +2,12 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(mkdir:*)",
+      "Bash(grep:*)",
+      "Bash(git diff:*)",
+      "Bash(./lint.sh)",
       "Bash(cargo build)",
       "Bash(cargo test)",
       "Bash(cargo fmt:*)",
@@ -9,13 +15,10 @@
       "Bash(cargo clippy:*)",
       "Bash(cargo check:*)",
       "Bash(cargo insta:*)",
+      "Bash(cargo doc:*)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:docs.rs)",
-      "WebFetch(domain:github.com)",
-      "Bash(find:*)",
-      "Bash(mkdir:*)",
-      "Bash(./clippy-harsh.sh)",
-      "Bash(grep:*)"
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }
