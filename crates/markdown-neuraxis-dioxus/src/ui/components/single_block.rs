@@ -3,13 +3,14 @@ use crate::ui::components::editor_block::EditorBlock;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::RenderBlock;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Component to render a single block
 #[component]
 pub fn SingleBlock(
     block: RenderBlock,
     group_index: usize,
-    document: markdown_neuraxis_engine::editing::Document,
+    document: Arc<markdown_neuraxis_engine::editing::Document>,
     focused_anchor_id: Signal<Option<markdown_neuraxis_engine::editing::AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<markdown_neuraxis_engine::editing::Cmd>,

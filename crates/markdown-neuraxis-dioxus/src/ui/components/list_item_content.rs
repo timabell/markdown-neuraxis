@@ -1,12 +1,13 @@
 use crate::ui::components::editor_block::EditorBlock;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, ListItem, RenderBlock};
+use std::sync::Arc;
 
 #[component]
 pub fn ListItemContent(
     item: ListItem,
     is_focused: bool,
-    document: Document,
+    document: Arc<Document>,
     on_command: Callback<Cmd>,
     on_focus: Callback<RenderBlock>,
     focused_anchor_id: Signal<Option<AnchorId>>,

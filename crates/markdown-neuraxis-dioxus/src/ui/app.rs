@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use markdown_neuraxis_engine::{Document, FileTree, MarkdownFile, Snapshot, io};
 use relative_path::RelativePathBuf;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 const SOLARIZED_LIGHT_CSS: &str = include_str!("../assets/solarized-light.css");
 
@@ -17,7 +18,7 @@ pub fn App(notes_path: PathBuf) -> Element {
     });
 
     let mut selected_file = use_signal(|| None::<MarkdownFile>);
-    let mut current_document = use_signal(|| None::<Document>);
+    let mut current_document = use_signal(|| None::<Arc<Document>>);
     let mut current_snapshot = use_signal(|| None::<Snapshot>);
 
     rsx! {
@@ -43,7 +44,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                             // Create snapshot for rendering
                                             let snapshot = document.snapshot();
 
-                                            *current_document.write() = Some(document);
+                                            *current_document.write() = Some(Arc::new(document));
                                             *current_snapshot.write() = Some(snapshot);
                                             *selected_file.write() = Some(markdown_file);
                                         }
@@ -96,7 +97,7 @@ pub fn App(notes_path: PathBuf) -> Element {
 
                                                 let snapshot = document.snapshot();
 
-                                                *current_document.write() = Some(document);
+                                                *current_document.write() = Some(Arc::new(document));
                                                 *current_snapshot.write() = Some(snapshot);
                                                 *selected_file.write() = Some(markdown_file);
                                             }
@@ -113,7 +114,7 @@ pub fn App(notes_path: PathBuf) -> Element {
 
                                                 let snapshot = document.snapshot();
 
-                                                *current_document.write() = Some(document);
+                                                *current_document.write() = Some(Arc::new(document));
                                                 *current_snapshot.write() = Some(snapshot);
                                                 *selected_file.write() = Some(markdown_file);
                                             }
@@ -150,15 +151,17 @@ pub fn App(notes_path: PathBuf) -> Element {
                             let notes_path = notes_path.clone();
                             let selected_file = selected_file.read().clone();
                             move |cmd: markdown_neuraxis_engine::editing::commands::Cmd| {
-                                // Apply the command to the current document
-                                let document_opt = current_document.read().clone();
-                                if let Some(mut updated_document) = document_opt {
-                                    let _patch = updated_document.apply(cmd);
-                                    let new_snapshot = updated_document.snapshot();
+                                // Apply the command to the current document using Arc for copy-on-write
+                                let document_arc = current_document.read().clone();
+                                if let Some(mut document_arc) = document_arc {
+                                    // Use Arc::make_mut for efficient copy-on-write
+                                    let document = Arc::make_mut(&mut document_arc);
+                                    let _patch = document.apply(cmd);
+                                    let new_snapshot = document.snapshot();
 
                                     // Auto-save the document to disk
                                     if let Some(file) = &selected_file {
-                                        let content = updated_document.text();
+                                        let content = document.text();
                                         match io::write_file(file.relative_path(), &notes_path, &content) {
                                             Ok(()) => {
                                                 // File saved successfully
@@ -169,7 +172,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                         }
                                     }
 
-                                    *current_document.write() = Some(updated_document);
+                                    *current_document.write() = Some(document_arc);
                                     *current_snapshot.write() = Some(new_snapshot);
                                 }
                             }

@@ -2,13 +2,14 @@ use crate::ui::components::list_component::ListComponent;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::ContentGroup as EditorContentGroup;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Component to render a list group
 #[component]
 pub fn ListGroup(
     group: EditorContentGroup,
     group_index: usize,
-    document: markdown_neuraxis_engine::editing::Document,
+    document: Arc<markdown_neuraxis_engine::editing::Document>,
     focused_anchor_id: Signal<Option<markdown_neuraxis_engine::editing::AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<markdown_neuraxis_engine::editing::Cmd>,

@@ -2,6 +2,7 @@ use crate::ui::components::{list_children::ListChildren, list_item_content::List
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, ListItem, RenderBlock};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Component to render a single list item with potential nested children
 #[component]
@@ -11,7 +12,7 @@ pub fn ListItemComponent(
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
     focused_anchor_id: Signal<Option<AnchorId>>,
-    document: Document,
+    document: Arc<Document>,
 ) -> Element {
     let is_focused = focused_anchor_id.read().as_ref() == Some(&item.block.id);
 

@@ -3,13 +3,14 @@ use crate::ui::components::single_block::SingleBlock;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::ContentGroup as EditorContentGroup;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Component for rendering individual content groups
 #[component]
 pub fn ContentGroup(
     group: EditorContentGroup,
     group_index: usize,
-    document: markdown_neuraxis_engine::editing::Document,
+    document: Arc<markdown_neuraxis_engine::editing::Document>,
     focused_anchor_id: Signal<Option<markdown_neuraxis_engine::editing::AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<markdown_neuraxis_engine::editing::Cmd>,

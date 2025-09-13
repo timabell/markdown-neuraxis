@@ -2,6 +2,7 @@ use crate::ui::components::list_item_component::ListItemComponent;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, ListItem, RenderBlock};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Component to render a nested list group as proper HTML ul/ol structure
 #[component]
@@ -12,7 +13,7 @@ pub fn ListComponent(
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
     focused_anchor_id: Signal<Option<AnchorId>>,
-    document: Document,
+    document: Arc<Document>,
 ) -> Element {
     match list_type {
         "ol" => rsx! {
