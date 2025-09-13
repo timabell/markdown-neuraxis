@@ -6,36 +6,126 @@ use crate::editing::{Document, document::Marker};
 /// Indentation string for list items (2 spaces)
 const INDENT_STR: &str = "  ";
 
-/// Commands that can be applied to the document
+/// Core edit commands that compile to xi-rope Deltas (ADR-0004)
+///
+/// This enum represents the "edit algebra" described in ADR-4. All document
+/// modifications flow through these commands, which:
+///
+/// 1. **Compile to Deltas**: Each command produces an `xi_rope::Delta`
+/// 2. **Apply atomically**: Commands execute immediately on every input event
+/// 3. **Transform selections**: Cursor/selection positions update automatically
+/// 4. **Enable undo/redo**: Delta history supports branching undo (future)
+///
+/// ## Command Design Principles
+///
+/// - **Byte-level precision**: All positions are absolute byte offsets in the rope
+/// - **Markdown-aware**: Commands understand list structure and indentation
+/// - **Incremental-friendly**: Operations work with Tree-sitter's incremental parsing
+/// - **Selection-preserving**: Commands automatically transform cursor positions
+///
+/// ## Usage Pattern
+///
+/// ```rust
+/// use markdown_neuraxis_engine::editing::*;
+///
+/// let mut doc = Document::from_bytes(b"- Item 1")?;
+///
+/// // Split list item: insert newline + marker + space
+/// let patch = doc.apply(Cmd::SplitListItem { at: 8 });
+///
+/// // Result: "- Item 1\n- "
+/// assert_eq!(doc.text(), "- Item 1\n- ");
+/// ```
+///
+/// Commands are designed to be **composable** and **undoable**, following the
+/// principles established in xi-editor for high-performance text editing.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cmd {
-    InsertText {
-        at: usize,
-        text: String,
-    },
-    DeleteRange {
-        range: std::ops::Range<usize>,
-    },
+    /// Insert text at absolute byte position
+    ///
+    /// **Delta**: Single insert operation at specified offset.
+    /// **Selection**: Shifts cursor right if insertion is at/before cursor.
+    InsertText { at: usize, text: String },
+
+    /// Delete byte range from document
+    ///
+    /// **Delta**: Single delete operation removing specified range.
+    /// **Selection**: Collapses to deletion start if cursor was in deleted range.
+    DeleteRange { range: std::ops::Range<usize> },
+
+    /// Replace byte range with new text
+    ///
+    /// **Delta**: Delete followed by insert (atomic operation).
+    /// **Selection**: Handles both shrinking and expanding replacements.
     ReplaceRange {
         range: std::ops::Range<usize>,
         text: String,
     },
-    SplitListItem {
-        at: usize,
-    },
-    IndentLines {
-        range: std::ops::Range<usize>,
-    },
-    OutdentLines {
-        range: std::ops::Range<usize>,
-    },
-    ToggleMarker {
-        line_start: usize,
-        to: Marker,
-    },
+
+    /// Split list item at cursor position
+    ///
+    /// **Markdown-aware**: Extracts indentation and marker from current line,
+    /// then inserts newline + indent + marker + space. Handles nested lists
+    /// and various marker types (-, *, +, 1., etc.).
+    ///
+    /// **Delta**: Single insert of computed list prefix.
+    SplitListItem { at: usize },
+
+    /// Increase indentation for lines in range
+    ///
+    /// **Line-based**: Operates on line starts within the specified byte range.
+    /// Adds configured indent string (typically 2 spaces) to each affected line.
+    ///
+    /// **Delta**: Multiple insert operations at line boundaries.
+    IndentLines { range: std::ops::Range<usize> },
+
+    /// Decrease indentation for lines in range
+    ///
+    /// **Line-based**: Removes up to one indentation level from lines in range.
+    /// Handles both space and tab indentation according to document style.
+    ///
+    /// **Delta**: Multiple delete operations at line boundaries.
+    OutdentLines { range: std::ops::Range<usize> },
+
+    /// Change or add list marker for line
+    ///
+    /// **Markdown-aware**: Replaces existing marker (-, *, +, 1.) or adds
+    /// new marker to plain text. Preserves indentation and handles numbered
+    /// vs bullet list conversion.
+    ///
+    /// **Delta**: Replace operation for marker portion of line.
+    ToggleMarker { line_start: usize, to: Marker },
 }
 
-/// Compile a command into a delta
+/// Compile a command into an xi-rope Delta (ADR-0004 Core Implementation)
+///
+/// This function implements the "command → Delta" compilation described in ADR-4.
+/// It converts high-level editing commands into low-level rope operations that:
+///
+/// 1. **Preserve document integrity**: All byte positions are clamped to valid ranges
+/// 2. **Generate minimal deltas**: Only the necessary text changes are encoded  
+/// 3. **Support incremental parsing**: Deltas can be fed to Tree-sitter for updates
+/// 4. **Enable undo/redo**: Deltas are invertible for history management
+///
+/// ## Delta Compilation Rules
+///
+/// - **InsertText**: `builder.replace(at..at, rope)` - zero-width replacement
+/// - **DeleteRange**: `builder.delete(range)` - removes specified bytes
+/// - **ReplaceRange**: `builder.replace(range, rope)` - atomic delete+insert
+/// - **SplitListItem**: Extracts list context, inserts newline + prefix
+/// - **IndentLines**: Multiple inserts at line boundaries within range
+/// - **OutdentLines**: Multiple deletes removing indentation
+/// - **ToggleMarker**: Replace or insert marker portion of line
+///
+/// ## Safety & Correctness
+///
+/// All byte ranges are **clamped** to document bounds to prevent xi-rope panics.
+/// This is critical for robust editing when cursors are at document edges.
+///
+/// ```rust
+/// let clamped_at = at.min(doc.len());  // Safe insertion point
+/// let clamped_range = start..end.min(doc.len()).max(start);  // Valid range
+/// ```
 pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
     match cmd {
         Cmd::InsertText { at, text } => {
@@ -153,7 +243,37 @@ pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
     }
 }
 
-/// Transform selection based on the command being applied
+/// Transform selection/cursor through command application (ADR-0004)
+///
+/// This function implements the selection transformation logic required by ADR-4
+/// to keep cursor/selection positions stable across edits. It predicts how the
+/// selection should move **before** the Delta is applied to the buffer.
+///
+/// ## Selection Transformation Rules
+///
+/// The transformation logic follows these principles:
+///
+/// 1. **Insertions before selection**: Shift entire selection right by insert length
+/// 2. **Insertions within selection**: Grow selection end by insert length  
+/// 3. **Insertions after selection**: No change to selection
+/// 4. **Deletions before selection**: Shift entire selection left by delete length
+/// 5. **Deletions overlapping selection**: Collapse selection to deletion start
+/// 6. **Deletions after selection**: No change to selection
+///
+/// ## Implementation Notes
+///
+/// This function is called **before** the command Delta is applied, so it operates
+/// on the original document state. The transformed range is then used to update
+/// `Document.selection` after the rope buffer is modified.
+///
+/// For complex commands like `SplitListItem`, the transformation calculates the
+/// equivalent insert length to apply the same shifting logic consistently.
+///
+/// ```rust
+/// // Example: Insert "Hello " at position 5 in "World"
+/// // Selection at 3..5 becomes 9..11 (shifted right by 6)
+/// let new_range = transform_selection_for_command(&doc, &(3..5), &cmd);
+/// ```
 pub(crate) fn transform_selection_for_command(
     doc: &Document,
     range: &std::ops::Range<usize>,

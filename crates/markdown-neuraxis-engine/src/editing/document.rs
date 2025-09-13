@@ -41,22 +41,69 @@ impl IndentStyle {
     }
 }
 
-/// Core document structure that holds the text buffer and provides editing operations.
-/// Uses xi-rope for efficient text manipulation and preserves exact byte representation.
+/// Core document structure implementing ADR-0004 editor architecture
+///
+/// Document represents the complete editing model described in ADR-4. It maintains:
+///
+/// ## 1. Single Source of Truth (xi-rope buffer)
+/// - **Lossless storage**: Entire document in one `xi_rope::Rope` buffer  
+/// - **Exact round-trip**: `to_bytes()` returns identical content to original
+/// - **Efficient edits**: xi-rope provides O(log n) insert/delete operations
+/// - **Delta tracking**: All changes generate invertible Delta operations
+///
+/// ## 2. Incremental Parsing (Tree-sitter)
+/// - **Markdown grammar**: Uses tree-sitter-markdown for structural parsing
+/// - **Incremental updates**: Only re-parses changed document regions
+/// - **CST access**: Provides structured view while preserving byte fidelity  
+/// - **Parse stability**: Tree updates via `tree.edit()` before re-parsing
+///
+/// ## 3. Stable Block Identity (Anchors)
+/// - **Persistent IDs**: AnchorIds survive document edits for UI stability
+/// - **Range transformation**: Anchor byte ranges updated via Delta transforms
+/// - **Rebinding logic**: Re-associates anchors after incremental parsing
+/// - **Block tracking**: Links UI elements to logical document structures
+///
+/// ## 4. Command-Based Editing
+/// - **Edit algebra**: All changes flow through `Cmd` enum compilation
+/// - **Atomic operations**: Commands compile to Deltas and apply immediately
+/// - **Selection tracking**: Cursor/selection positions transform automatically
+/// - **Undo foundation**: Delta history enables branching undo (future)
+///
+/// ## Usage Pattern
+///
+/// ```rust
+/// // Create document with lossless byte preservation
+/// let mut doc = Document::from_bytes(markdown_bytes)?;
+///
+/// // Initialize stable block identifiers
+/// doc.create_anchors_from_tree();
+///
+/// // Apply structured edits
+/// let patch = doc.apply(Cmd::SplitListItem { at: cursor_pos });
+///
+/// // Generate UI-ready view
+/// let snapshot = doc.snapshot();
+///
+/// // Round-trip: save exact original bytes
+/// std::fs::write("output.md", doc.to_bytes())?;
+/// ```
+///
+/// This architecture enables high-performance Markdown editing with exact fidelity,
+/// stable UI references, and clean separation between model and view layers.
 pub struct Document {
-    /// The rope buffer containing the entire document as UTF-8 bytes
+    /// xi-rope buffer containing entire document as UTF-8 bytes (ADR-4 source of truth)
     pub(crate) buffer: Rope,
-    /// Current selection/cursor position as byte offsets
+    /// Current selection/cursor position as byte offsets in buffer  
     pub(crate) selection: std::ops::Range<usize>,
-    /// Version number that increments with each edit
+    /// Version counter incremented on each edit (enables change detection)
     pub(crate) version: u64,
-    /// Tree-sitter parser for incremental parsing
+    /// Tree-sitter parser for incremental Markdown parsing
     pub(crate) parser: Parser,
-    /// Current parse tree (None until first parse)
+    /// Current parse tree (None until first parse, updated incrementally)
     pub(crate) tree: Option<Tree>,
-    /// Anchors for stable block IDs that survive edits
+    /// Stable block identifiers that survive edits (ADR-4 anchor system)
     pub(crate) anchors: Vec<Anchor>,
-    /// Detected indentation style for this document
+    /// Document's indentation style (spaces vs tabs, detected on load)
     pub(crate) indent_style: IndentStyle,
 }
 
@@ -94,7 +141,44 @@ impl Document {
         self.buffer.to_string().into_bytes()
     }
 
-    /// Apply a command to the document
+    /// Apply command to document (ADR-0004 Core Edit Loop)
+    ///
+    /// This method implements the complete editing pipeline described in ADR-4:
+    ///
+    /// ## Edit Pipeline Steps
+    ///
+    /// 1. **Command Compilation**: Convert `Cmd` to xi-rope `Delta`
+    /// 2. **Incremental Parsing**: Feed Delta to Tree-sitter before buffer update
+    /// 3. **Buffer Application**: Apply Delta to xi-rope buffer (authoritative update)
+    /// 4. **Anchor Transformation**: Update anchor ranges via Delta transforms
+    /// 5. **Anchor Rebinding**: Re-associate anchors with updated parse tree
+    /// 6. **Selection Update**: Transform cursor/selection through edit
+    /// 7. **Version Increment**: Update document version for change detection
+    ///
+    /// ## Critical Ordering
+    ///
+    /// The function must call `tree.edit()` **before** applying the Delta to the buffer.
+    /// This is because Tree-sitter needs the old buffer state to calculate proper
+    /// coordinate transformations during incremental parsing.
+    ///
+    /// ## Return Value
+    ///
+    /// Returns a `Patch` containing:
+    /// - **`changed`**: Byte ranges modified by this edit
+    /// - **`new_selection`**: Updated cursor/selection position  
+    /// - **`version`**: New document version number
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// let patch = doc.apply(Cmd::InsertText {
+    ///     at: 0,
+    ///     text: "# ".to_string()
+    /// });
+    ///
+    /// // Document buffer updated, anchors stable, version incremented
+    /// assert_eq!(patch.version, doc.version());
+    /// ```
     pub fn apply(&mut self, cmd: Cmd) -> Patch {
         // Build delta from command
         let delta = self.compile_command(&cmd);

@@ -5,16 +5,63 @@ use xi_rope::{Delta, RopeInfo};
 
 use crate::editing::Document;
 
-/// Stable identifier for a text range that survives edits
+/// Stable identifier for text ranges that survive edits (ADR-0004)
+///
+/// Anchors implement the stable block ID system described in ADR-4. They provide
+/// **persistent references** to document blocks (headings, list items, code blocks)
+/// that remain valid across edits, enabling stable UI keys and consistent selection.
+///
+/// ## Architecture Overview
+///
+/// The anchor system follows a three-phase lifecycle:
+///
+/// 1. **Creation**: Generated from Tree-sitter parse tree for block-level nodes
+/// 2. **Transformation**: Ranges updated through xi-rope Delta transforms  
+/// 3. **Rebinding**: Re-associated with nodes after incremental parsing
+///
+/// ## Anchor Stability Guarantees
+///
+/// - **ID Persistence**: `AnchorId` values remain constant across document edits
+/// - **Range Tracking**: Byte ranges follow text through insertions/deletions
+/// - **Block Association**: Anchors track logical blocks, not specific byte ranges
+/// - **Deterministic Rebinding**: Consistent ID assignment when structure changes
+///
+/// ## Usage in UI Layer
+///
+/// ```rust
+/// use markdown_neuraxis_engine::editing::*;
+///
+/// let mut doc = Document::from_bytes(b"# Heading\n- Item")?;
+/// doc.create_anchors_from_tree();
+///
+/// let snapshot = doc.snapshot();
+/// for block in &snapshot.blocks {
+///     println!("Block {} has stable ID: {:?}", block.content, block.id);
+///     // ID remains same after edits to this block
+/// }
+/// ```
+///
+/// See ADR-4 for detailed design rationale and future enhancements (bias, stickiness).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Anchor {
+    /// Stable, unique identifier that persists across edits
     pub id: AnchorId,
-    pub range: std::ops::Range<usize>, // byte range in the rope
-    pub node_id: Option<usize>,        // tree-sitter node ID for direct mapping
-                                       // TODO v2: add bias/stickiness and kind hints
+    /// Current byte range in the rope buffer (updates via Delta transforms)
+    pub range: std::ops::Range<usize>,
+    /// Tree-sitter node ID for direct mapping (may become stale after incremental parsing)
+    pub node_id: Option<usize>,
+    // TODO v2: add bias/stickiness and kind hints per ADR-4 future work
 }
 
-/// Unique identifier for an anchor
+/// Unique identifier for an anchor (128-bit hash for collision resistance)
+///
+/// AnchorIds are generated using deterministic hashing of:
+/// - Node characteristics (type, position)
+/// - Static/dynamic generation context
+/// - Collision-resistant algorithms (DefaultHasher)
+///
+/// The 128-bit width provides sufficient space for large documents while
+/// maintaining reasonable memory usage compared to full UUIDs.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct AnchorId(pub u128);
 
@@ -30,7 +77,38 @@ pub(crate) fn calculate_range_overlap(
     end.saturating_sub(start)
 }
 
-/// Transform anchors through a delta operation
+/// Transform anchor ranges through Delta operation (ADR-0004 Core)
+///
+/// This function implements the anchor transformation described in ADR-4. It uses
+/// xi-rope's **interval transformation** system to update anchor byte ranges as
+/// the document changes, preserving block identity across edits.
+///
+/// ## Transformation Strategy
+///
+/// The function applies **directional bias** to anchor boundaries:
+///
+/// - **Start boundary** (`after=true`): Insertions exactly at start push anchor forward
+/// - **End boundary** (`after=false`): Insertions exactly at end don't expand anchor  
+///
+/// This prevents anchors from accidentally "capturing" text inserted at their boundaries,
+/// which could lead to incorrect block associations.
+///
+/// ## Safety & Cleanup
+///
+/// After transformation, the function:
+/// 1. **Clamps ranges** to document bounds to prevent out-of-bounds access
+/// 2. **Removes invalid anchors** that became empty or malformed  
+/// 3. **Maintains consistency** between anchor count and actual document blocks
+///
+/// ## Example Transformation
+///
+/// ```
+/// Original: "# Header\n- Item"  (Anchor at 0..8 for "# Header")
+/// Insert "New " at position 2:  "# New Header\n- Item"
+/// Result: Anchor now at 0..12 for "# New Header"
+/// ```
+///
+/// This ensures UI references remain valid even as document structure changes.
 pub(crate) fn transform_anchors(doc: &mut Document, delta: &Delta<RopeInfo>) {
     // Create a transformer for this delta
     let mut transformer = Transformer::new(delta);
@@ -63,8 +141,38 @@ pub(crate) fn transform_anchors(doc: &mut Document, delta: &Delta<RopeInfo>) {
     });
 }
 
-/// Rebind anchors in changed regions to maintain stable block associations
-/// Applies deterministic rebinding when needed to prevent anchor confusion
+/// Rebind anchors after incremental parsing (ADR-0004 Stability)
+///
+/// This function implements the anchor rebinding logic described in ADR-4. After
+/// Tree-sitter performs incremental parsing, it re-associates anchors with the
+/// updated parse tree to maintain stable block identity.
+///
+/// ## When Rebinding Occurs
+///
+/// Rebinding is triggered when:
+/// 1. **Content changes within anchors**: Edits modify block internal structure
+/// 2. **Structural changes**: Block count differs from anchor count
+/// 3. **Node ID invalidation**: Tree-sitter assigns new node IDs after parsing
+///
+/// The function applies **conservative rebinding** - it only rebinds when necessary
+/// to avoid disrupting stable anchor associations.
+///
+/// ## Deterministic Rebinding Algorithm
+///
+/// When rebinding is required, the function:
+/// 1. **Collects new block structure** from updated Tree-sitter tree  
+/// 2. **Preserves existing IDs** where possible via node ID matching
+/// 3. **Uses positional mapping** when node IDs change (common with incremental parsing)
+/// 4. **Generates new IDs** only for genuinely new blocks
+///
+/// ## Preventing "Anchor Confusion"
+///
+/// The function specifically addresses cases where:
+/// - List items are edited, causing Tree-sitter to reassign node IDs
+/// - Document structure changes (blocks added/removed)
+/// - Range boundaries shift due to edits
+///
+/// This ensures UI components maintain consistent block references across edits.
 pub(crate) fn rebind_anchors_in_changed_regions(
     doc: &mut Document,
     changed: &[std::ops::Range<usize>],
@@ -216,7 +324,39 @@ fn collect_anchor_ranges_recursive(
     }
 }
 
-/// Create anchors from the current tree-sitter parse tree
+/// Create initial anchors from Tree-sitter parse tree (ADR-0004 Bootstrap)
+///
+/// This function implements the initial anchor generation described in ADR-4. It
+/// traverses the Tree-sitter CST and creates anchors for all **block-level nodes**
+/// that should have stable identifiers in the UI.
+///
+/// ## Block Selection Criteria
+///
+/// Anchors are created for these Markdown elements:
+/// - **`atx_heading`**: `# Heading`, `## Subheading`, etc.
+/// - **`list_item`**: `- Item`, `1. Item`, `* Item`, etc.  
+/// - **`fenced_code_block`**: `` ```language`` blocks
+/// - **`indented_code_block`**: 4-space indented code
+///
+/// **Excluded elements**: `paragraph` nodes are too generic and cause UI issues.
+/// Only explicit structural elements receive anchors.
+///
+/// ## Anchor ID Generation
+///
+/// Each anchor receives a **static ID** generated from:
+/// - Magic number (differentiates from dynamic IDs)
+/// - Node index within document  
+/// - Byte range (ensures uniqueness across content)
+/// - Hash collision resistance (128-bit IDs)
+///
+/// ## List Item Range Calculation
+///
+/// For `list_item` nodes, the function uses **own-range calculation** to prevent
+/// overlapping anchors between parent and child list items. This ensures each
+/// list item gets its own stable identifier without conflicts.
+///
+/// Call this function **once** after document creation to establish the initial
+/// anchor set. Subsequent edits will maintain anchors via transformation/rebinding.
 pub fn create_anchors_from_tree(doc: &mut Document) {
     doc.anchors.clear();
 

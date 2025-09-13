@@ -1,68 +1,185 @@
 use crate::editing::{AnchorId, Document, document::Marker};
 use regex::Regex;
 
-/// Represents a grouped content structure for proper HTML ul/ol rendering
+/// Content grouping for structured UI rendering (ADR-0004 View Layer)
+///
+/// ContentGroups implement the hierarchical rendering structure needed by frontend
+/// frameworks. They group flat `RenderBlock` sequences into semantically meaningful
+/// structures like nested lists, enabling proper HTML `<ul>`/`<ol>` generation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContentGroup {
-    /// A single non-list block
+    /// Single block element (heading, paragraph, code, etc.)
     SingleBlock(RenderBlock),
-    /// A group of consecutive bullet list items that should be rendered as ul/li
+    /// Consecutive bullet list items grouped for `<ul>` rendering
     BulletListGroup { items: Vec<ListItem> },
-    /// A group of consecutive numbered list items that should be rendered as ol/li
+    /// Consecutive numbered list items grouped for `<ol>` rendering  
     NumberedListGroup { items: Vec<ListItem> },
 }
 
-/// A list item that can contain nested sub-lists
+/// Hierarchical list item with nested children (ADR-0004)
+///
+/// ListItems represent the nested structure of Markdown lists, enabling proper
+/// recursive rendering in UI frameworks. Each item contains its own content block
+/// plus any child items at deeper indentation levels.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ListItem {
+    /// The render block for this list item's content
     pub block: RenderBlock,
+    /// Child list items at deeper indentation (recursive structure)
     pub children: Vec<ListItem>,
 }
 
-/// Snapshot of the document for rendering
+/// Immutable document snapshot for UI rendering (ADR-0004 Read API)
+///
+/// Snapshots implement the "Read API" described in ADR-4. They provide an **immutable view**
+/// of the document structure without exposing the underlying xi-rope buffer. This enables:
+///
+/// - **Clean UI separation**: UI renders from snapshots, never mutates rope directly
+/// - **Stable references**: Blocks have persistent AnchorIds across document edits
+/// - **Version tracking**: UI can detect when document changes require re-rendering
+/// - **Multiple frontends**: Same snapshot structure works for Dioxus, TUI, etc.
+///
+/// ## Rendering Pattern
+///
+/// ```rust
+/// let snapshot = doc.snapshot();
+/// for group in &snapshot.content_groups {
+///     match group {
+///         ContentGroup::BulletListGroup { items } => render_ul(items),
+///         ContentGroup::NumberedListGroup { items } => render_ol(items),
+///         ContentGroup::SingleBlock(block) => render_block(block),
+///     }
+/// }
+/// ```
 #[derive(Clone, PartialEq)]
 pub struct Snapshot {
+    /// Document version for change detection
     pub version: u64,
-    pub blocks: Vec<RenderBlock>, // Keep for backward compatibility during migration
+    /// Flat list of blocks (backward compatibility, will be deprecated)
+    pub blocks: Vec<RenderBlock>,
+    /// Hierarchical content structure for modern UI rendering
     pub content_groups: Vec<ContentGroup>,
 }
 
-/// A renderable block in the document
+/// UI-ready block with stable identity and content metadata (ADR-0004)
+///
+/// RenderBlocks represent individual document elements prepared for UI consumption.
+/// They contain all information needed for rendering without requiring access to
+/// the underlying document buffer.
+///
+/// ## Key Fields
+///
+/// - **`id`**: Stable AnchorId that persists across edits
+/// - **`kind`**: Block type determining rendering strategy  
+/// - **`byte_range`**: Full block range in original document
+/// - **`content_range`**: Editable text range (excludes Markdown syntax)
+/// - **`content`**: Extracted text ready for display/editing
+/// - **`segments`**: Parsed wiki-links and URLs for interactive rendering
+///
+/// ## UI Integration
+///
+/// The block provides both "pretty" rendering content and precise editing ranges:
+///
+/// ```rust
+/// match block.kind {
+///     BlockKind::Heading { level } => {
+///         // Pretty rendering: show content without # markers  
+///         render_heading(level, &block.content);
+///         // Edit mode: focus on content_range for raw Markdown editing
+///         if focused { edit_range(&doc, block.content_range); }
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderBlock {
+    /// Stable identifier that persists across document edits
     pub id: AnchorId,
+    /// Block type with associated metadata
     pub kind: BlockKind,
+    /// Full byte range of this block in the document
     pub byte_range: std::ops::Range<usize>,
+    /// Editable content range (excludes Markdown prefixes/suffixes)
     pub content_range: std::ops::Range<usize>,
+    /// Indentation depth for hierarchical display
     pub depth: usize,
+    /// Extracted content text ready for rendering
     pub content: String,
+    /// Parsed inline elements (wiki-links, URLs) for interactive rendering
     pub segments: Option<Vec<TextSegment>>,
 }
 
-/// Block types for rendering
+/// Markdown block type classification for rendering (ADR-0004)
+///
+/// BlockKind determines how UI frameworks should render each block. The enum
+/// provides sufficient metadata for both visual styling and editing behavior.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockKind {
+    /// Regular paragraph text
     Paragraph,
+    /// ATX heading (# to ######)
     Heading { level: u8 },
+    /// List item with marker type and nesting depth
     ListItem { marker: Marker, depth: usize },
+    /// Fenced code block with optional language
     CodeFence { lang: Option<String> },
-    ThematicBreak,     // Horizontal rule (---, ***, ___)
-    BlockQuote,        // > Quoted text
-    UnhandledMarkdown, // Fallback for any unrecognized markdown content
+    /// Horizontal rule (---, ***, ___)
+    ThematicBreak,
+    /// Block quote (> quoted text)
+    BlockQuote,
+    /// Fallback for unrecognized Markdown elements
+    UnhandledMarkdown,
 }
 
-/// Text segment for inline content with wiki-links and URLs
+/// Parsed inline content for interactive rendering (ADR-0004)
+///
+/// TextSegments enable rich inline rendering within blocks. They parse wiki-links
+/// and URLs from block content, enabling click navigation and hover previews.
+///
+/// ## Parsing Strategy
+///
+/// - **Wiki-links**: `[[Page Name]]` syntax for internal navigation
+/// - **URLs**: `http://` and `https://` links with punctuation cleanup
+/// - **Overlap resolution**: Wiki-links take precedence over URLs
+/// - **Plain text**: Everything else renders as regular text
 #[derive(Debug, Clone, PartialEq)]
 pub enum TextSegment {
     /// Regular text content
     Text(String),
-    /// Wiki-style link [[target]]
+    /// Wiki-style link [[target]] for internal navigation
     WikiLink { target: String },
-    /// HTTP/HTTPS URL
+    /// HTTP/HTTPS URL for external links
     Url { href: String },
 }
 
-/// Get a snapshot of the document for rendering
+/// Create immutable snapshot from document state (ADR-0004 Read API)
+///
+/// This function implements the core snapshot generation described in ADR-4. It
+/// traverses the Tree-sitter CST and produces UI-ready rendering blocks without
+/// exposing the internal xi-rope buffer structure.
+///
+/// ## Snapshot Generation Process
+///
+/// 1. **CST Traversal**: Recursively walks Tree-sitter parse tree
+/// 2. **Block Extraction**: Converts nodes to RenderBlocks with content metadata  
+/// 3. **Range Calculation**: Separates structural (byte_range) from editable (content_range)
+/// 4. **Anchor Association**: Links blocks to stable AnchorIds for UI consistency
+/// 5. **Content Grouping**: Organizes flat blocks into hierarchical ContentGroups
+/// 6. **Inline Parsing**: Extracts wiki-links and URLs for interactive rendering
+///
+/// ## Block Range Types
+///
+/// - **`byte_range`**: Full structural range including Markdown syntax
+/// - **`content_range`**: Editable text range excluding markers/prefixes
+///
+/// Example: `"# Heading"` → byte_range: 0..9, content_range: 2..9
+///
+/// ## UI Framework Integration
+///
+/// The snapshot structure enables both:
+/// - **Pretty rendering**: Display content without Markdown syntax
+/// - **Raw editing**: Focus content_range for textarea-based editing
+///
+/// This follows ADR-4's "pretty everywhere, raw in focused block" pattern.
 pub(crate) fn create_snapshot(doc: &Document) -> Snapshot {
     let mut blocks = Vec::new();
 
