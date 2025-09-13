@@ -24,3 +24,32 @@ rstest = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+criterion = "0.5"
+
+[[bench]]
+name = "document"
+harness = false
+
+[[bench]]
+name = "commands"
+harness = false
+
+[[bench]]
+name = "anchors"
+harness = false
+
+[[bench]]
+name = "snapshot"
+harness = false
+
+[[bench]]
+name = "point_description"
+harness = false
+
+[[bench]]
+name = "integration"
+harness = false
+
+[[bench]]
+name = "parsing"
+harness = false
