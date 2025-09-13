@@ -5,12 +5,13 @@ use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, Snapshot};
 use markdown_neuraxis_engine::models::MarkdownFile;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[component]
 pub fn MainPanel(
     file: MarkdownFile,
     snapshot: Snapshot,
-    document: Document,
+    document: Arc<Document>,
     on_file_select: Option<Callback<PathBuf>>,
     on_save: Callback<()>,
     on_command: Callback<Cmd>,

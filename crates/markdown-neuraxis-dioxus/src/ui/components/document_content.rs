@@ -2,12 +2,13 @@ use crate::ui::components::content_group::ContentGroup;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, Snapshot};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Component for document content rendering
 #[component]
 pub fn DocumentContent(
     snapshot: Snapshot,
-    document: Document,
+    document: Arc<Document>,
     focused_anchor_id: Signal<Option<AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<Cmd>,

@@ -4,6 +4,7 @@ use markdown_neuraxis_engine::editing::{
     AnchorId, BlockKind, Cmd, Document, ListItem, Marker, RenderBlock,
 };
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[component]
 pub fn ListChildren(
@@ -12,7 +13,7 @@ pub fn ListChildren(
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
     focused_anchor_id: Signal<Option<AnchorId>>,
-    document: Document,
+    document: Arc<Document>,
 ) -> Element {
     if item.children.is_empty() {
         return rsx! { {} };
