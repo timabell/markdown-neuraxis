@@ -1,4 +1,4 @@
-# ADR-0003: Multi-Crate Workspace Structure
+# ADR-0006: Multi-Crate Workspace Structure
 
 ## Status
 Accepted
