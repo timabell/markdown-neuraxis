@@ -2887,6 +2887,7 @@ name = "markdown-neuraxis-dioxus"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "criterion",
  "dioxus",
  "dioxus-ssr",
  "insta",
