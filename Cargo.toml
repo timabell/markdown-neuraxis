@@ -1,5 +1,12 @@
-[package]
-name = "markdown-neuraxis"
+[workspace]
+resolver = "2"
+members = [
+    "crates/markdown-neuraxis-engine",
+    "crates/markdown-neuraxis-dioxus",
+    "crates/markdown-neuraxis-cli",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 authors = ["Tim Abell"]
@@ -7,11 +14,11 @@ description = "Local-first structured thought and knowledge management tool"
 license = "AGPL-3.0-only"
 repository = "https://github.com/timabell/markdown-neuraxis"
 
-[dependencies]
+[workspace.dependencies]
+# Core dependencies
 anyhow = "1.0"
 pulldown-cmark = "0.13"
 serde = { version = "1.0", features = ["derive"] }
-dioxus = { version = "0.6", features = ["desktop"] }
 thiserror = "2.0"
 uuid = { version = "1.18", features = ["v4", "serde"] }
 relative-path = { version = "2.0", features = ["serde"] }
@@ -20,7 +27,12 @@ tree-sitter = "0.25"
 tree-sitter-md = "0.3"
 html-escape = "0.2"
 
-[dev-dependencies]
+# UI dependencies
+dioxus = { version = "0.6", features = ["desktop"] }
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Dev dependencies
 rstest = "0.26"
 insta = { version = "1.43", features = ["yaml"] }
 pretty_assertions = "1.4"

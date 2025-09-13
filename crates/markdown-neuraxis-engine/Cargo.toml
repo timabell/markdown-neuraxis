@@ -1,0 +1,26 @@
+[package]
+name = "markdown-neuraxis-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Core processing engine for markdown-neuraxis"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+pulldown-cmark = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+relative-path = { workspace = true }
+xi-rope = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-md = { workspace = true }
+html-escape = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }

@@ -1,0 +1,18 @@
+[package]
+name = "markdown-neuraxis-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Command-line TUI for markdown-neuraxis using ratatui"
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "markdown-neuraxis-cli"
+path = "src/main.rs"
+
+[dependencies]
+markdown-neuraxis-engine = { path = "../markdown-neuraxis-engine" }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+anyhow = { workspace = true }
