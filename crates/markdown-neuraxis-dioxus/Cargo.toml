@@ -1,0 +1,24 @@
+[package]
+name = "markdown-neuraxis-dioxus"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Dioxus desktop UI for markdown-neuraxis"
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "markdown-neuraxis-dioxus"
+path = "src/main.rs"
+
+[dependencies]
+markdown-neuraxis-engine = { path = "../markdown-neuraxis-engine" }
+dioxus = { workspace = true }
+anyhow = { workspace = true }
+relative-path = { workspace = true }
+
+[dev-dependencies]
+dioxus-ssr = { workspace = true }
+tempfile = { workspace = true }
+insta = { workspace = true }
+pretty_assertions = { workspace = true }

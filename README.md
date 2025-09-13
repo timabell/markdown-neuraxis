@@ -64,8 +64,17 @@ In this project, your **Markdown files** form that core. They represent everythi
 ## 📖 Usage
 
 ### Running the Application
+
+The project provides two frontends that share the same core engine:
+
+#### Desktop UI (Dioxus)
 ```bash
-cargo run <path-to-notes-folder>
+cargo run --bin markdown-neuraxis-dioxus -- <path-to-notes-folder>
+```
+
+#### Terminal UI (ratatui)
+```bash
+cargo run --bin markdown-neuraxis-cli -- <path-to-notes-folder>
 ```
 
 The application works with any folder containing markdown files. However it is encouraged to follow the following layout:
@@ -127,6 +136,16 @@ It will be a huge encouragement to my efforts if I know others think the same wa
 ## Technology & design
 
 See [doc/design.md](doc/design.md)
+
+## Architecture
+
+The codebase is organized as a Rust workspace with separate crates:
+
+- `crates/markdown-neuraxis-engine/` - Core processing logic, no UI dependencies
+- `crates/markdown-neuraxis-dioxus/` - Desktop GUI using Dioxus
+- `crates/markdown-neuraxis-cli/` - Terminal UI using ratatui
+
+Both UIs share the same engine crate, providing clean separation between processing logic and presentation.
 
 ## Development
 
