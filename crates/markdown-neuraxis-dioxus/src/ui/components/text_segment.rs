@@ -45,6 +45,27 @@ fn render_segment(segment: TextSegment, on_wikilink_click: Callback<String>) -> 
                 }
             }
         }
+        TextSegment::Url { href } => {
+            let href_clone = href.clone();
+            rsx! {
+                a {
+                    class: "external-link",
+                    href: "{href}",
+                    target: "_blank",
+                    rel: "noopener noreferrer",
+                    onclick: move |evt: MouseEvent| {
+                        evt.prevent_default();
+                        evt.stop_propagation();
+                        // Use system's default browser to open the URL
+                        if let Err(e) = open_url(&href_clone) {
+                            eprintln!("Failed to open URL {}: {}", href_clone, e);
+                        }
+                    },
+                    "{href}",
+                    span { class: "external-link-icon", " ↗" }
+                }
+            }
+        }
     }
 }
 
@@ -67,4 +88,26 @@ pub fn ContentWithWikiLinks(
     } else {
         rsx! { span { "{content}" } }
     }
+}
+
+/// Opens a URL in the system's default browser
+fn open_url(url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", url])
+            .spawn()?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(url).spawn()?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open").arg(url).spawn()?;
+    }
+
+    Ok(())
 }

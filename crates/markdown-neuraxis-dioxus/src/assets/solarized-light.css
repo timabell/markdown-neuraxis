@@ -598,3 +598,30 @@ hr {
     color: var(--magenta);
     border-bottom-color: var(--magenta);
 }
+
+/* External link styling */
+.external-link {
+    color: var(--green);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px dotted var(--green);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.external-link:hover {
+    color: var(--yellow);
+    border-bottom-color: var(--yellow);
+    background-color: rgba(181, 137, 0, 0.1);
+}
+
+.external-link:active {
+    color: var(--orange);
+    border-bottom-color: var(--orange);
+}
+
+.external-link-icon {
+    font-size: 0.8em;
+    opacity: 0.7;
+    margin-left: 2px;
+}

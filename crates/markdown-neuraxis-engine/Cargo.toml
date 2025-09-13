@@ -18,6 +18,7 @@ xi-rope = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-md = { workspace = true }
 html-escape = { workspace = true }
+regex = { workspace = true }
 
 [dev-dependencies]
 rstest = { workspace = true }

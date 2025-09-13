@@ -1,4 +1,5 @@
 use crate::editing::{AnchorId, Document, document::Marker};
+use regex::Regex;
 
 /// Represents a grouped content structure for proper HTML ul/ol rendering
 #[derive(Debug, Clone, PartialEq)]
@@ -50,13 +51,15 @@ pub enum BlockKind {
     UnhandledMarkdown, // Fallback for any unrecognized markdown content
 }
 
-/// Text segment for inline content with wiki-links
+/// Text segment for inline content with wiki-links and URLs
 #[derive(Debug, Clone, PartialEq)]
 pub enum TextSegment {
     /// Regular text content
     Text(String),
     /// Wiki-style link [[target]]
     WikiLink { target: String },
+    /// HTTP/HTTPS URL
+    Url { href: String },
 }
 
 /// Get a snapshot of the document for rendering
@@ -98,10 +101,10 @@ fn collect_render_blocks_recursive(
             let content_range = extract_heading_content_range(doc, &node);
             let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
-            let segments = parse_wiki_links(&content);
+            let segments = parse_text_segments(&content);
             let segments = if segments
                 .iter()
-                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
             {
                 Some(segments)
             } else {
@@ -128,10 +131,10 @@ fn collect_render_blocks_recursive(
             let own_byte_range = extract_list_item_own_range(doc, &node);
 
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
-            let segments = parse_wiki_links(&content);
+            let segments = parse_text_segments(&content);
             let segments = if segments
                 .iter()
-                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
             {
                 Some(segments)
             } else {
@@ -169,10 +172,10 @@ fn collect_render_blocks_recursive(
                 let content_range = extract_paragraph_content_range(doc, &node);
                 let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
                 let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
-                let segments = parse_wiki_links(&content);
+                let segments = parse_text_segments(&content);
                 let segments = if segments
                     .iter()
-                    .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                    .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
                 {
                     Some(segments)
                 } else {
@@ -241,10 +244,10 @@ fn collect_render_blocks_recursive(
             // > Quoted text
             let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
             let content = doc.slice_to_cow(byte_range.clone()).to_string();
-            let segments = parse_wiki_links(&content);
+            let segments = parse_text_segments(&content);
             let segments = if segments
                 .iter()
-                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
             {
                 Some(segments)
             } else {
@@ -293,10 +296,10 @@ fn collect_render_blocks_recursive(
             );
 
             let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
-            let segments = parse_wiki_links(&content);
+            let segments = parse_text_segments(&content);
             let segments = if segments
                 .iter()
-                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
             {
                 Some(segments)
             } else {
@@ -556,38 +559,107 @@ fn extract_code_fence_content_range(
     content_start..content_end
 }
 
-/// Parse text content and extract wiki-links, returning segments
-fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
+/// Parse text content and extract wiki-links and URLs, returning segments
+fn parse_text_segments(text: &str) -> Vec<TextSegment> {
+    use std::sync::OnceLock;
+
+    // Regex pattern for HTTP/HTTPS URLs
+    static URL_REGEX: OnceLock<Regex> = OnceLock::new();
+    let url_regex =
+        URL_REGEX.get_or_init(|| Regex::new(r"https?://[^\s<>\[\]]+").expect("Invalid URL regex"));
+
     let mut segments = Vec::new();
     let mut current_pos = 0;
 
-    // Find all [[...]] patterns
-    while let Some(start) = text[current_pos..].find("[[") {
-        let absolute_start = current_pos + start;
+    // Find all patterns (wiki-links and URLs) and their positions
+    let mut patterns: Vec<(usize, usize, PatternType)> = Vec::new();
 
-        // Add any text before the wiki-link
-        if start > 0 {
-            let text_segment = text[current_pos..absolute_start].to_string();
+    // Find wiki-links [[...]]
+    let mut wiki_start = 0;
+    while let Some(start) = text[wiki_start..].find("[[") {
+        let absolute_start = wiki_start + start;
+        if let Some(end) = text[absolute_start + 2..].find("]]") {
+            let absolute_end = absolute_start + 2 + end + 2; // Include the closing ]]
+            patterns.push((absolute_start, absolute_end, PatternType::WikiLink));
+            wiki_start = absolute_end;
+        } else {
+            // No closing ]], treat [[ as regular text (will be processed separately)
+            patterns.push((
+                absolute_start,
+                absolute_start + 2,
+                PatternType::UnmatchedWikiStart,
+            ));
+            wiki_start = absolute_start + 2;
+        }
+    }
+
+    // Find URLs and clean up trailing punctuation
+    for url_match in url_regex.find_iter(text) {
+        let start = url_match.start();
+        let mut end = url_match.end();
+
+        // Remove trailing punctuation that's typically not part of URLs
+        let url_text = &text[start..end];
+        while let Some(last_char) = url_text[..(end - start)].chars().last() {
+            if matches!(
+                last_char,
+                '.' | ',' | ':' | ';' | '!' | '?' | ')' | ']' | '}'
+            ) {
+                end -= last_char.len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        if end > start {
+            patterns.push((start, end, PatternType::Url));
+        }
+    }
+
+    // Sort patterns by starting position
+    patterns.sort_by_key(|&(start, _, _)| start);
+
+    // Remove overlapping patterns (prefer wiki-links over URLs when they overlap)
+    let mut filtered_patterns = Vec::new();
+    for &(start, end, pattern_type) in &patterns {
+        let overlaps = filtered_patterns.iter().any(|&(prev_start, prev_end, _)| {
+            // Check if current pattern overlaps with any previous pattern
+            start < prev_end && end > prev_start
+        });
+
+        if !overlaps {
+            filtered_patterns.push((start, end, pattern_type));
+        }
+    }
+
+    // Process the text with patterns
+    for &(start, end, pattern_type) in &filtered_patterns {
+        // Add text before the pattern
+        if current_pos < start {
+            let text_segment = text[current_pos..start].to_string();
             if !text_segment.is_empty() {
                 segments.push(TextSegment::Text(text_segment));
             }
         }
 
-        // Find the end of the wiki-link
-        if let Some(end) = text[absolute_start + 2..].find("]]") {
-            let absolute_end = absolute_start + 2 + end;
-            let link_content = &text[absolute_start + 2..absolute_end];
-
-            // Parse link content
-            let target = link_content.trim().to_string();
-
-            segments.push(TextSegment::WikiLink { target });
-            current_pos = absolute_end + 2;
-        } else {
-            // No closing ]], treat [[ as regular text
-            segments.push(TextSegment::Text("[[".to_string()));
-            current_pos = absolute_start + 2;
+        // Add the pattern segment
+        match pattern_type {
+            PatternType::WikiLink => {
+                let link_content = &text[start + 2..end - 2]; // Remove [[ and ]]
+                let target = link_content.trim().to_string();
+                segments.push(TextSegment::WikiLink { target });
+            }
+            PatternType::Url => {
+                let href = text[start..end].to_string();
+                segments.push(TextSegment::Url { href });
+            }
+            PatternType::UnmatchedWikiStart => {
+                // Add [[ as regular text
+                segments.push(TextSegment::Text("[[".to_string()));
+            }
         }
+
+        current_pos = end;
     }
 
     // Add any remaining text
@@ -599,6 +671,13 @@ fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
     }
 
     segments
+}
+
+#[derive(Copy, Clone, Debug)]
+enum PatternType {
+    WikiLink,
+    Url,
+    UnmatchedWikiStart,
 }
 
 /// Groups consecutive list items into proper nested HTML structure
@@ -1754,12 +1833,12 @@ mod tests {
         assert!(!snapshot2.blocks.is_empty());
     }
 
-    // ============ WikiLink Parsing tests ============
+    // ============ Text Segment Parsing tests ============
 
     #[test]
-    fn test_parse_wiki_links_plain_text() {
+    fn test_parse_text_segments_plain_text() {
         let text = "This is plain text without links";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         assert_eq!(segments.len(), 1);
         assert_eq!(
@@ -1769,9 +1848,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_wiki_links_single_link() {
+    fn test_parse_text_segments_single_link() {
         let text = "Check out [[Page Name]] for details";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         assert_eq!(segments.len(), 3);
         assert_eq!(segments[0], TextSegment::Text("Check out ".to_string()));
@@ -1785,9 +1864,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_wiki_links_multiple_links() {
+    fn test_parse_text_segments_multiple_links() {
         let text = "See [[First Page]] and [[Second Page]] and [[Third Page]]";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         assert_eq!(segments.len(), 6);
         assert_eq!(segments[0], TextSegment::Text("See ".to_string()));
@@ -1814,9 +1893,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_wiki_links_whitespace_trimming() {
+    fn test_parse_text_segments_whitespace_trimming() {
         let text = "Link: [[  Spaced Out  ]] text";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         assert_eq!(segments.len(), 3);
         assert_eq!(segments[0], TextSegment::Text("Link: ".to_string()));
@@ -1830,9 +1909,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_wiki_links_unclosed_bracket() {
+    fn test_parse_text_segments_unclosed_bracket() {
         let text = "Incomplete [[link without closing";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         // Should treat [[ as regular text when there's no closing ]]
         // The parse function will add "[[" as text, then continue with the rest
@@ -1846,9 +1925,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_wiki_links_empty_link() {
+    fn test_parse_text_segments_empty_link() {
         let text = "Empty [[]] link";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         assert_eq!(segments.len(), 3);
         assert_eq!(segments[0], TextSegment::Text("Empty ".to_string()));
@@ -1862,9 +1941,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_wiki_links_adjacent_links() {
+    fn test_parse_text_segments_adjacent_links() {
         let text = "[[First]][[Second]] adjacent";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         assert_eq!(segments.len(), 3);
         assert_eq!(
@@ -1883,9 +1962,9 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_wiki_links_complex_target_names() {
+    fn test_parse_text_segments_complex_target_names() {
         let text = "See [[Notes/2023/Daily Journal]] and [[Project: New Feature]]";
-        let segments = parse_wiki_links(text);
+        let segments = parse_text_segments(text);
 
         assert_eq!(segments.len(), 4);
         assert_eq!(segments[0], TextSegment::Text("See ".to_string()));
@@ -2028,5 +2107,305 @@ mod tests {
         let block = &snapshot.blocks[0];
         assert!(matches!(block.kind, BlockKind::CodeFence { lang: None }));
         assert!(block.segments.is_none());
+    }
+
+    // ============ URL Detection Tests ============
+
+    #[test]
+    fn test_parse_text_segments_simple_url() {
+        let text = "Check out https://example.com for more info";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Check out ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" for more info".to_string()));
+    }
+
+    #[test]
+    fn test_parse_text_segments_multiple_urls() {
+        let text = "Visit https://example.com and http://test.org for details";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 5);
+        assert_eq!(segments[0], TextSegment::Text("Visit ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" and ".to_string()));
+        assert_eq!(
+            segments[3],
+            TextSegment::Url {
+                href: "http://test.org".to_string()
+            }
+        );
+        assert_eq!(segments[4], TextSegment::Text(" for details".to_string()));
+    }
+
+    #[test]
+    fn test_parse_text_segments_mixed_wiki_and_urls() {
+        let text = "See [[Internal Page]] and visit https://external.com";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 4);
+        assert_eq!(segments[0], TextSegment::Text("See ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Internal Page".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" and visit ".to_string()));
+        assert_eq!(
+            segments[3],
+            TextSegment::Url {
+                href: "https://external.com".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_text_segments_url_at_start() {
+        let text = "https://example.com is a great site";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(
+            segments[0],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+        assert_eq!(
+            segments[1],
+            TextSegment::Text(" is a great site".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_text_segments_url_at_end() {
+        let text = "Visit our website at https://example.com";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(
+            segments[0],
+            TextSegment::Text("Visit our website at ".to_string())
+        );
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_text_segments_url_with_path_and_params() {
+        let text = "Go to https://example.com/path?param=value&other=test";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0], TextSegment::Text("Go to ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com/path?param=value&other=test".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_text_segments_no_urls_or_wikilinks() {
+        let text = "Just plain text with no special links";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(
+            segments[0],
+            TextSegment::Text("Just plain text with no special links".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_text_segments_adjacent_wiki_and_url() {
+        let text = "[[Internal]]https://external.com";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(
+            segments[0],
+            TextSegment::WikiLink {
+                target: "Internal".to_string()
+            }
+        );
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://external.com".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_text_segments_http_and_https() {
+        let text = "HTTP: http://insecure.com HTTPS: https://secure.com";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 4);
+        assert_eq!(segments[0], TextSegment::Text("HTTP: ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "http://insecure.com".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" HTTPS: ".to_string()));
+        assert_eq!(
+            segments[3],
+            TextSegment::Url {
+                href: "https://secure.com".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_text_segments_url_edge_cases() {
+        // URL followed by punctuation
+        let text = "Visit https://example.com. It's great!";
+        let segments = parse_text_segments(text);
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Visit ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(". It's great!".to_string()));
+    }
+
+    #[test]
+    fn test_parse_text_segments_overlapping_patterns() {
+        // Wiki link containing what looks like a URL
+        let text = "See [[https://example.com documentation]] for details";
+        let segments = parse_text_segments(text);
+
+        // Should prefer wiki-link over URL when they overlap
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("See ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "https://example.com documentation".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" for details".to_string()));
+    }
+
+    #[test]
+    fn test_snapshot_with_urls_in_heading() {
+        let text = "# Check out https://example.com for updates";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(block.kind, BlockKind::Heading { level: 1 }));
+        assert_eq!(block.content, "Check out https://example.com for updates");
+        assert!(block.segments.is_some());
+
+        let segments = block.segments.as_ref().unwrap();
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Check out ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" for updates".to_string()));
+    }
+
+    #[test]
+    fn test_snapshot_with_urls_in_paragraph() {
+        let text = "This paragraph has https://example.com and https://test.org links.";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(block.kind, BlockKind::Paragraph));
+        assert_eq!(
+            block.content,
+            "This paragraph has https://example.com and https://test.org links."
+        );
+        assert!(block.segments.is_some());
+
+        let segments = block.segments.as_ref().unwrap();
+        assert_eq!(segments.len(), 5);
+        assert_eq!(
+            segments[0],
+            TextSegment::Text("This paragraph has ".to_string())
+        );
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" and ".to_string()));
+        assert_eq!(
+            segments[3],
+            TextSegment::Url {
+                href: "https://test.org".to_string()
+            }
+        );
+        assert_eq!(segments[4], TextSegment::Text(" links.".to_string()));
+    }
+
+    #[test]
+    fn test_snapshot_with_urls_in_list_item() {
+        let text = "- Check https://example.com for updates";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(
+            block.kind,
+            BlockKind::ListItem {
+                marker: Marker::Dash,
+                depth: 0
+            }
+        ));
+        assert_eq!(block.content, "Check https://example.com for updates");
+        assert!(block.segments.is_some());
+
+        let segments = block.segments.as_ref().unwrap();
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Check ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::Url {
+                href: "https://example.com".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" for updates".to_string()));
     }
 }

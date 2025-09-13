@@ -2906,6 +2906,7 @@ dependencies = [
  "insta",
  "pretty_assertions",
  "pulldown-cmark",
+ "regex",
  "relative-path 2.0.1",
  "rstest",
  "serde",

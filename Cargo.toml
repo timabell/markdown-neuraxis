@@ -26,6 +26,7 @@ xi-rope = "0.3"
 tree-sitter = "0.25"
 tree-sitter-md = "0.3"
 html-escape = "0.2"
+regex = "1.0"
 
 # UI dependencies
 dioxus = { version = "0.6", features = ["desktop"] }
