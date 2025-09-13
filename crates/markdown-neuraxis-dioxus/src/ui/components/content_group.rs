@@ -10,20 +10,24 @@ use std::sync::Arc;
 pub fn ContentGroup(
     group: EditorContentGroup,
     group_index: usize,
+    notes_path: PathBuf,
     document: Arc<markdown_neuraxis_engine::editing::Document>,
     focused_anchor_id: Signal<Option<markdown_neuraxis_engine::editing::AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<markdown_neuraxis_engine::editing::Cmd>,
+    on_wikilink_click: Callback<String>,
 ) -> Element {
     match group {
         EditorContentGroup::SingleBlock(block) => rsx! {
             SingleBlock {
                 block,
                 group_index,
+                notes_path,
                 document,
                 focused_anchor_id,
                 on_file_select,
-                on_command
+                on_command,
+                on_wikilink_click
             }
         },
         EditorContentGroup::BulletListGroup { .. }
@@ -31,10 +35,12 @@ pub fn ContentGroup(
             ListGroup {
                 group,
                 group_index,
+                notes_path,
                 document,
                 focused_anchor_id,
                 on_file_select,
-                on_command
+                on_command,
+                on_wikilink_click
             }
         },
     }

@@ -9,9 +9,11 @@ use std::sync::Arc;
 pub fn ListComponent(
     items: Vec<ListItem>,
     list_type: &'static str,
+    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
+    on_wikilink_click: Callback<String>,
     focused_anchor_id: Signal<Option<AnchorId>>,
     document: Arc<Document>,
 ) -> Element {
@@ -22,9 +24,11 @@ pub fn ListComponent(
                 for item in items {
                     ListItemComponent {
                         item,
+                        notes_path: notes_path.clone(),
                         on_file_select,
                         on_focus,
                         on_command,
+                        on_wikilink_click,
                         focused_anchor_id,
                         document: document.clone()
                     }
@@ -37,9 +41,11 @@ pub fn ListComponent(
                 for item in items {
                     ListItemComponent {
                         item,
+                        notes_path: notes_path.clone(),
                         on_file_select,
                         on_focus,
                         on_command,
+                        on_wikilink_click,
                         focused_anchor_id,
                         document: document.clone()
                     }

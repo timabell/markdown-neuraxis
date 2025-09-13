@@ -1,15 +1,17 @@
-use crate::ui::components::editor_block::EditorBlock;
+use crate::ui::components::{editor_block::EditorBlock, text_segment::ContentWithWikiLinks};
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, ListItem, RenderBlock};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 #[component]
 pub fn ListItemContent(
     item: ListItem,
     is_focused: bool,
     document: Arc<Document>,
+    notes_path: PathBuf,
     on_command: Callback<Cmd>,
     on_focus: Callback<RenderBlock>,
+    on_wikilink_click: Callback<String>,
     focused_anchor_id: Signal<Option<AnchorId>>,
 ) -> Element {
     if is_focused {
@@ -33,7 +35,12 @@ pub fn ListItemContent(
                     evt.stop_propagation();
                     on_focus.call(block.clone());
                 },
-                "{item.block.content}"
+                ContentWithWikiLinks {
+                    content: item.block.content.clone(),
+                    segments: item.block.segments.clone(),
+                    notes_path,
+                    on_wikilink_click
+                }
             }
         }
     }

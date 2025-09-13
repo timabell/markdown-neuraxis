@@ -9,10 +9,12 @@ use std::sync::Arc;
 pub fn ListGroup(
     group: EditorContentGroup,
     group_index: usize,
+    notes_path: PathBuf,
     document: Arc<markdown_neuraxis_engine::editing::Document>,
     focused_anchor_id: Signal<Option<markdown_neuraxis_engine::editing::AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<markdown_neuraxis_engine::editing::Cmd>,
+    on_wikilink_click: Callback<String>,
 ) -> Element {
     match group {
         EditorContentGroup::BulletListGroup { items } => {
@@ -21,6 +23,7 @@ pub fn ListGroup(
                     key: "{group_index}-bullet-list",
                     items,
                     list_type: "ul",
+                    notes_path: notes_path.clone(),
                     on_file_select,
                     on_focus: {
                         let mut focused_anchor_id = focused_anchor_id;
@@ -29,6 +32,7 @@ pub fn ListGroup(
                         }
                     },
                     on_command,
+                    on_wikilink_click,
                     focused_anchor_id,
                     document
                 }
@@ -40,6 +44,7 @@ pub fn ListGroup(
                     key: "{group_index}-numbered-list",
                     items,
                     list_type: "ol",
+                    notes_path,
                     on_file_select,
                     on_focus: {
                         let mut focused_anchor_id = focused_anchor_id;
@@ -48,6 +53,7 @@ pub fn ListGroup(
                         }
                     },
                     on_command,
+                    on_wikilink_click,
                     focused_anchor_id,
                     document
                 }

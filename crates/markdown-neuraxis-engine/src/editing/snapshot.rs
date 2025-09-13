@@ -35,6 +35,7 @@ pub struct RenderBlock {
     pub content_range: std::ops::Range<usize>,
     pub depth: usize,
     pub content: String,
+    pub segments: Option<Vec<TextSegment>>,
 }
 
 /// Block types for rendering
@@ -47,6 +48,15 @@ pub enum BlockKind {
     ThematicBreak,     // Horizontal rule (---, ***, ___)
     BlockQuote,        // > Quoted text
     UnhandledMarkdown, // Fallback for any unrecognized markdown content
+}
+
+/// Text segment for inline content with wiki-links
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextSegment {
+    /// Regular text content
+    Text(String),
+    /// Wiki-style link [[target]]
+    WikiLink { target: String },
 }
 
 /// Get a snapshot of the document for rendering
@@ -88,6 +98,15 @@ fn collect_render_blocks_recursive(
             let content_range = extract_heading_content_range(doc, &node);
             let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
+            let segments = parse_wiki_links(&content);
+            let segments = if segments
+                .iter()
+                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+            {
+                Some(segments)
+            } else {
+                None
+            };
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -96,6 +115,7 @@ fn collect_render_blocks_recursive(
                 content_range,
                 depth: current_depth,
                 content,
+                segments,
             });
         }
         "list_item" => {
@@ -108,6 +128,15 @@ fn collect_render_blocks_recursive(
             let own_byte_range = extract_list_item_own_range(doc, &node);
 
             let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
+            let segments = parse_wiki_links(&content);
+            let segments = if segments
+                .iter()
+                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+            {
+                Some(segments)
+            } else {
+                None
+            };
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -119,6 +148,7 @@ fn collect_render_blocks_recursive(
                 content_range,
                 depth: list_depth,
                 content,
+                segments,
             });
 
             // Only process nested list children, not the list item's own content
@@ -139,6 +169,15 @@ fn collect_render_blocks_recursive(
                 let content_range = extract_paragraph_content_range(doc, &node);
                 let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
                 let content = doc.slice_to_cow(content_range.clone()).trim().to_string();
+                let segments = parse_wiki_links(&content);
+                let segments = if segments
+                    .iter()
+                    .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+                {
+                    Some(segments)
+                } else {
+                    None
+                };
 
                 blocks.push(RenderBlock {
                     id: anchor_id,
@@ -147,6 +186,7 @@ fn collect_render_blocks_recursive(
                     content_range,
                     depth: current_depth,
                     content,
+                    segments,
                 });
             }
             // If inside a list item, skip the paragraph block entirely
@@ -165,6 +205,7 @@ fn collect_render_blocks_recursive(
                 content_range,
                 depth: current_depth,
                 content,
+                segments: None, // Code blocks should not parse wikilinks
             });
         }
         "indented_code_block" => {
@@ -178,6 +219,7 @@ fn collect_render_blocks_recursive(
                 content_range: byte_range.clone(),
                 depth: current_depth,
                 content,
+                segments: None, // Code blocks should not parse wikilinks
             });
         }
         "thematic_break" => {
@@ -192,12 +234,22 @@ fn collect_render_blocks_recursive(
                 content_range: byte_range,
                 depth: current_depth,
                 content,
+                segments: None, // Thematic breaks should not parse wikilinks
             });
         }
         "block_quote" => {
             // > Quoted text
             let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
             let content = doc.slice_to_cow(byte_range.clone()).to_string();
+            let segments = parse_wiki_links(&content);
+            let segments = if segments
+                .iter()
+                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+            {
+                Some(segments)
+            } else {
+                None
+            };
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -206,6 +258,7 @@ fn collect_render_blocks_recursive(
                 content_range: byte_range,
                 depth: current_depth,
                 content,
+                segments,
             });
         }
         "document" | "section" => {
@@ -240,6 +293,15 @@ fn collect_render_blocks_recursive(
             );
 
             let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
+            let segments = parse_wiki_links(&content);
+            let segments = if segments
+                .iter()
+                .any(|s| matches!(s, TextSegment::WikiLink { .. }))
+            {
+                Some(segments)
+            } else {
+                None
+            };
 
             blocks.push(RenderBlock {
                 id: anchor_id,
@@ -248,6 +310,7 @@ fn collect_render_blocks_recursive(
                 content_range: byte_range,
                 depth: current_depth,
                 content,
+                segments,
             });
         }
     }
@@ -491,6 +554,51 @@ fn extract_code_fence_content_range(
     };
 
     content_start..content_end
+}
+
+/// Parse text content and extract wiki-links, returning segments
+fn parse_wiki_links(text: &str) -> Vec<TextSegment> {
+    let mut segments = Vec::new();
+    let mut current_pos = 0;
+
+    // Find all [[...]] patterns
+    while let Some(start) = text[current_pos..].find("[[") {
+        let absolute_start = current_pos + start;
+
+        // Add any text before the wiki-link
+        if start > 0 {
+            let text_segment = text[current_pos..absolute_start].to_string();
+            if !text_segment.is_empty() {
+                segments.push(TextSegment::Text(text_segment));
+            }
+        }
+
+        // Find the end of the wiki-link
+        if let Some(end) = text[absolute_start + 2..].find("]]") {
+            let absolute_end = absolute_start + 2 + end;
+            let link_content = &text[absolute_start + 2..absolute_end];
+
+            // Parse link content
+            let target = link_content.trim().to_string();
+
+            segments.push(TextSegment::WikiLink { target });
+            current_pos = absolute_end + 2;
+        } else {
+            // No closing ]], treat [[ as regular text
+            segments.push(TextSegment::Text("[[".to_string()));
+            current_pos = absolute_start + 2;
+        }
+    }
+
+    // Add any remaining text
+    if current_pos < text.len() {
+        let remaining = text[current_pos..].to_string();
+        if !remaining.is_empty() {
+            segments.push(TextSegment::Text(remaining));
+        }
+    }
+
+    segments
 }
 
 /// Groups consecutive list items into proper nested HTML structure
@@ -1174,6 +1282,7 @@ mod tests {
                 content_range: 2..8,
                 depth: 0,
                 content: "Item 1".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(2),
@@ -1185,6 +1294,7 @@ mod tests {
                 content_range: 11..17,
                 depth: 0,
                 content: "Item 2".to_string(),
+                segments: None,
             },
         ];
 
@@ -1217,6 +1327,7 @@ mod tests {
                 content_range: 3..8,
                 depth: 0,
                 content: "Item 1".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(2),
@@ -1228,6 +1339,7 @@ mod tests {
                 content_range: 12..17,
                 depth: 0,
                 content: "Item 2".to_string(),
+                segments: None,
             },
         ];
 
@@ -1260,6 +1372,7 @@ mod tests {
                 content_range: 2..8,
                 depth: 0,
                 content: "Bullet 1".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(2),
@@ -1271,6 +1384,7 @@ mod tests {
                 content_range: 11..17,
                 depth: 0,
                 content: "Bullet 2".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(3),
@@ -1282,6 +1396,7 @@ mod tests {
                 content_range: 21..26,
                 depth: 0,
                 content: "Number 1".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(4),
@@ -1293,6 +1408,7 @@ mod tests {
                 content_range: 30..35,
                 depth: 0,
                 content: "Number 2".to_string(),
+                segments: None,
             },
         ];
 
@@ -1335,6 +1451,7 @@ mod tests {
                 content_range: 2..8,
                 depth: 0,
                 content: "Item 1".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(2),
@@ -1346,6 +1463,7 @@ mod tests {
                 content_range: 13..19,
                 depth: 1,
                 content: "Nested 1".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(3),
@@ -1357,6 +1475,7 @@ mod tests {
                 content_range: 24..30,
                 depth: 1,
                 content: "Nested 2".to_string(),
+                segments: None,
             },
         ];
 
@@ -1386,6 +1505,7 @@ mod tests {
                 content_range: 2..10,
                 depth: 0,
                 content: "Heading".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(2),
@@ -1397,6 +1517,7 @@ mod tests {
                 content_range: 13..19,
                 depth: 0,
                 content: "Item 1".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(3),
@@ -1408,6 +1529,7 @@ mod tests {
                 content_range: 22..28,
                 depth: 0,
                 content: "Item 2".to_string(),
+                segments: None,
             },
             RenderBlock {
                 id: AnchorId(4),
@@ -1416,6 +1538,7 @@ mod tests {
                 content_range: 29..39,
                 depth: 0,
                 content: "Paragraph".to_string(),
+                segments: None,
             },
         ];
 
@@ -1629,5 +1752,281 @@ mod tests {
         // because tree-sitter nodes have stale byte ranges
         let snapshot2 = doc.snapshot();
         assert!(!snapshot2.blocks.is_empty());
+    }
+
+    // ============ WikiLink Parsing tests ============
+
+    #[test]
+    fn test_parse_wiki_links_plain_text() {
+        let text = "This is plain text without links";
+        let segments = parse_wiki_links(text);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(
+            segments[0],
+            TextSegment::Text("This is plain text without links".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_wiki_links_single_link() {
+        let text = "Check out [[Page Name]] for details";
+        let segments = parse_wiki_links(text);
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Check out ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Page Name".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" for details".to_string()));
+    }
+
+    #[test]
+    fn test_parse_wiki_links_multiple_links() {
+        let text = "See [[First Page]] and [[Second Page]] and [[Third Page]]";
+        let segments = parse_wiki_links(text);
+
+        assert_eq!(segments.len(), 6);
+        assert_eq!(segments[0], TextSegment::Text("See ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "First Page".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" and ".to_string()));
+        assert_eq!(
+            segments[3],
+            TextSegment::WikiLink {
+                target: "Second Page".to_string()
+            }
+        );
+        assert_eq!(segments[4], TextSegment::Text(" and ".to_string()));
+        assert_eq!(
+            segments[5],
+            TextSegment::WikiLink {
+                target: "Third Page".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_wiki_links_whitespace_trimming() {
+        let text = "Link: [[  Spaced Out  ]] text";
+        let segments = parse_wiki_links(text);
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Link: ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Spaced Out".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" text".to_string()));
+    }
+
+    #[test]
+    fn test_parse_wiki_links_unclosed_bracket() {
+        let text = "Incomplete [[link without closing";
+        let segments = parse_wiki_links(text);
+
+        // Should treat [[ as regular text when there's no closing ]]
+        // The parse function will add "[[" as text, then continue with the rest
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Incomplete ".to_string()));
+        assert_eq!(segments[1], TextSegment::Text("[[".to_string()));
+        assert_eq!(
+            segments[2],
+            TextSegment::Text("link without closing".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_wiki_links_empty_link() {
+        let text = "Empty [[]] link";
+        let segments = parse_wiki_links(text);
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Empty ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" link".to_string()));
+    }
+
+    #[test]
+    fn test_parse_wiki_links_adjacent_links() {
+        let text = "[[First]][[Second]] adjacent";
+        let segments = parse_wiki_links(text);
+
+        assert_eq!(segments.len(), 3);
+        assert_eq!(
+            segments[0],
+            TextSegment::WikiLink {
+                target: "First".to_string()
+            }
+        );
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Second".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" adjacent".to_string()));
+    }
+
+    #[test]
+    fn test_parse_wiki_links_complex_target_names() {
+        let text = "See [[Notes/2023/Daily Journal]] and [[Project: New Feature]]";
+        let segments = parse_wiki_links(text);
+
+        assert_eq!(segments.len(), 4);
+        assert_eq!(segments[0], TextSegment::Text("See ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Notes/2023/Daily Journal".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" and ".to_string()));
+        assert_eq!(
+            segments[3],
+            TextSegment::WikiLink {
+                target: "Project: New Feature".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_snapshot_with_wikilinks_in_heading() {
+        let text = "# See [[Other Page]] for more info";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(block.kind, BlockKind::Heading { level: 1 }));
+        assert_eq!(block.content, "See [[Other Page]] for more info");
+        assert!(block.segments.is_some());
+
+        let segments = block.segments.as_ref().unwrap();
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("See ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Other Page".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" for more info".to_string()));
+    }
+
+    #[test]
+    fn test_snapshot_with_wikilinks_in_paragraph() {
+        let text = "This paragraph links to [[Another Page]] and [[Yet Another]].";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(block.kind, BlockKind::Paragraph));
+        assert_eq!(
+            block.content,
+            "This paragraph links to [[Another Page]] and [[Yet Another]]."
+        );
+        assert!(block.segments.is_some());
+
+        let segments = block.segments.as_ref().unwrap();
+        assert_eq!(segments.len(), 5);
+        assert_eq!(
+            segments[0],
+            TextSegment::Text("This paragraph links to ".to_string())
+        );
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Another Page".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" and ".to_string()));
+        assert_eq!(
+            segments[3],
+            TextSegment::WikiLink {
+                target: "Yet Another".to_string()
+            }
+        );
+        assert_eq!(segments[4], TextSegment::Text(".".to_string()));
+    }
+
+    #[test]
+    fn test_snapshot_with_wikilinks_in_list_item() {
+        let text = "- Link to [[Referenced Page]] in list item";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(
+            block.kind,
+            BlockKind::ListItem {
+                marker: Marker::Dash,
+                depth: 0
+            }
+        ));
+        assert_eq!(block.content, "Link to [[Referenced Page]] in list item");
+        assert!(block.segments.is_some());
+
+        let segments = block.segments.as_ref().unwrap();
+        assert_eq!(segments.len(), 3);
+        assert_eq!(segments[0], TextSegment::Text("Link to ".to_string()));
+        assert_eq!(
+            segments[1],
+            TextSegment::WikiLink {
+                target: "Referenced Page".to_string()
+            }
+        );
+        assert_eq!(segments[2], TextSegment::Text(" in list item".to_string()));
+    }
+
+    #[test]
+    fn test_snapshot_no_wikilinks_segments_none() {
+        let text = "# Plain heading with no links";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(block.kind, BlockKind::Heading { level: 1 }));
+        assert_eq!(block.content, "Plain heading with no links");
+        assert!(block.segments.is_none());
+    }
+
+    #[test]
+    fn test_snapshot_code_blocks_no_wikilink_parsing() {
+        let text = "```\nThis [[link]] should not be parsed\n```";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        let snapshot = doc.snapshot();
+        assert_eq!(snapshot.blocks.len(), 1);
+
+        let block = &snapshot.blocks[0];
+        assert!(matches!(block.kind, BlockKind::CodeFence { lang: None }));
+        assert!(block.segments.is_none());
     }
 }

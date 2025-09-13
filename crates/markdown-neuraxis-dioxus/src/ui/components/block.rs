@@ -9,21 +9,27 @@ use std::path::PathBuf;
 #[component]
 pub fn Block(
     block: RenderBlock,
+    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<()>,
+    on_wikilink_click: Callback<String>,
 ) -> Element {
     match &block.kind {
         BlockKind::Heading { level } => rsx! {
             Heading {
                 block: block.clone(),
                 level: (*level).into(),
-                on_focus
+                notes_path,
+                on_focus,
+                on_wikilink_click
             }
         },
         BlockKind::Paragraph => rsx! {
             Paragraph {
                 block: block.clone(),
-                on_focus
+                notes_path,
+                on_focus,
+                on_wikilink_click
             }
         },
         BlockKind::ListItem { .. } => {

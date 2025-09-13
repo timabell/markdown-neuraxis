@@ -14,6 +14,7 @@ pub mod list_item_content;
 pub mod main_panel;
 pub mod paragraph;
 pub mod single_block;
+pub mod text_segment;
 pub mod thematic_break;
 pub mod tree_view;
 pub mod tree_view_item;

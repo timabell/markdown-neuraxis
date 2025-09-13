@@ -74,6 +74,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                     super::components::MainPanel {
                         file: file.clone(),
                         snapshot: snapshot.clone(),
+                        notes_path: notes_path.clone(),
                         document: document.clone(),
                         on_file_select: Some(Callback::new({
                             let notes_path = notes_path.clone();
@@ -175,6 +176,48 @@ pub fn App(notes_path: PathBuf) -> Element {
                                     *current_document.write() = Some(document_arc);
                                     *current_snapshot.write() = Some(new_snapshot);
                                 }
+                            }
+                        },
+                        on_wikilink_click: {
+                            let notes_path = notes_path.clone();
+                            let mut selected_file = selected_file;
+                            let mut current_document = current_document;
+                            let mut current_snapshot = current_snapshot;
+                            move |target: String| {
+                                // Handle wikilink navigation
+                                // For now, we'll try to find a file that matches the target
+                                let potential_files = vec![
+                                    format!("{}.md", target),
+                                    format!("{}/index.md", target),
+                                    target.clone(),
+                                ];
+
+                                for potential_file in potential_files {
+                                    let relative_path = RelativePathBuf::from_path(&potential_file)
+                                        .expect("Failed to create relative path");
+                                    let markdown_file = MarkdownFile::new(relative_path.clone());
+
+                                    match io::read_file(markdown_file.relative_path(), &notes_path) {
+                                        Ok(content) => {
+                                            match Document::from_bytes(content.as_bytes()) {
+                                                Ok(mut document) => {
+                                                    document.create_anchors_from_tree();
+                                                    let snapshot = document.snapshot();
+
+                                                    *current_document.write() = Some(Arc::new(document));
+                                                    *current_snapshot.write() = Some(snapshot);
+                                                    *selected_file.write() = Some(markdown_file);
+                                                    return; // Successfully navigated
+                                                }
+                                                Err(_) => continue, // Try next potential file
+                                            }
+                                        }
+                                        Err(_) => continue, // Try next potential file
+                                    }
+                                }
+
+                                // If no file found, print a message (could be enhanced to create the file)
+                                eprintln!("Wikilink target not found: {}", target);
                             }
                         }
                     }

@@ -9,9 +9,11 @@ use std::sync::Arc;
 #[component]
 pub fn ListChildren(
     item: ListItem,
+    notes_path: PathBuf,
     on_file_select: Option<Callback<PathBuf>>,
     on_focus: Callback<RenderBlock>,
     on_command: Callback<Cmd>,
+    on_wikilink_click: Callback<String>,
     focused_anchor_id: Signal<Option<AnchorId>>,
     document: Arc<Document>,
 ) -> Element {
@@ -25,9 +27,11 @@ pub fn ListChildren(
         ListComponent {
             items: item.children.clone(),
             list_type: child_list_type,
+            notes_path,
             on_file_select,
             on_focus,
             on_command,
+            on_wikilink_click,
             focused_anchor_id,
             document
         }

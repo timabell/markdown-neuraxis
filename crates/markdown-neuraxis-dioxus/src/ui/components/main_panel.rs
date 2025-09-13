@@ -11,10 +11,12 @@ use std::sync::Arc;
 pub fn MainPanel(
     file: MarkdownFile,
     snapshot: Snapshot,
+    notes_path: PathBuf,
     document: Arc<Document>,
     on_file_select: Option<Callback<PathBuf>>,
     on_save: Callback<()>,
     on_command: Callback<Cmd>,
+    on_wikilink_click: Callback<String>,
 ) -> Element {
     let mut focused_anchor_id = use_signal(|| None::<AnchorId>);
     let snapshot_clone = snapshot.clone();
@@ -39,10 +41,12 @@ pub fn MainPanel(
             if !snapshot.blocks.is_empty() {
                 DocumentContent {
                     snapshot: snapshot_for_content,
+                    notes_path,
                     document,
                     focused_anchor_id,
                     on_file_select,
-                    on_command
+                    on_command,
+                    on_wikilink_click
                 }
             } else {
                 EmptyDocument { on_command }

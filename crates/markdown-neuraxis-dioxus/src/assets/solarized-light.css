@@ -578,3 +578,23 @@ hr {
 .indent-level-2 { /* For future use if needed */ }
 .indent-level-3 { /* For future use if needed */ }
 .indent-level-4 { /* For future use if needed */ }
+
+/* WikiLink styling */
+.wikilink {
+    color: var(--blue);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px dotted var(--blue);
+    transition: all 0.2s ease;
+}
+
+.wikilink:hover {
+    color: var(--cyan);
+    border-bottom-color: var(--cyan);
+    background-color: rgba(42, 161, 152, 0.1);
+}
+
+.wikilink:active {
+    color: var(--magenta);
+    border-bottom-color: var(--magenta);
+}

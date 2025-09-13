@@ -10,10 +10,12 @@ use std::sync::Arc;
 pub fn SingleBlock(
     block: RenderBlock,
     group_index: usize,
+    notes_path: PathBuf,
     document: Arc<markdown_neuraxis_engine::editing::Document>,
     focused_anchor_id: Signal<Option<markdown_neuraxis_engine::editing::AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<markdown_neuraxis_engine::editing::Cmd>,
+    on_wikilink_click: Callback<String>,
 ) -> Element {
     let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
 
@@ -37,6 +39,7 @@ pub fn SingleBlock(
             Block {
                 key: "{group_index}-render",
                 block: block.clone(),
+                notes_path,
                 on_file_select,
                 on_focus: {
                     let mut focused_anchor_id = focused_anchor_id;
@@ -44,7 +47,8 @@ pub fn SingleBlock(
                     move |_| {
                         focused_anchor_id.set(Some(block_id));
                     }
-                }
+                },
+                on_wikilink_click
             }
         }
     }
