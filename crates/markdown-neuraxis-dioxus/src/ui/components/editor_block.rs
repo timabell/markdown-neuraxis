@@ -35,10 +35,6 @@ pub fn EditorBlock(
         div {
             class: "editor-block",
 
-            // Render indent blocks for proper CSS-based alignment
-            for _ in 0..block.depth {
-                div { class: "indent-block" }
-            }
 
             // Uncontrolled textarea that manages its own content locally
             textarea {

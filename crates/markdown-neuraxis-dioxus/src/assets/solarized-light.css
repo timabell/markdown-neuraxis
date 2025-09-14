@@ -246,11 +246,6 @@ hr {
     margin: 4px 0;
 }
 
-/* Indent block system for flexible indentation */
-.indent-block {
-    width: 20px; /* 20px per indent level */
-    flex-shrink: 0;
-}
 
 .list-marker {
     margin-right: 8px;
@@ -527,11 +522,6 @@ hr {
     position: relative;
 }
 
-/* Indent blocks in editor maintain same spacing as pretty view */
-.editor-block .indent-block {
-    width: 20px; /* Same as list indent blocks */
-    flex-shrink: 0;
-}
 
 .editor-textarea {
     border: none;
@@ -574,12 +564,6 @@ hr {
     outline: none;
 }
 
-/* Semantic CSS classes for different indent levels */
-.indent-level-0 { /* For future use if needed */ }
-.indent-level-1 { /* For future use if needed */ }
-.indent-level-2 { /* For future use if needed */ }
-.indent-level-3 { /* For future use if needed */ }
-.indent-level-4 { /* For future use if needed */ }
 
 /* WikiLink styling */
 .wikilink {
