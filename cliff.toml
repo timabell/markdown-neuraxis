@@ -28,13 +28,11 @@ commit_parsers = [
     { message = "^feat", group = "Features"},
     { message = "^fix", group = "Bug Fixes"},
     { message = "^refactor", group = "Refactor"},
-    { message = "^test", group = "Tests"},
     { message = "^chore", group = "Chores"},
     { message = "^doc", group = "Documentation"},
     { message = "^perf", group = "Performance"},
     { message = "^style", group = "Styling"},
     { message = "^security", group = "Security"},
-    { message = "^ci", group = "CI/CD"},
     { body = ".*security", group = "Security"},
 ]
 protect_breaking_commits = false
