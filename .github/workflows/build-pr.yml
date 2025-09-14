@@ -1,0 +1,9 @@
+name: Build PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/_ci.yml
