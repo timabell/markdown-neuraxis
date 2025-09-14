@@ -81,7 +81,7 @@ impl App {
                 self.current_content = vec![
                     format!("📁 {}", item.node.name),
                     String::new(),
-                    "Press Enter or → to toggle folder".to_string(),
+                    "Press Enter/Space to toggle, → to expand, ← to collapse".to_string(),
                 ];
                 self.selected_document = None;
             } else if let Some(ref file) = item.node.markdown_file {
@@ -124,6 +124,32 @@ impl App {
     fn toggle_folder(&mut self, relative_path: RelativePathBuf) {
         self.file_tree.toggle_folder(&relative_path);
         self.tree_items = self.file_tree.get_items();
+    }
+
+    fn expand_selected_folder(&mut self) -> Result<()> {
+        if let Some(index) = self.file_list_state.selected()
+            && let Some(item) = self.tree_items.get(index)
+            && item.node.is_folder
+            && !item.node.is_expanded
+        {
+            self.file_tree.expand_folder(&item.node.relative_path);
+            self.tree_items = self.file_tree.get_items();
+            self.update_content_for_selection();
+        }
+        Ok(())
+    }
+
+    fn collapse_selected_folder(&mut self) -> Result<()> {
+        if let Some(index) = self.file_list_state.selected()
+            && let Some(item) = self.tree_items.get(index)
+            && item.node.is_folder
+            && item.node.is_expanded
+        {
+            self.file_tree.collapse_folder(&item.node.relative_path);
+            self.tree_items = self.file_tree.get_items();
+            self.update_content_for_selection();
+        }
+        Ok(())
     }
 
     fn render_document_content(&self, document: &Document) -> Vec<String> {
@@ -242,8 +268,14 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Down | KeyCode::Char('j') => app.next_file(),
                 KeyCode::Up | KeyCode::Char('k') => app.previous_file(),
-                KeyCode::Enter | KeyCode::Right => {
+                KeyCode::Enter | KeyCode::Char(' ') => {
                     let _ = app.activate_selected_item();
+                }
+                KeyCode::Right => {
+                    let _ = app.expand_selected_folder();
+                }
+                KeyCode::Left => {
+                    let _ = app.collapse_selected_folder();
                 }
                 _ => {}
             }
@@ -306,7 +338,7 @@ fn ui(f: &mut Frame, app: &mut App) {
         Span::raw("q: Quit | "),
         Span::raw("↑/k: Previous | "),
         Span::raw("↓/j: Next | "),
-        Span::raw("Enter/→: Open/Toggle"),
+        Span::raw("Enter/Space: Toggle | →: Expand | ←: Collapse"),
     ]);
 
     let help = Paragraph::new(vec![help_text]).block(Block::default());

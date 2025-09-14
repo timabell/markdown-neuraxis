@@ -87,6 +87,40 @@ impl FileTreeNode {
         false
     }
 
+    pub fn expand(&mut self, relative_path: &RelativePath) -> bool {
+        if self.relative_path == relative_path {
+            if self.is_folder && !self.is_expanded {
+                self.is_expanded = true;
+                return true;
+            }
+            return false;
+        }
+
+        for child in self.children.values_mut() {
+            if child.expand(relative_path) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn collapse(&mut self, relative_path: &RelativePath) -> bool {
+        if self.relative_path == relative_path {
+            if self.is_folder && self.is_expanded {
+                self.is_expanded = false;
+                return true;
+            }
+            return false;
+        }
+
+        for child in self.children.values_mut() {
+            if child.collapse(relative_path) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn get_flattened_items(&self, depth: usize) -> Vec<FileTreeItem> {
         let mut items = Vec::new();
 
@@ -166,6 +200,14 @@ impl FileTree {
 
     pub fn toggle_folder(&mut self, relative_path: &RelativePath) {
         self.root.toggle_expanded(relative_path);
+    }
+
+    pub fn expand_folder(&mut self, relative_path: &RelativePath) {
+        self.root.expand(relative_path);
+    }
+
+    pub fn collapse_folder(&mut self, relative_path: &RelativePath) {
+        self.root.collapse(relative_path);
     }
 
     /// Add a new file to the tree
