@@ -26,20 +26,20 @@ xi-rope = "0.3"
 tree-sitter = "0.25"
 tree-sitter-md = "0.3"
 html-escape = "0.2"
-regex = "1.0"
+regex = "1.11"
 
 # UI dependencies
 dioxus = { version = "0.6", features = ["desktop"] }
 ratatui = "0.29"
-crossterm = "0.28"
+crossterm = "0.29"
 
 # Dev dependencies
 rstest = "0.26"
 insta = { version = "1.43", features = ["yaml"] }
 pretty_assertions = "1.4"
-tempfile = "3.21"
+tempfile = "3.22"
 dioxus-ssr = "0.6"
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports"] }
 
 [profile.dev]
 panic = "abort"

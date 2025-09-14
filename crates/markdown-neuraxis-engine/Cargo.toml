@@ -22,7 +22,7 @@ rstest = { workspace = true }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
-criterion = "0.5"
+criterion = "0.7"
 
 [[bench]]
 name = "document"
