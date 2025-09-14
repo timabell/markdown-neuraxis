@@ -42,12 +42,21 @@ pub struct ListItem {
 /// ## Rendering Pattern
 ///
 /// ```rust
+/// # use markdown_neuraxis_engine::editing::{Document, ContentGroup};
+/// # let mut doc = Document::from_bytes(b"# Hello\n\n- Item 1\n- Item 2").unwrap();
+/// # doc.create_anchors_from_tree();
 /// let snapshot = doc.snapshot();
 /// for group in &snapshot.content_groups {
 ///     match group {
-///         ContentGroup::BulletListGroup { items } => render_ul(items),
-///         ContentGroup::NumberedListGroup { items } => render_ol(items),
-///         ContentGroup::SingleBlock(block) => render_block(block),
+///         ContentGroup::BulletListGroup { items } => {
+///             println!("Bullet list with {} items", items.len());
+///         },
+///         ContentGroup::NumberedListGroup { items } => {
+///             println!("Numbered list with {} items", items.len());
+///         },
+///         ContentGroup::SingleBlock(block) => {
+///             println!("Single block: {}", block.content);
+///         },
 ///     }
 /// }
 /// ```
@@ -81,13 +90,19 @@ pub struct Snapshot {
 /// The block provides both "pretty" rendering content and precise editing ranges:
 ///
 /// ```rust
+/// # use markdown_neuraxis_engine::editing::{Document, BlockKind};
+/// # let mut doc = Document::from_bytes(b"# Hello World\n\n- Item 1").unwrap();
+/// # doc.create_anchors_from_tree();
+/// # let snapshot = doc.snapshot();
+/// # let block = &snapshot.blocks[0]; // Get first block (heading)
 /// match block.kind {
 ///     BlockKind::Heading { level } => {
 ///         // Pretty rendering: show content without # markers  
-///         render_heading(level, &block.content);
+///         println!("Heading level {}: {}", level, block.content);
 ///         // Edit mode: focus on content_range for raw Markdown editing
-///         if focused { edit_range(&doc, block.content_range); }
+///         println!("Edit range: {:?}", block.content_range);
 ///     }
+///     _ => {}
 /// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]

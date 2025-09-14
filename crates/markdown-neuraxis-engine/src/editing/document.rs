@@ -72,20 +72,23 @@ impl IndentStyle {
 /// ## Usage Pattern
 ///
 /// ```rust
+/// # use markdown_neuraxis_engine::editing::{Document, Cmd};
 /// // Create document with lossless byte preservation
-/// let mut doc = Document::from_bytes(markdown_bytes)?;
+/// let markdown_bytes = b"# Hello\n\n- Item 1";
+/// let mut doc = Document::from_bytes(markdown_bytes).unwrap();
 ///
 /// // Initialize stable block identifiers
 /// doc.create_anchors_from_tree();
 ///
 /// // Apply structured edits
-/// let patch = doc.apply(Cmd::SplitListItem { at: cursor_pos });
+/// let patch = doc.apply(Cmd::SplitListItem { at: 10 });
 ///
 /// // Generate UI-ready view
 /// let snapshot = doc.snapshot();
 ///
 /// // Round-trip: save exact original bytes
-/// std::fs::write("output.md", doc.to_bytes())?;
+/// let bytes_to_save = doc.text();
+/// # assert!(!bytes_to_save.is_empty());
 /// ```
 ///
 /// This architecture enables high-performance Markdown editing with exact fidelity,
@@ -170,7 +173,7 @@ impl Document {
     ///
     /// ## Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let patch = doc.apply(Cmd::InsertText {
     ///     at: 0,
     ///     text: "# ".to_string()

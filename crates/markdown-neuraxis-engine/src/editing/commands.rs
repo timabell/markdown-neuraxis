@@ -28,7 +28,7 @@ const INDENT_STR: &str = "  ";
 /// ```rust
 /// use markdown_neuraxis_engine::editing::*;
 ///
-/// let mut doc = Document::from_bytes(b"- Item 1")?;
+/// let mut doc = Document::from_bytes(b"- Item 1").unwrap();
 ///
 /// // Split list item: insert newline + marker + space
 /// let patch = doc.apply(Cmd::SplitListItem { at: 8 });
@@ -123,8 +123,12 @@ pub enum Cmd {
 /// This is critical for robust editing when cursors are at document edges.
 ///
 /// ```rust
-/// let clamped_at = at.min(doc.len());  // Safe insertion point
-/// let clamped_range = start..end.min(doc.len()).max(start);  // Valid range
+/// # let doc_len = 11usize; // Example document length
+/// # let at = 5; let start = 2; let end = 8;
+/// let clamped_at = at.min(doc_len);  // Safe insertion point
+/// let clamped_range = start..end.min(doc_len).max(start);  // Valid range
+/// # assert_eq!(clamped_at, 5);
+/// # assert_eq!(clamped_range, 2..8);
 /// ```
 pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
     match cmd {
@@ -269,7 +273,7 @@ pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
 /// For complex commands like `SplitListItem`, the transformation calculates the
 /// equivalent insert length to apply the same shifting logic consistently.
 ///
-/// ```rust
+/// ```rust,ignore
 /// // Example: Insert "Hello " at position 5 in "World"
 /// // Selection at 3..5 becomes 9..11 (shifted right by 6)
 /// let new_range = transform_selection_for_command(&doc, &(3..5), &cmd);

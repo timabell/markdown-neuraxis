@@ -50,7 +50,8 @@
  * use markdown_neuraxis_engine::editing::*;
  *
  * // 1. Create document from bytes (lossless)
- * let mut doc = Document::from_bytes(markdown_bytes)?;
+ * let markdown_bytes = b"# Hello\n\n- Item 1\n- Item 2";
+ * let mut doc = Document::from_bytes(markdown_bytes).unwrap();
  *
  * // 2. Initialize anchors for stable block IDs
  * doc.create_anchors_from_tree();
@@ -62,7 +63,7 @@
  * let snapshot = doc.snapshot();
  *
  * // 5. Round-trip: save exact bytes
- * let saved_bytes = doc.to_bytes(); // Identical to original
+ * let saved_bytes = doc.text(); // Get current content
  * ```
  *
  * This architecture enables:

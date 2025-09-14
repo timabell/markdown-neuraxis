@@ -31,7 +31,7 @@ use crate::editing::Document;
 /// ```rust
 /// use markdown_neuraxis_engine::editing::*;
 ///
-/// let mut doc = Document::from_bytes(b"# Heading\n- Item")?;
+/// let mut doc = Document::from_bytes(b"# Heading\n- Item").unwrap();
 /// doc.create_anchors_from_tree();
 ///
 /// let snapshot = doc.snapshot();
@@ -102,7 +102,7 @@ pub(crate) fn calculate_range_overlap(
 ///
 /// ## Example Transformation
 ///
-/// ```
+/// ```text
 /// Original: "# Header\n- Item"  (Anchor at 0..8 for "# Header")
 /// Insert "New " at position 2:  "# New Header\n- Item"
 /// Result: Anchor now at 0..12 for "# New Header"
