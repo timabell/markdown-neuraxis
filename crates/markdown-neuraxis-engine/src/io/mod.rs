@@ -29,6 +29,12 @@ pub fn write_file(
     content: &str,
 ) -> Result<(), IoError> {
     let absolute_path = relative_path.to_path(notes_root);
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = absolute_path.parent() {
+        fs::create_dir_all(parent).map_err(IoError::Io)?;
+    }
+
     fs::write(&absolute_path, content).map_err(IoError::Io)
 }
 
@@ -185,5 +191,57 @@ mod tests {
         let result = read_file(relative_path, notes_dir.path());
         assert!(result.is_err());
         assert!(matches!(result, Err(IoError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_write_file_success() {
+        let notes_dir = create_test_notes_dir();
+        let relative_path = RelativePath::new("new_file.md");
+        let content = "# New File\n\nThis is new content";
+
+        // Write the file
+        let result = write_file(relative_path, notes_dir.path(), content);
+        assert!(result.is_ok());
+
+        // Verify file exists and has correct content
+        let written_content = read_file(relative_path, notes_dir.path()).unwrap();
+        assert_eq!(written_content, content);
+    }
+
+    #[test]
+    fn test_write_file_creates_parent_directories() {
+        let notes_dir = create_test_notes_dir();
+        let relative_path = RelativePath::new("folder/subfolder/new_file.md");
+        let content = "# New File in Nested Folder";
+
+        // Write the file - this should create the parent directories
+        let result = write_file(relative_path, notes_dir.path(), content);
+        assert!(result.is_ok());
+
+        // Verify file exists and has correct content
+        let written_content = read_file(relative_path, notes_dir.path()).unwrap();
+        assert_eq!(written_content, content);
+
+        // Verify parent directories were created
+        let parent_dir = notes_dir.path().join("folder").join("subfolder");
+        assert!(parent_dir.exists());
+        assert!(parent_dir.is_dir());
+    }
+
+    #[test]
+    fn test_write_file_overwrites_existing() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "existing.md", "# Original Content");
+
+        let relative_path = RelativePath::new("existing.md");
+        let new_content = "# Updated Content\n\nThis is new";
+
+        // Overwrite the existing file
+        let result = write_file(relative_path, notes_dir.path(), new_content);
+        assert!(result.is_ok());
+
+        // Verify content was updated
+        let written_content = read_file(relative_path, notes_dir.path()).unwrap();
+        assert_eq!(written_content, new_content);
     }
 }

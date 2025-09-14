@@ -30,7 +30,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         move |markdown_file: MarkdownFile| {
-            load_document(
+            load_existing_document(
                 &markdown_file,
                 &notes_path,
                 &mut selected_file,
@@ -62,26 +62,23 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         move |target: String| {
-            if let Some(markdown_file) = resolve_wikilink(&target, &notes_path) {
-                load_document(
-                    &markdown_file,
-                    &notes_path,
-                    &mut selected_file,
-                    &mut current_document,
-                    &mut current_snapshot,
-                );
-            } else {
-                eprintln!("Wikilink target not found: {}", target);
-            }
+            let markdown_file = resolve_wikilink(&target, &notes_path);
+            load_document(
+                markdown_file,
+                &notes_path,
+                &mut selected_file,
+                &mut current_document,
+                &mut current_snapshot,
+            );
         }
     };
 
-    let on_save = create_save_callback(notes_path.clone(), selected_file, current_document);
     let on_command = create_command_callback(
         notes_path.clone(),
         selected_file,
         current_document,
         current_snapshot,
+        file_tree,
     );
 
     rsx! {
@@ -113,7 +110,6 @@ pub fn App(notes_path: PathBuf) -> Element {
                         notes_path: notes_path.clone(),
                         document: document.clone(),
                         on_file_select: Some(Callback::new(on_file_navigate)),
-                        on_save,
                         on_command,
                         on_wikilink_click: on_wikilink_navigate,
                     }
@@ -129,8 +125,8 @@ pub fn App(notes_path: PathBuf) -> Element {
     }
 }
 
-/// Helper function to load and parse a document from a file
-fn load_document(
+/// Helper function to load and parse a document from an existing file
+fn load_existing_document(
     markdown_file: &MarkdownFile,
     notes_path: &Path,
     selected_file: &mut Signal<Option<MarkdownFile>>,
@@ -167,7 +163,7 @@ fn load_document(
 }
 
 /// Load a document or create a blank one if it doesn't exist
-fn load_or_create_document(
+pub fn load_document(
     markdown_file: MarkdownFile,
     notes_path: &Path,
     selected_file: &mut Signal<Option<MarkdownFile>>,
@@ -227,7 +223,7 @@ fn navigate_to_path(
         RelativePathBuf::from_path(&relative_path).expect("Failed to create relative path");
     let markdown_file = MarkdownFile::new(relative_path_buf);
 
-    load_or_create_document(
+    load_document(
         markdown_file,
         notes_path,
         selected_file,
@@ -237,47 +233,17 @@ fn navigate_to_path(
 }
 
 /// Resolve a wikilink target to a markdown file
-fn resolve_wikilink(target: &str, notes_path: &Path) -> Option<MarkdownFile> {
-    let potential_files = vec![
-        format!("{}.md", target),
-        target.to_string(),
-    ];
+pub fn resolve_wikilink(target: &str, _notes_path: &Path) -> MarkdownFile {
+    // Ensure .md extension is present
+    let filename = if target.ends_with(".md") {
+        target.to_string()
+    } else {
+        format!("{}.md", target)
+    };
 
-    for potential_file in potential_files {
-        let relative_path =
-            RelativePathBuf::from_path(&potential_file).expect("Failed to create relative path");
-        let markdown_file = MarkdownFile::new(relative_path.clone());
-
-        // Check if file exists
-        if io::read_file(markdown_file.relative_path(), notes_path).is_ok() {
-            return Some(markdown_file);
-        }
-    }
-    None
-}
-
-/// Create a save callback
-fn create_save_callback(
-    notes_path: PathBuf,
-    selected_file: Signal<Option<MarkdownFile>>,
-    current_document: Signal<Option<Arc<Document>>>,
-) -> impl Fn(()) + 'static {
-    move |_| {
-        if let (Some(file), Some(document)) = (
-            selected_file.read().as_ref(),
-            current_document.read().as_ref(),
-        ) {
-            let content = document.text();
-            match io::write_file(file.relative_path(), &notes_path, &content) {
-                Ok(()) => {
-                    println!("File saved successfully: {:?}", file.relative_path());
-                }
-                Err(e) => {
-                    eprintln!("Error saving file {:?}: {e}", file.relative_path());
-                }
-            }
-        }
-    }
+    let relative_path =
+        RelativePathBuf::from_path(&filename).expect("Failed to create relative path");
+    MarkdownFile::new(relative_path)
 }
 
 /// Create a command callback for document editing
@@ -286,6 +252,7 @@ fn create_command_callback(
     selected_file: Signal<Option<MarkdownFile>>,
     mut current_document: Signal<Option<Arc<Document>>>,
     mut current_snapshot: Signal<Option<Snapshot>>,
+    mut file_tree: Signal<FileTree>,
 ) -> impl FnMut(Cmd) + 'static {
     move |cmd: Cmd| {
         let document_arc = current_document.read().clone();
@@ -298,9 +265,20 @@ fn create_command_callback(
             // Auto-save the document to disk
             if let Some(file) = selected_file.read().as_ref() {
                 let content = document.text();
+
+                // Check if file exists before writing
+                let file_existed = io::read_file(file.relative_path(), &notes_path).is_ok();
+
                 match io::write_file(file.relative_path(), &notes_path, &content) {
                     Ok(()) => {
-                        // File saved successfully
+                        if !file_existed {
+                            let absolute_path = file.relative_path().to_path(&notes_path);
+                            file_tree.write().add_file(&absolute_path, &notes_path);
+                            println!(
+                                "New file created and auto-saved: {:?}",
+                                file.relative_path()
+                            );
+                        }
                     }
                     Err(e) => {
                         eprintln!("Error auto-saving file {:?}: {e}", file.relative_path());
@@ -311,5 +289,43 @@ fn create_command_callback(
             *current_document.write() = Some(document_arc);
             *current_snapshot.write() = Some(new_snapshot);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_resolve_wikilink_adds_md_extension() {
+        let notes_path = Path::new("/test");
+        let result = resolve_wikilink("my-note", notes_path);
+
+        assert_eq!(result.relative_path().as_str(), "my-note.md");
+    }
+
+    #[test]
+    fn test_resolve_wikilink_preserves_md_extension() {
+        let notes_path = Path::new("/test");
+        let result = resolve_wikilink("my-note.md", notes_path);
+
+        assert_eq!(result.relative_path().as_str(), "my-note.md");
+    }
+
+    #[test]
+    fn test_resolve_wikilink_with_path_separators() {
+        let notes_path = Path::new("/test");
+        let result = resolve_wikilink("folder/my-note", notes_path);
+
+        assert_eq!(result.relative_path().as_str(), "folder/my-note.md");
+    }
+
+    #[test]
+    fn test_resolve_wikilink_with_path_separators_and_extension() {
+        let notes_path = Path::new("/test");
+        let result = resolve_wikilink("folder/my-note.md", notes_path);
+
+        assert_eq!(result.relative_path().as_str(), "folder/my-note.md");
     }
 }

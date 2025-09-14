@@ -14,7 +14,6 @@ pub fn MainPanel(
     notes_path: PathBuf,
     document: Arc<Document>,
     on_file_select: Option<Callback<PathBuf>>,
-    on_save: Callback<()>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
