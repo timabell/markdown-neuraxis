@@ -1,12 +1,7 @@
 [advisories]
-# The lint level for security vulnerabilities
-vulnerability = "deny"
-# The lint level for unmaintained crates
-unmaintained = "allow"
+version = 2
 # The lint level for crates that have been yanked from their source registry
 yanked = "warn"
-# The lint level for crates with security notices
-notice = "warn"
 
 [licenses]
 # Only allow licenses compatible with AGPL

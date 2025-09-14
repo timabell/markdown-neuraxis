@@ -10,14 +10,11 @@ repository.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 pulldown-cmark = { workspace = true }
-serde = { workspace = true }
 thiserror = { workspace = true }
-uuid = { workspace = true }
 relative-path = { workspace = true }
 xi-rope = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-md = { workspace = true }
-html-escape = { workspace = true }
 regex = { workspace = true }
 
 [dev-dependencies]

@@ -48,7 +48,7 @@ jobs:
           tool: cargo-deny
 
       - name: Run cargo-deny
-        run: cargo deny check
+        run: cargo deny check bans licenses sources
 
   machete:
     runs-on: ubuntu-latest
