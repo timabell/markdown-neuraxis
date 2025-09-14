@@ -419,6 +419,8 @@ hr {
     padding: 4px;
     margin: 2px 0;
     outline: none;
+    display: block;
+    width: 100%;
 }
 
 .clickable-block:hover {
