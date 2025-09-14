@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use markdown_neuraxis_engine::editing::{anchors::create_anchors_from_tree, document::Document};
 mod common;
 
@@ -12,8 +12,8 @@ fn bench_point_description(c: &mut Criterion) {
 
     group.bench_function("describe_point", |b| {
         b.iter(|| {
-            let point = doc.describe_point(black_box(50));
-            black_box(point);
+            let point = doc.describe_point(std::hint::black_box(50));
+            std::hint::black_box(point);
         });
     });
 

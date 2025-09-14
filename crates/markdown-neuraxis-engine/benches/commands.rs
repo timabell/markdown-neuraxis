@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use markdown_neuraxis_engine::editing::{commands::Cmd, document::Document};
 mod common;
 
@@ -13,11 +13,11 @@ fn bench_command_operations(c: &mut Criterion) {
         let mut d = doc.clone();
         b.iter(|| {
             let cmd = Cmd::InsertText {
-                at: black_box(50),
-                text: black_box("test".to_string()),
+                at: std::hint::black_box(50),
+                text: std::hint::black_box("test".to_string()),
             };
             let patch = d.apply(cmd);
-            black_box(patch);
+            std::hint::black_box(patch);
         });
     });
 

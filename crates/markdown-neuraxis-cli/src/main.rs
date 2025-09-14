@@ -110,15 +110,14 @@ impl App {
     fn activate_selected_item(&mut self) -> Result<()> {
         if let Some(index) = self.file_list_state.selected()
             && let Some(item) = self.tree_items.get(index)
+            && item.node.is_folder
         {
-            if item.node.is_folder {
-                // Handle folder toggle
-                self.toggle_folder(item.node.relative_path.clone());
-                // Update content after toggle
-                self.update_content_for_selection();
-            }
-            // Files don't need activation - they're already loaded by update_content_for_selection
+            // Handle folder toggle
+            self.toggle_folder(item.node.relative_path.clone());
+            // Update content after toggle
+            self.update_content_for_selection();
         }
+        // Files don't need activation - they're already loaded by update_content_for_selection
         Ok(())
     }
 

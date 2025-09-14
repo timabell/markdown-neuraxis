@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use pulldown_cmark::Parser;
 mod common;
 
@@ -9,9 +9,9 @@ fn bench_pulldown_cmark_baseline(c: &mut Criterion) {
     let content = common::generate_markdown_content(100);
     group.bench_function("pulldown_cmark", |b| {
         b.iter(|| {
-            let parser = Parser::new(black_box(&content));
+            let parser = Parser::new(std::hint::black_box(&content));
             let events: Vec<_> = parser.collect();
-            black_box(events);
+            std::hint::black_box(events);
         });
     });
 

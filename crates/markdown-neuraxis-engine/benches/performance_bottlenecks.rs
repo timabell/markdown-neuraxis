@@ -1,4 +1,4 @@
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use markdown_neuraxis_engine::editing::Cmd;
 use markdown_neuraxis_engine::editing::document::Document;
 use std::time::Instant;
@@ -25,10 +25,11 @@ fn bench_tree_sitter_parsing(c: &mut Criterion) {
                         let start = Instant::now();
 
                         // This is the expensive operation happening in Document::clone()
-                        let document = black_box(Document::from_bytes(content.as_bytes()).unwrap());
+                        let document =
+                            std::hint::black_box(Document::from_bytes(content.as_bytes()).unwrap());
 
                         total_duration += start.elapsed();
-                        black_box(document);
+                        std::hint::black_box(document);
                     }
 
                     total_duration
@@ -66,10 +67,10 @@ fn bench_anchor_operations(c: &mut Criterion) {
                     text: "X".to_string(),
                 };
 
-                black_box(doc_copy.apply(command));
+                std::hint::black_box(doc_copy.apply(command));
 
                 total_duration += start.elapsed();
-                black_box(doc_copy);
+                std::hint::black_box(doc_copy);
             }
 
             total_duration
@@ -94,8 +95,8 @@ fn bench_string_operations(c: &mut Criterion) {
             |b, doc| {
                 b.iter(|| {
                     // This happens frequently throughout the codebase
-                    let text = black_box(doc.text());
-                    black_box(text);
+                    let text = std::hint::black_box(doc.text());
+                    std::hint::black_box(text);
                 });
             },
         );
@@ -107,8 +108,8 @@ fn bench_string_operations(c: &mut Criterion) {
                 b.iter(|| {
                     // Simulate the buffer.to_string() calls in document operations
                     let doc = Document::from_bytes(content.as_bytes()).unwrap();
-                    let text = black_box(doc.text());
-                    black_box(text);
+                    let text = std::hint::black_box(doc.text());
+                    std::hint::black_box(text);
                 });
             },
         );
@@ -131,8 +132,8 @@ fn bench_snapshot_overhead(c: &mut Criterion) {
             &document,
             |b, doc| {
                 b.iter(|| {
-                    let snapshot = black_box(doc.snapshot());
-                    black_box(snapshot);
+                    let snapshot = std::hint::black_box(doc.snapshot());
+                    std::hint::black_box(snapshot);
                 });
             },
         );
@@ -143,11 +144,11 @@ fn bench_snapshot_overhead(c: &mut Criterion) {
             &document,
             |b, doc| {
                 b.iter(|| {
-                    let snapshot = black_box(doc.snapshot());
-                    let blocks = black_box(&snapshot.blocks);
+                    let snapshot = std::hint::black_box(doc.snapshot());
+                    let blocks = std::hint::black_box(&snapshot.blocks);
                     // Simulate accessing all blocks (common UI pattern)
                     let count = blocks.len();
-                    black_box(count);
+                    std::hint::black_box(count);
                 });
             },
         );
@@ -178,19 +179,19 @@ fn bench_editing_cascades(c: &mut Criterion) {
                     at: (i % 100) as usize + 50,
                     text: "edit".to_string(),
                 };
-                black_box(document.apply(command));
+                std::hint::black_box(document.apply(command));
 
                 // 2. Clone document for UI (major bottleneck)
-                let ui_document = black_box(document.clone());
+                let ui_document = std::hint::black_box(document.clone());
 
                 // 3. Create snapshot (another bottleneck)
-                let snapshot = black_box(document.snapshot());
+                let snapshot = std::hint::black_box(document.snapshot());
 
                 // 4. Clone snapshot for UI components
-                let ui_snapshot = black_box(snapshot.clone());
+                let ui_snapshot = std::hint::black_box(snapshot.clone());
 
                 total_duration += start.elapsed();
-                black_box((ui_document, ui_snapshot));
+                std::hint::black_box((ui_document, ui_snapshot));
             }
 
             total_duration
@@ -233,7 +234,7 @@ fn bench_io_patterns(c: &mut Criterion) {
                 fs::write(temp_file.path(), &text).unwrap();
 
                 total_duration += start.elapsed();
-                black_box(document);
+                std::hint::black_box(document);
             }
 
             total_duration

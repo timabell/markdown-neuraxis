@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use markdown_neuraxis_engine::editing::{anchors::create_anchors_from_tree, document::Document};
 mod common;
 
@@ -12,8 +12,8 @@ fn bench_anchor_operations(c: &mut Criterion) {
     group.bench_function("create_anchors", |b| {
         let mut d = doc.clone();
         b.iter(|| {
-            create_anchors_from_tree(black_box(&mut d));
-            black_box(&d);
+            create_anchors_from_tree(std::hint::black_box(&mut d));
+            std::hint::black_box(&d);
         });
     });
 

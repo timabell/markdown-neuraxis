@@ -137,7 +137,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts
-          
           if [ "${{ matrix.os }}" = "windows" ]; then
             cli_bin="target/${{ matrix.target }}/release/markdown-neuraxis-cli.exe"
             dioxus_bin="target/${{ matrix.target }}/release/markdown-neuraxis-dioxus.exe"

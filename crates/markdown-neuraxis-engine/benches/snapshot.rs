@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use markdown_neuraxis_engine::editing::{anchors::create_anchors_from_tree, document::Document};
 mod common;
 
@@ -13,7 +13,7 @@ fn bench_snapshot_operations(c: &mut Criterion) {
     group.bench_function("snapshot", |b| {
         b.iter(|| {
             let snapshot = doc.snapshot();
-            black_box(snapshot);
+            std::hint::black_box(snapshot);
         });
     });
 

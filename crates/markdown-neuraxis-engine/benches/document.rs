@@ -1,4 +1,4 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use markdown_neuraxis_engine::editing::document::Document;
 mod common;
 
@@ -10,8 +10,8 @@ fn bench_document_creation(c: &mut Criterion) {
     group.bench_function("from_bytes", |b| {
         let bytes = content.as_bytes();
         b.iter(|| {
-            let doc = Document::from_bytes(black_box(bytes)).unwrap();
-            black_box(doc);
+            let doc = Document::from_bytes(std::hint::black_box(bytes)).unwrap();
+            std::hint::black_box(doc);
         });
     });
 
@@ -28,7 +28,7 @@ fn bench_document_operations(c: &mut Criterion) {
     group.bench_function("text", |b| {
         b.iter(|| {
             let text = doc.text();
-            black_box(text);
+            std::hint::black_box(text);
         });
     });
 
