@@ -2911,6 +2911,7 @@ dependencies = [
  "crossterm 0.29.0",
  "markdown-neuraxis-engine",
  "ratatui",
+ "relative-path 2.0.1",
 ]
 
 [[package]]

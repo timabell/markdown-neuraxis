@@ -16,3 +16,4 @@ markdown-neuraxis-engine = { path = "../markdown-neuraxis-engine" }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 anyhow = { workspace = true }
+relative-path = { workspace = true }

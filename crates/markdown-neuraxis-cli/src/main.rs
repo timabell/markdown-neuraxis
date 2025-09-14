@@ -4,7 +4,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use markdown_neuraxis_engine::{Document, MarkdownFile, io};
+use markdown_neuraxis_engine::{Document, FileTree, FileTreeItem, io};
 use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
@@ -13,11 +13,13 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
+use relative_path::RelativePathBuf;
 use std::{env, io::stdout, path::PathBuf, process};
 
 struct App {
     notes_path: PathBuf,
-    files: Vec<MarkdownFile>,
+    file_tree: FileTree,
+    tree_items: Vec<FileTreeItem>,
     file_list_state: ListState,
     selected_document: Option<Document>,
     current_content: Vec<String>,
@@ -26,24 +28,21 @@ struct App {
 impl App {
     fn new(notes_path: PathBuf) -> Result<Self> {
         let file_tree = io::build_file_tree(&notes_path)?;
-        let items = file_tree.get_items();
-        let files: Vec<MarkdownFile> = items
-            .into_iter()
-            .filter_map(|item| item.node.markdown_file)
-            .collect();
+        let tree_items = file_tree.get_items();
 
         let mut app = Self {
             notes_path,
-            files,
+            file_tree,
+            tree_items,
             file_list_state: ListState::default(),
             selected_document: None,
             current_content: Vec::new(),
         };
 
-        // Select first file if available
-        if !app.files.is_empty() {
+        // Select first item if available
+        if !app.tree_items.is_empty() {
             app.file_list_state.select(Some(0));
-            app.load_selected_file()?;
+            app.update_content_for_selection();
         }
 
         Ok(app)
@@ -51,18 +50,18 @@ impl App {
 
     fn next_file(&mut self) {
         let i = match self.file_list_state.selected() {
-            Some(i) => (i + 1) % self.files.len(),
+            Some(i) => (i + 1) % self.tree_items.len(),
             None => 0,
         };
         self.file_list_state.select(Some(i));
-        let _ = self.load_selected_file();
+        self.update_content_for_selection();
     }
 
     fn previous_file(&mut self) {
         let i = match self.file_list_state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.files.len() - 1
+                    self.tree_items.len() - 1
                 } else {
                     i - 1
                 }
@@ -70,30 +69,62 @@ impl App {
             None => 0,
         };
         self.file_list_state.select(Some(i));
-        let _ = self.load_selected_file();
+        self.update_content_for_selection();
     }
 
-    fn load_selected_file(&mut self) -> Result<()> {
+    fn update_content_for_selection(&mut self) {
         if let Some(index) = self.file_list_state.selected()
-            && let Some(file) = self.files.get(index)
+            && let Some(item) = self.tree_items.get(index)
         {
-            match io::read_file(file.relative_path(), &self.notes_path) {
-                Ok(content) => match Document::from_bytes(content.as_bytes()) {
-                    Ok(mut document) => {
-                        document.create_anchors_from_tree();
-                        self.selected_document = Some(document.clone());
-                        self.current_content = self.render_document_content(&document);
-                    }
+            if item.node.is_folder {
+                // For folders, show folder info
+                self.current_content = vec![
+                    format!("📁 {}", item.node.name),
+                    String::new(),
+                    "Press Enter or → to toggle folder".to_string(),
+                ];
+                self.selected_document = None;
+            } else if let Some(ref file) = item.node.markdown_file {
+                // Load and display file content
+                match io::read_file(file.relative_path(), &self.notes_path) {
+                    Ok(content) => match Document::from_bytes(content.as_bytes()) {
+                        Ok(mut document) => {
+                            document.create_anchors_from_tree();
+                            self.selected_document = Some(document.clone());
+                            self.current_content = self.render_document_content(&document);
+                        }
+                        Err(e) => {
+                            self.current_content = vec![format!("Error parsing document: {}", e)];
+                            self.selected_document = None;
+                        }
+                    },
                     Err(e) => {
-                        self.current_content = vec![format!("Error parsing document: {}", e)];
+                        self.current_content = vec![format!("Error reading file: {}", e)];
+                        self.selected_document = None;
                     }
-                },
-                Err(e) => {
-                    self.current_content = vec![format!("Error reading file: {}", e)];
                 }
             }
         }
+    }
+
+    fn activate_selected_item(&mut self) -> Result<()> {
+        if let Some(index) = self.file_list_state.selected()
+            && let Some(item) = self.tree_items.get(index)
+        {
+            if item.node.is_folder {
+                // Handle folder toggle
+                self.toggle_folder(item.node.relative_path.clone());
+                // Update content after toggle
+                self.update_content_for_selection();
+            }
+            // Files don't need activation - they're already loaded by update_content_for_selection
+        }
         Ok(())
+    }
+
+    fn toggle_folder(&mut self, relative_path: RelativePathBuf) {
+        self.file_tree.toggle_folder(&relative_path);
+        self.tree_items = self.file_tree.get_items();
     }
 
     fn render_document_content(&self, document: &Document) -> Vec<String> {
@@ -212,6 +243,9 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Down | KeyCode::Char('j') => app.next_file(),
                 KeyCode::Up | KeyCode::Char('k') => app.previous_file(),
+                KeyCode::Enter | KeyCode::Right => {
+                    let _ = app.activate_selected_item();
+                }
                 _ => {}
             }
         }
@@ -227,11 +261,22 @@ fn ui(f: &mut Frame, app: &mut App) {
 
     // File list panel
     let file_items: Vec<ListItem> = app
-        .files
+        .tree_items
         .iter()
-        .map(|file| {
-            let path = file.relative_path().as_str();
-            ListItem::new(vec![Line::from(vec![Span::raw(path)])])
+        .map(|item| {
+            let indent = "  ".repeat(item.depth);
+            let icon = if item.node.is_folder {
+                if item.node.is_expanded {
+                    "📂 "
+                } else {
+                    "📁 "
+                }
+            } else {
+                "📄 "
+            };
+            let name = &item.node.name;
+            let display_text = format!("{}{}{}", indent, icon, name);
+            ListItem::new(vec![Line::from(vec![Span::raw(display_text)])])
         })
         .collect();
 
@@ -261,7 +306,8 @@ fn ui(f: &mut Frame, app: &mut App) {
     let help_text = Line::from(vec![
         Span::raw("q: Quit | "),
         Span::raw("↑/k: Previous | "),
-        Span::raw("↓/j: Next"),
+        Span::raw("↓/j: Next | "),
+        Span::raw("Enter/→: Open/Toggle"),
     ]);
 
     let help = Paragraph::new(vec![help_text]).block(Block::default());
