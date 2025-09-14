@@ -7,10 +7,22 @@ use crate::editing::{Anchor, Cmd, Patch};
 /// Marker types for list items
 #[derive(Debug, Clone, PartialEq)]
 pub enum Marker {
-    Dash,     // "-"
-    Asterisk, // "*"
-    Plus,     // "+"
-    Numbered, // "1.", "2.", etc.
+    Dash,             // "-"
+    Asterisk,         // "*"
+    Plus,             // "+"
+    Numbered(String), // "1.", "2.", "42.", etc. (without space)
+}
+
+impl Marker {
+    /// Return the marker text with space for editing
+    pub fn to_string_with_space(&self) -> String {
+        match self {
+            Marker::Dash => "- ".to_string(),
+            Marker::Asterisk => "* ".to_string(),
+            Marker::Plus => "+ ".to_string(),
+            Marker::Numbered(num) => format!("{} ", num),
+        }
+    }
 }
 
 /// Indentation style detected in the document
@@ -619,6 +631,17 @@ mod tests {
     use xi_rope::delta::Builder;
 
     // ============ Basic document tests ============
+
+    #[test]
+    fn test_marker_to_string_with_space() {
+        assert_eq!(Marker::Dash.to_string_with_space(), "- ");
+        assert_eq!(Marker::Asterisk.to_string_with_space(), "* ");
+        assert_eq!(Marker::Plus.to_string_with_space(), "+ ");
+        assert_eq!(
+            Marker::Numbered("42.".to_string()).to_string_with_space(),
+            "42. "
+        );
+    }
 
     #[test]
     fn test_document_from_bytes_valid_utf8() {

@@ -118,7 +118,7 @@ impl App {
                         markdown_neuraxis_engine::editing::document::Marker::Dash => "•",
                         markdown_neuraxis_engine::editing::document::Marker::Asterisk => "*",
                         markdown_neuraxis_engine::editing::document::Marker::Plus => "+",
-                        markdown_neuraxis_engine::editing::document::Marker::Numbered => "1.",
+                        markdown_neuraxis_engine::editing::document::Marker::Numbered(_) => "1.",
                     };
                     lines.push(format!("{} {}", marker_str, block.content));
                 }

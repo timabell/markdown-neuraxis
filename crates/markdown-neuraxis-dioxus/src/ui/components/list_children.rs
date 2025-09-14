@@ -44,7 +44,7 @@ fn determine_child_list_type(children: &[ListItem]) -> &'static str {
         .first()
         .and_then(|child| match &child.block.kind {
             BlockKind::ListItem {
-                marker: Marker::Numbered,
+                marker: Marker::Numbered(_),
                 ..
             } => Some("ol"),
             _ => None,

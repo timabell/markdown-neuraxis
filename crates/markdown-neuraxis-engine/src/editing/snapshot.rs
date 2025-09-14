@@ -533,8 +533,15 @@ fn extract_list_marker(doc: &Document, node: &tree_sitter::Node) -> Marker {
     } else if trimmed.starts_with("+ ") {
         Marker::Plus
     } else if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-        // Numbered list (1., 2., etc.)
-        Marker::Numbered
+        // Numbered list - extract the actual number and dot (without space)
+        let marker_end = trimmed
+            .char_indices()
+            .find(|(_, c)| *c == '.')
+            .map(|(i, _)| i + 1) // Include the dot
+            .unwrap_or(0);
+
+        let marker_text = &trimmed[..marker_end];
+        Marker::Numbered(marker_text.to_string())
     } else {
         // Default to dash if we can't determine
         Marker::Dash
@@ -845,7 +852,7 @@ fn group_blocks_for_rendering(blocks: &[RenderBlock]) -> Vec<ContentGroup> {
 
                 // Create the appropriate list group based on marker type
                 let group = match first_marker {
-                    Marker::Numbered => ContentGroup::NumberedListGroup { items: list_items },
+                    Marker::Numbered(_) => ContentGroup::NumberedListGroup { items: list_items },
                     _ => ContentGroup::BulletListGroup { items: list_items },
                 };
 
@@ -866,7 +873,7 @@ fn group_blocks_for_rendering(blocks: &[RenderBlock]) -> Vec<ContentGroup> {
 fn is_same_list_type(marker1: &Marker, marker2: &Marker) -> bool {
     matches!(
         (marker1, marker2),
-        (Marker::Numbered, Marker::Numbered)
+        (Marker::Numbered(_), Marker::Numbered(_))
             | (
                 Marker::Dash | Marker::Asterisk | Marker::Plus,
                 Marker::Dash | Marker::Asterisk | Marker::Plus,
@@ -1308,7 +1315,7 @@ mod tests {
         assert!(matches!(
             snapshot.blocks[3].kind,
             BlockKind::ListItem {
-                marker: Marker::Numbered,
+                marker: Marker::Numbered(_),
                 depth: 0
             }
         ));
@@ -1531,7 +1538,7 @@ mod tests {
             RenderBlock {
                 id: AnchorId(1),
                 kind: BlockKind::ListItem {
-                    marker: Marker::Numbered,
+                    marker: Marker::Numbered("1.".to_string()),
                     depth: 0,
                 },
                 byte_range: 0..8,
@@ -1543,7 +1550,7 @@ mod tests {
             RenderBlock {
                 id: AnchorId(2),
                 kind: BlockKind::ListItem {
-                    marker: Marker::Numbered,
+                    marker: Marker::Numbered("1.".to_string()),
                     depth: 0,
                 },
                 byte_range: 9..17,
@@ -1600,7 +1607,7 @@ mod tests {
             RenderBlock {
                 id: AnchorId(3),
                 kind: BlockKind::ListItem {
-                    marker: Marker::Numbered,
+                    marker: Marker::Numbered("1.".to_string()),
                     depth: 0,
                 },
                 byte_range: 18..26,
@@ -1612,7 +1619,7 @@ mod tests {
             RenderBlock {
                 id: AnchorId(4),
                 kind: BlockKind::ListItem {
-                    marker: Marker::Numbered,
+                    marker: Marker::Numbered("1.".to_string()),
                     depth: 0,
                 },
                 byte_range: 27..35,
@@ -1927,7 +1934,10 @@ mod tests {
     #[test]
     fn test_is_same_list_type() {
         // Test numbered lists
-        assert!(is_same_list_type(&Marker::Numbered, &Marker::Numbered));
+        assert!(is_same_list_type(
+            &Marker::Numbered("1.".to_string()),
+            &Marker::Numbered("1.".to_string())
+        ));
 
         // Test bullet lists
         assert!(is_same_list_type(&Marker::Dash, &Marker::Dash));
@@ -1936,10 +1946,22 @@ mod tests {
         assert!(is_same_list_type(&Marker::Plus, &Marker::Dash));
 
         // Test different types
-        assert!(!is_same_list_type(&Marker::Numbered, &Marker::Dash));
-        assert!(!is_same_list_type(&Marker::Dash, &Marker::Numbered));
-        assert!(!is_same_list_type(&Marker::Asterisk, &Marker::Numbered));
-        assert!(!is_same_list_type(&Marker::Plus, &Marker::Numbered));
+        assert!(!is_same_list_type(
+            &Marker::Numbered("1.".to_string()),
+            &Marker::Dash
+        ));
+        assert!(!is_same_list_type(
+            &Marker::Dash,
+            &Marker::Numbered("1.".to_string())
+        ));
+        assert!(!is_same_list_type(
+            &Marker::Asterisk,
+            &Marker::Numbered("1.".to_string())
+        ));
+        assert!(!is_same_list_type(
+            &Marker::Plus,
+            &Marker::Numbered("1.".to_string())
+        ));
     }
 
     #[test]

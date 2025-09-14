@@ -201,10 +201,10 @@ pub(crate) fn compile_command(doc: &Document, cmd: &Cmd) -> Delta<RopeInfo> {
         Cmd::ToggleMarker { line_start, to } => {
             let line_text = get_line_at(doc, *line_start);
             let new_marker = match to {
-                Marker::Dash => "- ",
-                Marker::Asterisk => "* ",
-                Marker::Plus => "+ ",
-                Marker::Numbered => "1. ",
+                Marker::Dash => "- ".to_string(),
+                Marker::Asterisk => "* ".to_string(),
+                Marker::Plus => "+ ".to_string(),
+                Marker::Numbered(num) => format!("{} ", num),
             };
 
             // Find existing marker if any
@@ -765,7 +765,7 @@ mod tests {
 
         let _patch = doc.apply(Cmd::ToggleMarker {
             line_start: 0,
-            to: Marker::Numbered,
+            to: Marker::Numbered("1.".to_string()),
         });
 
         assert_eq!(doc.text(), "1. Item 1");
