@@ -420,10 +420,11 @@ fn collect_render_blocks_recursive(
             let start_point = node.start_position();
             let content = doc.slice_to_cow(byte_range.clone()).to_string();
 
-            eprintln!(
-                "Warning: Unknown markdown element '{}' at line {} (will render as-is): {}",
+            // Use log crate to avoid corrupting TUI - logs can be redirected to file
+            log::warn!(
+                "Unknown markdown element '{}' at line {} (will render as-is): {}",
                 node.kind(),
-                start_point.row + 1, // Convert 0-based to 1-based line numbers
+                start_point.row + 1,
                 content.lines().next().unwrap_or(&content).trim()
             );
 

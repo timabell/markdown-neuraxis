@@ -16,6 +16,7 @@ xi-rope = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-md = { workspace = true }
 regex = { workspace = true }
+log = "0.4"
 
 [dev-dependencies]
 rstest = { workspace = true }
