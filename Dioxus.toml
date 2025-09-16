@@ -7,7 +7,7 @@ asset_dir = "crates/markdown-neuraxis-dioxus/src/assets"
 out_dir = "dist"
 
 [bundle]
-identifier = "uk.0x5.markdown-neuraxis"
+identifier = "co.rustworkshop.markdown-neuraxis"
 publisher = "tim-abell"
 
 [bundle.android]
