@@ -1,0 +1,41 @@
+[application]
+name = "markdown-neuraxis"
+default_platform = "desktop"
+asset_dir = "crates/markdown-neuraxis-dioxus/src/assets"
+
+[application.tools]
+out_dir = "dist"
+
+[bundle]
+identifier = "uk.0x5.markdown-neuraxis"
+publisher = "tim-abell"
+
+[bundle.android]
+# Android-specific configuration
+build_targets = ["aarch64", "armv7", "x86_64"]
+
+[bundle.android.signing]
+# For release builds, you'll need to set up signing
+# store_path = "keystore.jks"
+# store_password = ""
+# key_alias = ""
+# key_password = ""
+
+[bundle.android.permissions]
+# Add permissions as needed for file access
+permissions = [
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.WRITE_EXTERNAL_STORAGE"
+]
+
+[web.app]
+title = "markdown-neuraxis"
+
+[web.watcher]
+watch_path = ["src", "assets"]
+
+[desktop.app]
+window.title = "markdown-neuraxis"
+window.width = 1200
+window.height = 800
+window.resizable = true
