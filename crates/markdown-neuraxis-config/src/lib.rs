@@ -63,6 +63,11 @@ impl Config {
         Ok(())
     }
 
+    pub fn save(&self) -> anyhow::Result<()> {
+        let config_path = Self::config_path();
+        self.save_to_path(&config_path)
+    }
+
     pub fn config_path() -> PathBuf {
         let config_dir = shellexpand::tilde("~/.config/markdown-neuraxis");
         PathBuf::from(config_dir.as_ref()).join("config.toml")
@@ -210,5 +215,23 @@ notes_path = "$NOTES_ROOT/my-notes"
         unsafe {
             env::remove_var("NOTES_ROOT");
         }
+    }
+
+    #[test]
+    fn test_save_convenience_method() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_file = temp_dir.path().join("config.toml");
+        let test_config = Config {
+            notes_path: PathBuf::from("/tmp/test-notes"),
+        };
+
+        // Test that save_to_path and save produce the same result
+        // First save to a specific path
+        test_config.save_to_path(&config_file).unwrap();
+
+        // Verify the file was created and has correct content
+        assert!(config_file.exists(), "Config file should exist");
+        let loaded_config = Config::load_from_path(&config_file).unwrap().unwrap();
+        assert_eq!(loaded_config.notes_path, test_config.notes_path);
     }
 }

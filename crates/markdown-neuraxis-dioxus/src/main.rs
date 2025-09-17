@@ -9,6 +9,27 @@ mod ui;
 use markdown_neuraxis_config::Config;
 use ui::App;
 
+#[cfg(target_os = "android")]
+fn create_default_android_config() -> PathBuf {
+    let config_path = Config::config_path();
+    let default_notes_path = PathBuf::from("~/markdown-neuraxis");
+    let default_config = Config {
+        notes_path: default_notes_path.clone(),
+    };
+
+    if let Err(e) = default_config.save() {
+        eprintln!("Warning: Failed to create default config file: {e}");
+        eprintln!(
+            "Using temporary notes path: {}",
+            default_notes_path.display()
+        );
+    } else {
+        eprintln!("Created default config file at {}", config_path.display());
+    }
+
+    default_notes_path
+}
+
 fn main() {
     // Determine notes path from CLI args or config file
     let args: Vec<String> = env::args().collect();
@@ -29,10 +50,18 @@ fn main() {
                 from_config = true;
             }
             Ok(None) => {
-                eprintln!("Error: No notes path provided and no config file found");
-                eprintln!("Usage: {} <notes-folder-path>", args[0]);
-                eprintln!("Or create a config file at {}", config_path.display());
-                process::exit(1);
+                #[cfg(target_os = "android")]
+                {
+                    notes_path = create_default_android_config();
+                    from_config = true;
+                }
+                #[cfg(not(target_os = "android"))]
+                {
+                    eprintln!("Error: No notes path provided and no config file found");
+                    eprintln!("Usage: {} <notes-folder-path>", args[0]);
+                    eprintln!("Or create a config file at {}", config_path.display());
+                    process::exit(1);
+                }
             }
             Err(e) => {
                 eprintln!("Error: Failed to load config file: {e}");
