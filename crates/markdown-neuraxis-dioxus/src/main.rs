@@ -31,8 +31,28 @@ fn create_default_android_config() -> PathBuf {
 }
 
 fn main() {
+    // Initialize logging
+    #[cfg(target_os = "android")]
+    {
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Debug)
+                .with_tag("MarkdownNeuraxis"),
+        );
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Info)
+            .init();
+    }
+
+    log::info!("markdown-neuraxis starting up!");
+
     // Determine notes path from CLI args or config file
     let config_path = Config::config_path();
+    log::info!("Config path: {}", config_path.display());
 
     let notes_path;
     let from_config;
@@ -51,6 +71,7 @@ fn main() {
             let args: Vec<String> = env::args().collect();
             notes_path = PathBuf::from(&args[1]);
             from_config = false;
+            log::info!("Using notes path from CLI argument: {}", notes_path.display());
         }
         #[cfg(target_os = "android")]
         {
@@ -59,16 +80,20 @@ fn main() {
         }
     } else if args_count == 1 {
         // No CLI argument - try config file
+        log::info!("No CLI argument provided, checking config file");
         match Config::load() {
             Ok(Some(config)) => {
                 notes_path = config.notes_path;
                 from_config = true;
+                log::info!("Loaded notes path from config: {}", notes_path.display());
             }
             Ok(None) => {
+                log::info!("No config file found");
                 #[cfg(target_os = "android")]
                 {
                     notes_path = create_default_android_config();
                     from_config = true;
+                    log::info!("Created default Android config with path: {}", notes_path.display());
                 }
                 #[cfg(not(target_os = "android"))]
                 {
@@ -82,6 +107,7 @@ fn main() {
                 }
             }
             Err(e) => {
+                log::error!("Failed to load config file: {e}");
                 eprintln!("Error: Failed to load config file: {e}");
                 let program_name = env::args()
                     .next()
