@@ -32,17 +32,32 @@ fn create_default_android_config() -> PathBuf {
 
 fn main() {
     // Determine notes path from CLI args or config file
-    let args: Vec<String> = env::args().collect();
     let config_path = Config::config_path();
 
     let notes_path;
     let from_config;
 
-    if args.len() == 2 {
-        // CLI argument provided - use it
-        notes_path = PathBuf::from(&args[1]);
-        from_config = false;
-    } else if args.len() == 1 {
+    // On Android, env::args() can cause capacity overflow, so handle args more carefully
+    #[cfg(target_os = "android")]
+    let args_count = 1; // Android apps typically don't receive CLI args
+
+    #[cfg(not(target_os = "android"))]
+    let args_count = env::args().count();
+
+    if args_count == 2 {
+        // CLI argument provided - use it (only on non-Android)
+        #[cfg(not(target_os = "android"))]
+        {
+            let args: Vec<String> = env::args().collect();
+            notes_path = PathBuf::from(&args[1]);
+            from_config = false;
+        }
+        #[cfg(target_os = "android")]
+        {
+            // This branch should never be reached on Android
+            unreachable!("Android should not have CLI args");
+        }
+    } else if args_count == 1 {
         // No CLI argument - try config file
         match Config::load() {
             Ok(Some(config)) => {
@@ -58,19 +73,28 @@ fn main() {
                 #[cfg(not(target_os = "android"))]
                 {
                     eprintln!("Error: No notes path provided and no config file found");
-                    eprintln!("Usage: {} <notes-folder-path>", args[0]);
+                    let program_name = env::args()
+                        .next()
+                        .unwrap_or_else(|| "markdown-neuraxis".to_string());
+                    eprintln!("Usage: {} <notes-folder-path>", program_name);
                     eprintln!("Or create a config file at {}", config_path.display());
                     process::exit(1);
                 }
             }
             Err(e) => {
                 eprintln!("Error: Failed to load config file: {e}");
-                eprintln!("Usage: {} <notes-folder-path>", args[0]);
+                let program_name = env::args()
+                    .next()
+                    .unwrap_or_else(|| "markdown-neuraxis".to_string());
+                eprintln!("Usage: {} <notes-folder-path>", program_name);
                 process::exit(1);
             }
         }
     } else {
-        eprintln!("Usage: {} [notes-folder-path]", args[0]);
+        let program_name = env::args()
+            .next()
+            .unwrap_or_else(|| "markdown-neuraxis".to_string());
+        eprintln!("Usage: {} [notes-folder-path]", program_name);
         process::exit(1);
     };
 
@@ -96,17 +120,34 @@ fn main() {
 
 fn app_root() -> Element {
     // Re-get notes path using same logic as main
-    let args: Vec<String> = env::args().collect();
-    let notes_path = if args.len() == 2 {
-        PathBuf::from(&args[1])
-    } else {
-        // No CLI argument - use config file, error if not found
-        Config::load()
+    let notes_path;
+
+    // On Android, env::args() can cause capacity overflow, so handle args more carefully
+    #[cfg(target_os = "android")]
+    {
+        // Android apps always use config file
+        notes_path = Config::load()
             .map_err(|_| "Config file error")
             .unwrap()
             .unwrap_or_else(|| panic!("Config file not found"))
-            .notes_path
-    };
+            .notes_path;
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let args_count = env::args().count();
+        notes_path = if args_count == 2 {
+            let args: Vec<String> = env::args().collect();
+            PathBuf::from(&args[1])
+        } else {
+            // No CLI argument - use config file, error if not found
+            Config::load()
+                .map_err(|_| "Config file error")
+                .unwrap()
+                .unwrap_or_else(|| panic!("Config file not found"))
+                .notes_path
+        };
+    }
 
     rsx! {
         App { notes_path: notes_path }
