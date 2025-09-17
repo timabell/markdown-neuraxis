@@ -69,8 +69,18 @@ impl Config {
     }
 
     pub fn config_path() -> PathBuf {
-        let config_dir = shellexpand::tilde("~/.config/markdown-neuraxis");
-        PathBuf::from(config_dir.as_ref()).join("config.toml")
+        #[cfg(target_os = "android")]
+        {
+            // Use app's internal storage for config - no permissions needed
+            PathBuf::from(
+                "/data/data/co.rustworkshop.MarkdownNeuraxisDioxus/files/.config/markdown-neuraxis/config.toml",
+            )
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let config_dir = shellexpand::tilde("~/.config/markdown-neuraxis");
+            PathBuf::from(config_dir.as_ref()).join("config.toml")
+        }
     }
 
     fn expand_path(path: &Path) -> Option<PathBuf> {
