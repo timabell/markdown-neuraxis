@@ -10,12 +10,21 @@ const SOLARIZED_LIGHT_CSS: &str = include_str!("../assets/solarized-light.css");
 
 #[component]
 pub fn App(notes_path: PathBuf) -> Element {
+    log::info!("App component initialized with path: {}", notes_path.display());
+
     // Build file tree
-    let mut file_tree = use_signal(|| match io::build_file_tree(&notes_path) {
-        Ok(tree) => tree,
-        Err(e) => {
-            eprintln!("Error building file tree: {e}");
-            FileTree::new(notes_path.clone())
+    let mut file_tree = use_signal(|| {
+        log::info!("Building file tree for: {}", notes_path.display());
+        match io::build_file_tree(&notes_path) {
+            Ok(tree) => {
+                log::info!("File tree built successfully");
+                tree
+            }
+            Err(e) => {
+                log::error!("Error building file tree: {e}");
+                eprintln!("Error building file tree: {e}");
+                FileTree::new(notes_path.clone())
+            }
         }
     });
 

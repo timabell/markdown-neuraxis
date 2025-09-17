@@ -30,7 +30,7 @@ html-escape = "0.2"
 regex = "1.11"
 
 # UI dependencies
-dioxus = { version = "0.6", features = ["desktop"] }
+dioxus = { version = "0.6", features = ["desktop", "mobile"] }
 ratatui = "0.29"
 crossterm = "0.29"
 

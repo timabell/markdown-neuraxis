@@ -226,12 +226,26 @@ Happy note-taking! 📝
         process::exit(1);
     }
 
-    dioxus::LaunchBuilder::desktop()
-        .with_cfg(make_window_config())
-        .launch(app_root);
+    #[cfg(not(target_os = "android"))]
+    {
+        log::info!("About to launch Dioxus app for desktop");
+        dioxus::LaunchBuilder::desktop()
+            .with_cfg(make_window_config())
+            .launch(app_root);
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        // On Android, we need to actually launch the app
+        log::info!("Launching Dioxus app for Android");
+        dioxus::launch(app_root);
+        log::info!("Dioxus launch completed");
+    }
 }
 
 fn app_root() -> Element {
+    log::info!("app_root() called");
+
     // Re-get notes path using same logic as main
     let notes_path;
 
@@ -239,11 +253,13 @@ fn app_root() -> Element {
     #[cfg(target_os = "android")]
     {
         // Android apps always use config file
+        log::info!("Android: loading config in app_root");
         notes_path = Config::load()
             .map_err(|_| "Config file error")
             .unwrap()
             .unwrap_or_else(|| panic!("Config file not found"))
             .notes_path;
+        log::info!("Android app_root using notes path: {}", notes_path.display());
     }
 
     #[cfg(not(target_os = "android"))]
@@ -261,6 +277,8 @@ fn app_root() -> Element {
                 .notes_path
         };
     }
+
+    log::info!("app_root() creating App component with path: {}", notes_path.display());
 
     rsx! {
         App { notes_path: notes_path }
