@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 markdown-neuraxis-engine = { path = "../markdown-neuraxis-engine" }
+markdown-neuraxis-config = { path = "../markdown-neuraxis-config" }
 dioxus = { workspace = true }
 relative-path = { workspace = true }
 
