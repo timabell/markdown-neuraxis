@@ -19,7 +19,7 @@ trim = true
 
 [git]
 conventional_commits = true
-filter_unconventional = true
+filter_unconventional = true # ignore commits with "prefix:"
 split_commits = false
 commit_preprocessors = [
     { pattern = '\((\w+\s)?#([0-9]+)\)', replace = ""},
@@ -36,9 +36,9 @@ commit_parsers = [
     { body = ".*security", group = "Security"},
 ]
 protect_breaking_commits = false
-filter_commits = true
+filter_commits = true # ignore prefixes not listed above
 tag_pattern = "v[0-9]*"
-skip_tags = "v[0-9]*-.*"
+skip_tags = "v[0-9]*-.*" # ignore pre-release semver tags
 ignore_tags = ""
 topo_order = false
 sort_commits = "oldest"
