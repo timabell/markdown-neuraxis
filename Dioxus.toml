@@ -10,24 +10,6 @@ out_dir = "dist"
 identifier = "co.rustworkshop.markdown-neuraxis"
 publisher = "tim-abell"
 
-[bundle.android]
-# Android-specific configuration
-build_targets = ["aarch64", "armv7", "x86_64"]
-
-[bundle.android.signing]
-# For release builds, you'll need to set up signing
-# store_path = "keystore.jks"
-# store_password = ""
-# key_alias = ""
-# key_password = ""
-
-[bundle.android.permissions]
-# Add permissions as needed for file access
-permissions = [
-    "android.permission.READ_EXTERNAL_STORAGE",
-    "android.permission.WRITE_EXTERNAL_STORAGE"
-]
-
 [web.app]
 title = "markdown-neuraxis"
 
