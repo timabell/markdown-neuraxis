@@ -10,7 +10,10 @@ const SOLARIZED_LIGHT_CSS: &str = include_str!("../assets/solarized-light.css");
 
 #[component]
 pub fn App(notes_path: PathBuf) -> Element {
-    log::info!("App component initialized with path: {}", notes_path.display());
+    log::info!(
+        "App component initialized with path: {}",
+        notes_path.display()
+    );
 
     // Build file tree
     let mut file_tree = use_signal(|| {

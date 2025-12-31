@@ -259,7 +259,10 @@ fn app_root() -> Element {
             .unwrap()
             .unwrap_or_else(|| panic!("Config file not found"))
             .notes_path;
-        log::info!("Android app_root using notes path: {}", notes_path.display());
+        log::info!(
+            "Android app_root using notes path: {}",
+            notes_path.display()
+        );
     }
 
     #[cfg(not(target_os = "android"))]
@@ -278,7 +281,10 @@ fn app_root() -> Element {
         };
     }
 
-    log::info!("app_root() creating App component with path: {}", notes_path.display());
+    log::info!(
+        "app_root() creating App component with path: {}",
+        notes_path.display()
+    );
 
     rsx! {
         App { notes_path: notes_path }
