@@ -4,4 +4,4 @@ set -e
 
 source set-android-envs.sh
 
-dx serve --android
+dx serve --android --package markdown-neuraxis-dioxus
