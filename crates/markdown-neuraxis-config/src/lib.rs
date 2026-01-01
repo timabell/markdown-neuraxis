@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+/// Android package identifier - must match bundle.identifier in Dioxus.toml
+pub const ANDROID_PACKAGE_NAME: &str = "co.rustworkshop.markdown_neuraxis";
+
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("Failed to read config file at {config_path}: {source}")]
@@ -72,9 +75,10 @@ impl Config {
         #[cfg(target_os = "android")]
         {
             // Use app's internal storage for config - no permissions needed
-            PathBuf::from(
-                "/data/data/co.rustworkshop.MarkdownNeuraxisDioxus/files/.config/markdown-neuraxis/config.toml",
-            )
+            PathBuf::from(format!(
+                "/data/data/{}/files/.config/markdown-neuraxis/config.toml",
+                ANDROID_PACKAGE_NAME
+            ))
         }
         #[cfg(not(target_os = "android"))]
         {
