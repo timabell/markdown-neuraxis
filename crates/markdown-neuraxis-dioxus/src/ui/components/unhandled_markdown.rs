@@ -12,7 +12,7 @@ pub fn UnhandledMarkdown(block: RenderBlock, on_focus: Callback<()>) -> Element 
             tabindex: "0",
             onfocus: move |_| on_focus.call(()),
             onkeydown: move |evt| {
-                if evt.key() == dioxus::events::Key::Enter {
+                if evt.key() == Key::Enter {
                     on_focus.call(());
                 }
             },

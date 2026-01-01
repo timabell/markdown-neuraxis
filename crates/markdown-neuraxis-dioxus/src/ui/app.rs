@@ -101,7 +101,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 class: "sidebar",
                 h2 { "Files" }
                 super::components::TreeView {
-                    tree: ReadOnlySignal::from(file_tree),
+                    tree: ReadSignal::from(file_tree),
                     selected_file: selected_file.read().clone(),
                     on_file_select: on_sidebar_file_select,
                     on_folder_toggle: move |relative_path: RelativePathBuf| {

@@ -1,12 +1,11 @@
 use crate::ui::components::tree_view_item::TreeViewItem;
-use dioxus::events::{Key, KeyboardEvent};
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::models::{FileTree, FileTreeItem, MarkdownFile};
 use relative_path::RelativePathBuf;
 
 #[component]
 pub fn TreeView(
-    tree: ReadOnlySignal<FileTree>,
+    tree: ReadSignal<FileTree>,
     selected_file: Option<MarkdownFile>,
     on_file_select: EventHandler<MarkdownFile>,
     on_folder_toggle: EventHandler<RelativePathBuf>,
