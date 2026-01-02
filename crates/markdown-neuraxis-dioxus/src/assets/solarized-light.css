@@ -732,3 +732,71 @@ hr {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        display: none;
+        width: 100%;
+        height: calc(100vh - 56px);
+        box-sizing: border-box;
+    }
+
+    .sidebar.mobile-visible {
+        display: block;
+    }
+
+    .main-content {
+        height: calc(100vh - 56px);
+        box-sizing: border-box;
+    }
+
+    .main-content.mobile-hidden {
+        display: none;
+    }
+
+    .mobile-bottom-bar {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        background-color: var(--base2);
+        border-top: 1px solid var(--base1);
+        align-items: center;
+        padding: 0 16px;
+        z-index: 100;
+    }
+
+    .hamburger-btn {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 8px 12px;
+        color: var(--base01);
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+
+    .hamburger-btn:hover {
+        background-color: var(--base1);
+    }
+
+    .hamburger-btn:active {
+        background-color: var(--blue);
+        color: var(--base3);
+    }
+}
+
+/* Desktop: hide mobile-only elements */
+@media (min-width: 769px) {
+    .mobile-bottom-bar {
+        display: none;
+    }
+}

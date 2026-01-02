@@ -60,6 +60,9 @@ pub fn App(notes_path: PathBuf) -> Element {
     let current_document = use_signal(|| None::<Arc<Document>>);
     let current_snapshot = use_signal(|| None::<Snapshot>);
 
+    // Mobile navigation state - tracks whether file tree is shown on mobile
+    let mut mobile_nav_open = use_signal(|| false);
+
     // Create callbacks outside the rsx! block for cleaner code
     let on_sidebar_file_select = {
         let notes_path = notes_path.clone();
@@ -67,6 +70,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
+        let mut mobile_nav_open = mobile_nav_open;
         move |markdown_file: MarkdownFile| {
             load_existing_document(
                 &markdown_file,
@@ -76,6 +80,8 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut current_snapshot,
                 &mut error_state,
             );
+            // Close mobile nav when file is selected
+            mobile_nav_open.set(false);
         }
     };
 
@@ -146,7 +152,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 }
             }
             div {
-                class: "sidebar",
+                class: if *mobile_nav_open.read() { "sidebar mobile-visible" } else { "sidebar" },
                 h2 { "Files" }
                 super::components::TreeView {
                     tree: ReadSignal::from(file_tree),
@@ -158,7 +164,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 }
             }
             div {
-                class: "main-content",
+                class: if *mobile_nav_open.read() { "main-content mobile-hidden" } else { "main-content" },
                 if let (Some(file), Some(snapshot), Some(document)) = (
                     selected_file.read().as_ref(),
                     current_snapshot.read().as_ref(),
@@ -179,6 +185,18 @@ pub fn App(notes_path: PathBuf) -> Element {
                         h1 { "markdown-neuraxis" }
                         p { "Select a file from the sidebar to view its content" }
                     }
+                }
+            }
+            // Mobile bottom navigation bar
+            div {
+                class: "mobile-bottom-bar",
+                button {
+                    class: "hamburger-btn",
+                    onclick: move |_| {
+                        let current = *mobile_nav_open.read();
+                        mobile_nav_open.set(!current);
+                    },
+                    "☰"
                 }
             }
         }
