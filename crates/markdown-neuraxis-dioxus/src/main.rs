@@ -2,12 +2,58 @@ use dioxus::prelude::*;
 use markdown_neuraxis_engine::io;
 use std::env;
 use std::path::PathBuf;
-use std::process;
 
 mod ui;
 
 use markdown_neuraxis_config::Config;
 use ui::App;
+use ui::components::ErrorScreen;
+
+/// Application error information for display to users
+#[derive(Clone, Debug)]
+pub struct AppError {
+    pub title: String,
+    pub message: String,
+    pub details: Option<String>,
+}
+
+/// Global error state for startup errors (used to pass error info to error screen)
+/// Only used on Android where stderr isn't visible to users
+#[cfg(target_os = "android")]
+static STARTUP_ERROR: std::sync::OnceLock<AppError> = std::sync::OnceLock::new();
+
+/// Launch an error screen instead of the main app (Android only)
+/// On desktop, errors are shown via stderr before exit
+#[cfg(target_os = "android")]
+fn launch_error_app(error: AppError) {
+    log::error!(
+        "Launching error screen: {} - {}",
+        error.title,
+        error.message
+    );
+
+    // Store error for the error_app_root component to access
+    let _ = STARTUP_ERROR.set(error);
+
+    dioxus::launch(error_app_root);
+}
+
+/// Root component for displaying startup errors (Android only)
+#[cfg(target_os = "android")]
+fn error_app_root() -> Element {
+    let error = STARTUP_ERROR
+        .get()
+        .expect("STARTUP_ERROR must be set before launching error app");
+
+    rsx! {
+        style { {include_str!("assets/solarized-light.css")} }
+        ErrorScreen {
+            title: error.title.clone(),
+            message: error.message.clone(),
+            details: error.details.clone(),
+        }
+    }
+}
 
 #[cfg(target_os = "android")]
 fn create_default_android_config() -> PathBuf {
@@ -62,6 +108,25 @@ fn main() {
         env_logger::Builder::from_default_env()
             .filter_level(log::LevelFilter::Info)
             .init();
+    }
+
+    // Set up panic hook to log panics before abort (especially useful on Android)
+    #[cfg(target_os = "android")]
+    {
+        use markdown_neuraxis_config::ANDROID_PACKAGE_NAME;
+
+        std::panic::set_hook(Box::new(|panic_info| {
+            let msg = panic_info.to_string();
+            log::error!("PANIC: {}", msg);
+
+            // Also write to a crash log file for post-crash inspection
+            let crash_path = format!("/data/data/{}/files/crash.log", ANDROID_PACKAGE_NAME);
+            let crash_path = std::path::Path::new(&crash_path);
+            if let Some(parent) = crash_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::write(crash_path, &msg);
+        }));
     }
 
     log::info!("markdown-neuraxis starting up!");
@@ -128,17 +193,28 @@ fn main() {
                         .unwrap_or_else(|| "markdown-neuraxis".to_string());
                     eprintln!("Usage: {} <notes-folder-path>", program_name);
                     eprintln!("Or create a config file at {}", config_path.display());
-                    process::exit(1);
+                    std::process::exit(1);
                 }
             }
             Err(e) => {
                 log::error!("Config::load() failed with error: {e}");
-                eprintln!("Error: Failed to load config file: {e}");
-                let program_name = env::args()
-                    .next()
-                    .unwrap_or_else(|| "markdown-neuraxis".to_string());
-                eprintln!("Usage: {} <notes-folder-path>", program_name);
-                process::exit(1);
+                #[cfg(target_os = "android")]
+                {
+                    return launch_error_app(AppError {
+                        title: "Configuration Error".to_string(),
+                        message: "Failed to load configuration file".to_string(),
+                        details: Some(e.to_string()),
+                    });
+                }
+                #[cfg(not(target_os = "android"))]
+                {
+                    eprintln!("Error: Failed to load config file: {e}");
+                    let program_name = env::args()
+                        .next()
+                        .unwrap_or_else(|| "markdown-neuraxis".to_string());
+                    eprintln!("Usage: {} <notes-folder-path>", program_name);
+                    std::process::exit(1);
+                }
             }
         }
     } else {
@@ -146,7 +222,7 @@ fn main() {
             .next()
             .unwrap_or_else(|| "markdown-neuraxis".to_string());
         eprintln!("Usage: {} [notes-folder-path]", program_name);
-        process::exit(1);
+        std::process::exit(1);
     };
 
     // On Android, create the notes directory if it doesn't exist
@@ -194,11 +270,18 @@ Happy note-taking! 📝
                     log::error!(
                         "This usually means the app lacks WRITE_EXTERNAL_STORAGE permission"
                     );
-                    eprintln!(
-                        "Error: Failed to create notes directory '{}': {e}",
-                        notes_path.display()
-                    );
-                    process::exit(1);
+                    return launch_error_app(AppError {
+                        title: "Storage Permission Error".to_string(),
+                        message: format!(
+                            "Failed to create notes directory at '{}'",
+                            notes_path.display()
+                        ),
+                        details: Some(format!(
+                            "{}\n\nThis usually means the app lacks storage permission. \
+                             Please grant storage access in Settings > Apps > markdown-neuraxis > Permissions.",
+                            e
+                        )),
+                    });
                 }
             }
         }
@@ -207,23 +290,32 @@ Happy note-taking! 📝
     // Validate notes directory using engine
     if let Err(e) = io::validate_notes_dir(&notes_path) {
         let source = if from_config {
-            format!(" from config file '{}'", config_path.display())
+            format!(" (from config file '{}')", config_path.display())
         } else {
             String::new()
         };
 
+        log::error!("Notes path validation failed: {e}");
+        log::error!("Notes path: {}", notes_path.display());
+
         #[cfg(target_os = "android")]
         {
-            log::error!("Notes path validation failed: {e}");
-            log::error!("Notes path: {}", notes_path.display());
+            return launch_error_app(AppError {
+                title: "Invalid Notes Directory".to_string(),
+                message: format!("Notes path '{}'{} is invalid", notes_path.display(), source),
+                details: Some(e.to_string()),
+            });
         }
 
-        eprintln!(
-            "Error: Notes path '{}'{} is invalid: {e}",
-            notes_path.display(),
-            source
-        );
-        process::exit(1);
+        #[cfg(not(target_os = "android"))]
+        {
+            eprintln!(
+                "Error: Notes path '{}'{} is invalid: {e}",
+                notes_path.display(),
+                source
+            );
+            std::process::exit(1);
+        }
     }
 
     #[cfg(not(target_os = "android"))]
@@ -247,22 +339,26 @@ fn app_root() -> Element {
     log::info!("app_root() called");
 
     // Re-get notes path using same logic as main
-    let notes_path;
+    let notes_path: Result<PathBuf, AppError>;
 
     // On Android, env::args() can cause capacity overflow, so handle args more carefully
     #[cfg(target_os = "android")]
     {
         // Android apps always use config file
         log::info!("Android: loading config in app_root");
-        notes_path = Config::load()
-            .map_err(|_| "Config file error")
-            .unwrap()
-            .unwrap_or_else(|| panic!("Config file not found"))
-            .notes_path;
-        log::info!(
-            "Android app_root using notes path: {}",
-            notes_path.display()
-        );
+        notes_path = match Config::load() {
+            Ok(Some(config)) => Ok(config.notes_path),
+            Ok(None) => Err(AppError {
+                title: "Configuration Missing".to_string(),
+                message: "No configuration file found".to_string(),
+                details: Some("The app could not find its configuration file.".to_string()),
+            }),
+            Err(e) => Err(AppError {
+                title: "Configuration Error".to_string(),
+                message: "Failed to load configuration".to_string(),
+                details: Some(e.to_string()),
+            }),
+        };
     }
 
     #[cfg(not(target_os = "android"))]
@@ -270,24 +366,46 @@ fn app_root() -> Element {
         let args_count = env::args().count();
         notes_path = if args_count == 2 {
             let args: Vec<String> = env::args().collect();
-            PathBuf::from(&args[1])
+            Ok(PathBuf::from(&args[1]))
         } else {
             // No CLI argument - use config file, error if not found
-            Config::load()
-                .map_err(|_| "Config file error")
-                .unwrap()
-                .unwrap_or_else(|| panic!("Config file not found"))
-                .notes_path
+            match Config::load() {
+                Ok(Some(config)) => Ok(config.notes_path),
+                Ok(None) => Err(AppError {
+                    title: "Configuration Missing".to_string(),
+                    message: "No configuration file found".to_string(),
+                    details: None,
+                }),
+                Err(e) => Err(AppError {
+                    title: "Configuration Error".to_string(),
+                    message: "Failed to load configuration".to_string(),
+                    details: Some(e.to_string()),
+                }),
+            }
         };
     }
 
-    log::info!(
-        "app_root() creating App component with path: {}",
-        notes_path.display()
-    );
-
-    rsx! {
-        App { notes_path: notes_path }
+    match notes_path {
+        Ok(path) => {
+            log::info!(
+                "app_root() creating App component with path: {}",
+                path.display()
+            );
+            rsx! {
+                App { notes_path: path }
+            }
+        }
+        Err(error) => {
+            log::error!("app_root() error: {} - {}", error.title, error.message);
+            rsx! {
+                style { {include_str!("assets/solarized-light.css")} }
+                ErrorScreen {
+                    title: error.title,
+                    message: error.message,
+                    details: error.details,
+                }
+            }
+        }
     }
 }
 

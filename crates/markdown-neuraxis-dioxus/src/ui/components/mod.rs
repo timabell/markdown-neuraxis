@@ -5,6 +5,7 @@ pub mod content_group;
 pub mod document_content;
 pub mod editor_block;
 pub mod empty_document;
+pub mod error_screen;
 pub mod heading;
 pub mod list_children;
 pub mod list_component;
@@ -21,5 +22,6 @@ pub mod tree_view_item;
 pub mod unhandled_markdown;
 
 pub use empty_document::*;
+pub use error_screen::*;
 pub use main_panel::*;
 pub use tree_view::*;
