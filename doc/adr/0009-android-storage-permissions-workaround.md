@@ -37,6 +37,8 @@ We will use a build-time manifest patching script as a workaround until Dioxus s
 
 ### Implementation
 
+#### 1. Build-time Manifest Patching
+
 The `patch-android-manifest.sh` script modifies the generated `AndroidManifest.xml` after Dioxus creates it but before the Gradle build runs:
 
 ```bash
@@ -46,7 +48,25 @@ The `patch-android-manifest.sh` script modifies the generated `AndroidManifest.x
 # Then run the Gradle build manually or via dx
 ```
 
-The build scripts (`build-android-dx.sh`, etc.) should be updated to include this patching step.
+The build scripts (`build-android-dx.sh`, etc.) include this patching step.
+
+#### 2. Runtime Permission Requests
+
+Since Android 6.0 (API 23), apps must request dangerous permissions at runtime, not just declare them in the manifest. We implement this via JNI using the `jni` and `ndk-context` crates.
+
+The `platform` module (`src/platform/`) provides:
+- `check_storage_permission()` - Returns permission status
+- `request_storage_permission()` - Opens appropriate settings page
+
+On Android 10 and below:
+- Checks `ContextCompat.checkSelfPermission()` for READ_EXTERNAL_STORAGE
+- Opens app settings page for user to grant permission
+
+On Android 11+:
+- Checks `Environment.isExternalStorageManager()` for MANAGE_EXTERNAL_STORAGE
+- Opens "All files access" settings page via `ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION`
+
+The setup screen checks permission status when "Use existing folder" is selected and guides users through granting permission if needed.
 
 ## Consequences
 
@@ -79,14 +99,19 @@ This is not ideal UX but is the only option without implementing Storage Access 
 
 - Monitor Dioxus for native permission support and migrate when available
 - Consider SAF integration for a more Android-native experience
-- Add in-app permission request flow with guidance for enabling all-files access
 
 ## Dependencies
 
+### Build-time
 The `patch-android-manifest.sh` script requires `xmlstarlet` for proper XML manipulation:
 ```bash
 apt install xmlstarlet
 ```
+
+### Runtime (Android only)
+The runtime permission handling uses these Rust crates (Android-only dependencies):
+- `jni = "0.21"` - JNI bindings for calling Android Java APIs
+- `ndk-context = "0.1"` - Access to Android context for JNI operations
 
 ## References
 
