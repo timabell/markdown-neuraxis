@@ -1,6 +1,10 @@
 use crate::platform::{
     StoragePermissionStatus, check_storage_permission, request_storage_permission,
 };
+#[cfg(target_os = "android")]
+use crate::platform::{
+    get_folder_picker_result, is_folder_picker_complete, launch_folder_picker, reset_folder_picker,
+};
 use dioxus::prelude::*;
 use markdown_neuraxis_config::Config;
 use std::path::PathBuf;
@@ -49,6 +53,16 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
     let mut is_saving = use_signal(|| false);
     let permission_status = use_signal(|| StoragePermissionStatus::Granted);
 
+    // Folder picker state (Android only)
+    #[cfg(target_os = "android")]
+    let mut picker_active = use_signal(|| false);
+    #[cfg(not(target_os = "android"))]
+    let picker_active = use_signal(|| false);
+
+    // Suppress unused warning on non-Android
+    #[cfg(not(target_os = "android"))]
+    let _ = &picker_active;
+
     let handle_new_folder = {
         let mut mode = mode;
         let mut path_input = path_input;
@@ -64,12 +78,17 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
         let mut mode = mode;
         let mut path_input = path_input;
         let mut error_message = error_message;
+        #[cfg(not(target_os = "android"))]
         let mut permission_status = permission_status;
         move |_| {
-            // Check storage permission before allowing existing folder selection
-            let status = check_storage_permission();
-            log::info!("Storage permission status: {status:?}");
-            permission_status.set(status);
+            // On Android, SAF folder picker handles its own permissions
+            // On desktop, check storage permission (always granted)
+            #[cfg(not(target_os = "android"))]
+            {
+                let status = check_storage_permission();
+                log::info!("Storage permission status: {status:?}");
+                permission_status.set(status);
+            }
 
             path_input.set(String::new());
             error_message.set(None);
@@ -107,8 +126,8 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
     };
 
     let handle_submit = {
-        let current_mode = *mode.read();
         move |_| {
+            let current_mode = *mode.read();
             let path_str = path_input.read().clone();
             let path = PathBuf::from(&path_str);
 
@@ -122,6 +141,9 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
 
             match current_mode {
                 SetupMode::NewFolder => {
+                    // On Android, folder picker may have already created the folder
+                    // On desktop, check if it exists and error if so
+                    #[cfg(not(target_os = "android"))]
                     if path.exists() {
                         error_message.set(Some(
                             "This folder already exists. Use 'existing folder' option or choose a different path.".to_string(),
@@ -130,7 +152,10 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
                         return;
                     }
 
-                    if let Err(e) = std::fs::create_dir_all(&path) {
+                    // Create folder if it doesn't exist
+                    if !path.exists()
+                        && let Err(e) = std::fs::create_dir_all(&path)
+                    {
                         error_message.set(Some(format!("Failed to create directory: {e}")));
                         is_saving.set(false);
                         return;
@@ -207,54 +232,78 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
                     }
                 },
 
-                SetupMode::NewFolder => rsx! {
-                    p { "Enter a path for your new notes folder. A welcome guide will be created to help you get started." }
+                SetupMode::NewFolder => {
+                    // On Android, use native folder picker; on desktop, use text input
+                    #[cfg(target_os = "android")]
+                    {
+                        let handle_browse = {
+                            let mut picker_active = picker_active;
+                            let mut error_message = error_message;
+                            move |_| {
+                                log::info!("Launching folder picker for new folder...");
+                                if launch_folder_picker() {
+                                    picker_active.set(true);
+                                    error_message.set(None);
+                                } else {
+                                    error_message.set(Some("Failed to open folder picker".to_string()));
+                                }
+                            }
+                        };
 
-                    div {
-                        class: "setup-form",
-                        label { "New folder path:" }
-                        input {
-                            r#type: "text",
-                            value: "{path_input}",
-                            oninput: move |evt| path_input.set(evt.value().clone()),
-                            disabled: *is_saving.read(),
-                        }
-                    }
+                        let handle_check_selection = {
+                            let mut picker_active = picker_active;
+                            let mut path_input = path_input;
+                            let mut error_message = error_message;
+                            move |_| {
+                                log::info!("Checking folder picker result...");
+                                if is_folder_picker_complete() {
+                                    if let Some(path) = get_folder_picker_result() {
+                                        log::info!("Folder picker returned: {path}");
+                                        path_input.set(path);
+                                        error_message.set(None);
+                                    } else {
+                                        log::info!("Folder picker was cancelled");
+                                        error_message.set(Some("No folder was selected".to_string()));
+                                    }
+                                    reset_folder_picker();
+                                    picker_active.set(false);
+                                } else {
+                                    error_message.set(Some("Please select a folder first".to_string()));
+                                }
+                            }
+                        };
 
-                    if let Some(error) = error_message.read().as_ref() {
-                        p { class: "setup-error", "{error}" }
-                    }
+                        let path_str = path_input.read().clone();
+                        let has_selection = !path_str.is_empty();
+                        let is_picking = *picker_active.read();
 
-                    div {
-                        class: "setup-buttons",
-                        button {
-                            class: "setup-btn back",
-                            onclick: handle_back,
-                            disabled: *is_saving.read(),
-                            "Back"
-                        }
-                        button {
-                            class: "setup-btn submit",
-                            onclick: handle_submit,
-                            disabled: *is_saving.read(),
-                            if *is_saving.read() { "Creating..." } else { "Create folder" }
-                        }
-                    }
-                },
-
-                SetupMode::ExistingFolder => rsx! {
-                    match *permission_status.read() {
-                        StoragePermissionStatus::Granted => rsx! {
-                            p { "Enter the path to your existing notes folder." }
+                        rsx! {
+                            p { "Select or create a folder for your notes. A welcome guide will be added." }
 
                             div {
                                 class: "setup-form",
-                                label { "Existing folder path:" }
-                                input {
-                                    r#type: "text",
-                                    value: "{path_input}",
-                                    oninput: move |evt| path_input.set(evt.value().clone()),
+
+                                if has_selection {
+                                    div {
+                                        class: "selected-path",
+                                        label { "Selected folder:" }
+                                        p { class: "path-display", "{path_str}" }
+                                    }
+                                }
+
+                                button {
+                                    class: "setup-btn browse",
+                                    onclick: handle_browse,
                                     disabled: *is_saving.read(),
+                                    if has_selection { "Choose different location" } else { "Browse for location" }
+                                }
+
+                                if is_picking {
+                                    button {
+                                        class: "setup-btn secondary",
+                                        onclick: handle_check_selection,
+                                        "I've selected a folder"
+                                    }
                                 }
                             }
 
@@ -273,8 +322,200 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
                                 button {
                                     class: "setup-btn submit",
                                     onclick: handle_submit,
-                                    disabled: *is_saving.read(),
-                                    if *is_saving.read() { "Saving..." } else { "Use this folder" }
+                                    disabled: *is_saving.read() || !has_selection,
+                                    if *is_saving.read() { "Creating..." } else { "Create folder" }
+                                }
+                            }
+                        }
+                    }
+
+                    #[cfg(not(target_os = "android"))]
+                    rsx! {
+                        p { "Enter a path for your new notes folder. A welcome guide will be created to help you get started." }
+
+                        div {
+                            class: "setup-form",
+                            label { "New folder path:" }
+                            input {
+                                r#type: "text",
+                                value: "{path_input}",
+                                oninput: move |evt| path_input.set(evt.value().clone()),
+                                disabled: *is_saving.read(),
+                            }
+                        }
+
+                        if let Some(error) = error_message.read().as_ref() {
+                            p { class: "setup-error", "{error}" }
+                        }
+
+                        div {
+                            class: "setup-buttons",
+                            button {
+                                class: "setup-btn back",
+                                onclick: handle_back,
+                                disabled: *is_saving.read(),
+                                "Back"
+                            }
+                            button {
+                                class: "setup-btn submit",
+                                onclick: handle_submit,
+                                disabled: *is_saving.read(),
+                                if *is_saving.read() { "Creating..." } else { "Create folder" }
+                            }
+                        }
+                    }
+                },
+
+                SetupMode::ExistingFolder => rsx! {
+                    match *permission_status.read() {
+                        StoragePermissionStatus::Granted => {
+                            // On Android, use native folder picker; on desktop, use text input
+                            #[cfg(target_os = "android")]
+                            {
+                                let handle_browse = {
+                                    let mut picker_active = picker_active;
+                                    let mut error_message = error_message;
+                                    move |_| {
+                                        log::info!("Launching folder picker...");
+                                        if launch_folder_picker() {
+                                            picker_active.set(true);
+                                            error_message.set(None);
+                                        } else {
+                                            error_message.set(Some("Failed to open folder picker".to_string()));
+                                        }
+                                    }
+                                };
+
+                                let handle_check_selection = {
+                                    let mut picker_active = picker_active;
+                                    let mut path_input = path_input;
+                                    let mut error_message = error_message;
+                                    move |_| {
+                                        log::info!("Checking folder picker result...");
+                                        if is_folder_picker_complete() {
+                                            if let Some(path) = get_folder_picker_result() {
+                                                log::info!("Folder picker returned: {path}");
+                                                path_input.set(path);
+                                                error_message.set(None);
+                                            } else {
+                                                log::info!("Folder picker was cancelled");
+                                                error_message.set(Some("No folder was selected".to_string()));
+                                            }
+                                            reset_folder_picker();
+                                            picker_active.set(false);
+                                        } else {
+                                            error_message.set(Some("Please select a folder first".to_string()));
+                                        }
+                                    }
+                                };
+
+                                let path_str = path_input.read().clone();
+                                let has_selection = !path_str.is_empty();
+                                let is_picking = *picker_active.read();
+
+                                rsx! {
+                                    p { "Select the folder containing your markdown notes." }
+
+                                    div {
+                                        class: "setup-form",
+
+                                        if has_selection {
+                                            div {
+                                                class: "selected-path",
+                                                label { "Selected folder:" }
+                                                p { class: "path-display", "{path_str}" }
+                                            }
+                                        }
+
+                                        button {
+                                            class: "setup-btn browse",
+                                            onclick: handle_browse,
+                                            disabled: *is_saving.read(),
+                                            if has_selection { "Choose different folder" } else { "Browse for folder" }
+                                        }
+
+                                        if is_picking {
+                                            button {
+                                                class: "setup-btn secondary",
+                                                onclick: handle_check_selection,
+                                                "I've selected a folder"
+                                            }
+                                        }
+                                    }
+
+                                    if let Some(error) = error_message.read().as_ref() {
+                                        p { class: "setup-error", "{error}" }
+                                    }
+
+                                    // Note about storage access for reading files
+                                    if has_selection {
+                                        div {
+                                            class: "permission-notice",
+                                            p {
+                                                class: "permission-instructions",
+                                                "File access must be enabled in Settings to read files in the selected folder."
+                                            }
+                                            button {
+                                                class: "setup-btn secondary",
+                                                onclick: move |_| {
+                                                    request_storage_permission();
+                                                },
+                                                "Open Settings"
+                                            }
+                                        }
+                                    }
+
+                                    div {
+                                        class: "setup-buttons",
+                                        button {
+                                            class: "setup-btn back",
+                                            onclick: handle_back,
+                                            disabled: *is_saving.read(),
+                                            "Back"
+                                        }
+                                        button {
+                                            class: "setup-btn submit",
+                                            onclick: handle_submit,
+                                            disabled: *is_saving.read() || !has_selection,
+                                            if *is_saving.read() { "Saving..." } else { "Use this folder" }
+                                        }
+                                    }
+                                }
+                            }
+
+                            #[cfg(not(target_os = "android"))]
+                            rsx! {
+                                p { "Enter the path to your existing notes folder." }
+
+                                div {
+                                    class: "setup-form",
+                                    label { "Existing folder path:" }
+                                    input {
+                                        r#type: "text",
+                                        value: "{path_input}",
+                                        oninput: move |evt| path_input.set(evt.value().clone()),
+                                        disabled: *is_saving.read(),
+                                    }
+                                }
+
+                                if let Some(error) = error_message.read().as_ref() {
+                                    p { class: "setup-error", "{error}" }
+                                }
+
+                                div {
+                                    class: "setup-buttons",
+                                    button {
+                                        class: "setup-btn back",
+                                        onclick: handle_back,
+                                        disabled: *is_saving.read(),
+                                        "Back"
+                                    }
+                                    button {
+                                        class: "setup-btn submit",
+                                        onclick: handle_submit,
+                                        disabled: *is_saving.read(),
+                                        if *is_saving.read() { "Saving..." } else { "Use this folder" }
+                                    }
                                 }
                             }
                         },

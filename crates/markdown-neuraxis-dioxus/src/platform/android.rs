@@ -1,7 +1,8 @@
 //! Android-specific platform functionality
 //!
-//! Handles storage permissions using JNI to call Android APIs.
+//! Handles storage permissions and folder picking using JNI to call Android APIs.
 //! See ADR-0009 for details on the permission requirements.
+//! See ADR-0010 for details on the folder picker implementation.
 
 use super::StoragePermissionStatus;
 use jni::JNIEnv;
@@ -205,4 +206,110 @@ pub fn request_storage_permission() -> bool {
         }
     })
     .is_some()
+}
+
+// ============================================================================
+// Folder Picker (see ADR-0010)
+// ============================================================================
+
+const FOLDER_PICKER_CLASS: &str = "co/rustworkshop/markdown_neuraxis/FolderPickerActivity";
+
+/// Launch the native folder picker activity.
+///
+/// Returns `true` if the picker was launched successfully.
+/// Use `is_folder_picker_complete()` to check when the user has made a selection,
+/// then `get_folder_picker_result()` to retrieve the selected path.
+pub fn launch_folder_picker() -> bool {
+    with_jni(|env, context| {
+        // Reset picker state before launching
+        reset_folder_picker_internal(env)?;
+
+        // Create intent to launch FolderPickerActivity
+        let picker_class = env.find_class(FOLDER_PICKER_CLASS)?;
+        let intent_class = env.find_class("android/content/Intent")?;
+        let intent = env.new_object(
+            intent_class,
+            "(Landroid/content/Context;Ljava/lang/Class;)V",
+            &[
+                JValue::Object(&context),
+                JValue::Object(&picker_class.into()),
+            ],
+        )?;
+
+        // Add FLAG_ACTIVITY_NEW_TASK since we're starting from non-Activity context
+        let flag_new_task: i32 = 0x10000000;
+        env.call_method(
+            &intent,
+            "addFlags",
+            "(I)Landroid/content/Intent;",
+            &[JValue::Int(flag_new_task)],
+        )?;
+
+        // Start the activity
+        env.call_method(
+            &context,
+            "startActivity",
+            "(Landroid/content/Intent;)V",
+            &[JValue::Object(&intent)],
+        )?;
+
+        log::info!("Launched folder picker activity");
+        Ok(())
+    })
+    .is_some()
+}
+
+/// Check if the folder picker has completed (user selected or cancelled).
+pub fn is_folder_picker_complete() -> bool {
+    with_jni(|env, _context| {
+        let picker_class = env.find_class(FOLDER_PICKER_CLASS)?;
+        let completed = env.get_static_field(picker_class, "completed", "Z")?;
+        completed.z()
+    })
+    .unwrap_or(false)
+}
+
+/// Get the result from the folder picker.
+///
+/// Returns `Some(path)` if a folder was selected, `None` if cancelled or not yet complete.
+pub fn get_folder_picker_result() -> Option<String> {
+    with_jni(|env, _context| {
+        let picker_class = env.find_class(FOLDER_PICKER_CLASS)?;
+        let result = env.get_static_field(picker_class, "result", "Ljava/lang/String;")?;
+        let result_obj = result.l()?;
+
+        if result_obj.is_null() {
+            return Ok(None);
+        }
+
+        let result_jstring: jni::objects::JString = result_obj.into();
+        let result_str = env.get_string(&result_jstring)?;
+        Ok(Some(result_str.to_str().unwrap_or("").to_string()))
+    })
+    .flatten()
+}
+
+/// Reset the folder picker state for a new selection.
+pub fn reset_folder_picker() {
+    let _ = with_jni(|env, _context| reset_folder_picker_internal(env));
+}
+
+fn reset_folder_picker_internal(env: &mut JNIEnv) -> Result<(), jni::errors::Error> {
+    let picker_class = env.find_class(FOLDER_PICKER_CLASS)?;
+
+    // Get field IDs
+    let completed_field = env.get_static_field_id(&picker_class, "completed", "Z")?;
+    let result_field = env.get_static_field_id(&picker_class, "result", "Ljava/lang/String;")?;
+
+    // Set completed = false
+    env.set_static_field(&picker_class, completed_field, JValue::Bool(0))?;
+
+    // Set result = null
+    env.set_static_field(
+        &picker_class,
+        result_field,
+        JValue::Object(&JObject::null()),
+    )?;
+
+    Ok(())
 }

@@ -732,6 +732,12 @@ hr {
     background: var(--cyan);
 }
 
+.setup-btn.browse {
+    background: var(--violet);
+    width: 100%;
+    margin-top: 8px;
+}
+
 .setup-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;

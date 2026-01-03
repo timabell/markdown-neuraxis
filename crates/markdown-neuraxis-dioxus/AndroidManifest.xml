@@ -26,5 +26,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Folder picker helper activity for SAF folder selection -->
+        <activity
+            android:name="co.rustworkshop.markdown_neuraxis.FolderPickerActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false"/>
     </application>
 </manifest>
