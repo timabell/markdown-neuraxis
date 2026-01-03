@@ -8,14 +8,51 @@ use std::sync::Arc;
 
 const SOLARIZED_LIGHT_CSS: &str = include_str!("../assets/solarized-light.css");
 
+/// Runtime error information for display in the App UI
+#[derive(Clone, Debug)]
+pub struct RuntimeError {
+    pub message: String,
+    pub details: Option<String>,
+}
+
+impl RuntimeError {
+    /// Log the error and set it on the signal in one call
+    pub fn log_and_set(
+        error_state: &mut Signal<Option<RuntimeError>>,
+        message: String,
+        details: impl ToString,
+    ) {
+        let details = details.to_string();
+        log::error!("{}: {}", message, details);
+        error_state.set(Some(RuntimeError {
+            message,
+            details: Some(details),
+        }));
+    }
+}
+
 #[component]
 pub fn App(notes_path: PathBuf) -> Element {
+    log::info!(
+        "App component initialized with path: {}",
+        notes_path.display()
+    );
+
+    // Error state for runtime errors
+    let mut error_state = use_signal(|| None::<RuntimeError>);
+
     // Build file tree
-    let mut file_tree = use_signal(|| match io::build_file_tree(&notes_path) {
-        Ok(tree) => tree,
-        Err(e) => {
-            eprintln!("Error building file tree: {e}");
-            FileTree::new(notes_path.clone())
+    let mut file_tree = use_signal(|| {
+        log::info!("Building file tree for: {}", notes_path.display());
+        match io::build_file_tree(&notes_path) {
+            Ok(tree) => {
+                log::info!("File tree built successfully");
+                tree
+            }
+            Err(e) => {
+                log::error!("Error building file tree: {e}");
+                FileTree::new(notes_path.clone())
+            }
         }
     });
 
@@ -23,12 +60,17 @@ pub fn App(notes_path: PathBuf) -> Element {
     let current_document = use_signal(|| None::<Arc<Document>>);
     let current_snapshot = use_signal(|| None::<Snapshot>);
 
+    // Mobile navigation state - tracks whether file tree is shown on mobile
+    let mut mobile_nav_open = use_signal(|| false);
+
     // Create callbacks outside the rsx! block for cleaner code
     let on_sidebar_file_select = {
         let notes_path = notes_path.clone();
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
+        let mut error_state = error_state;
+        let mut mobile_nav_open = mobile_nav_open;
         move |markdown_file: MarkdownFile| {
             load_existing_document(
                 &markdown_file,
@@ -36,7 +78,10 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
+                &mut error_state,
             );
+            // Close mobile nav when file is selected
+            mobile_nav_open.set(false);
         }
     };
 
@@ -45,6 +90,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
+        let mut error_state = error_state;
         move |file_path: PathBuf| {
             navigate_to_path(
                 file_path,
@@ -52,6 +98,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
+                &mut error_state,
             );
         }
     };
@@ -61,6 +108,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
+        let mut error_state = error_state;
         move |target: String| {
             let markdown_file = resolve_wikilink(&target, &notes_path);
             load_document(
@@ -69,6 +117,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
+                &mut error_state,
             );
         }
     };
@@ -79,17 +128,34 @@ pub fn App(notes_path: PathBuf) -> Element {
         current_document,
         current_snapshot,
         file_tree,
+        error_state,
     );
 
     rsx! {
         style { {SOLARIZED_LIGHT_CSS} }
         div {
             class: "app-container",
+            // Error banner for runtime errors
+            if let Some(error) = error_state.read().as_ref() {
+                div {
+                    style: "background: #dc322f; color: white; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center;",
+                    span {
+                        "{error.message}"
+                        if let Some(ref details) = error.details {
+                            " - {details}"
+                        }
+                    }
+                    button {
+                        onclick: move |_| error_state.set(None),
+                        "Dismiss"
+                    }
+                }
+            }
             div {
-                class: "sidebar",
+                class: if *mobile_nav_open.read() { "sidebar mobile-visible" } else { "sidebar" },
                 h2 { "Files" }
                 super::components::TreeView {
-                    tree: ReadOnlySignal::from(file_tree),
+                    tree: ReadSignal::from(file_tree),
                     selected_file: selected_file.read().clone(),
                     on_file_select: on_sidebar_file_select,
                     on_folder_toggle: move |relative_path: RelativePathBuf| {
@@ -98,7 +164,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 }
             }
             div {
-                class: "main-content",
+                class: if *mobile_nav_open.read() { "main-content mobile-hidden" } else { "main-content" },
                 if let (Some(file), Some(snapshot), Some(document)) = (
                     selected_file.read().as_ref(),
                     current_snapshot.read().as_ref(),
@@ -121,6 +187,18 @@ pub fn App(notes_path: PathBuf) -> Element {
                     }
                 }
             }
+            // Mobile bottom navigation bar
+            div {
+                class: "mobile-bottom-bar",
+                button {
+                    class: "hamburger-btn",
+                    onclick: move |_| {
+                        let current = *mobile_nav_open.read();
+                        mobile_nav_open.set(!current);
+                    },
+                    "☰"
+                }
+            }
         }
     }
 }
@@ -132,7 +210,11 @@ fn load_existing_document(
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
+    error_state: &mut Signal<Option<RuntimeError>>,
 ) {
+    // Clear any previous error
+    error_state.set(None);
+
     match io::read_file(markdown_file.relative_path(), notes_path) {
         Ok(content) => match Document::from_bytes(content.as_bytes()) {
             Ok(mut document) => {
@@ -147,16 +229,18 @@ fn load_existing_document(
                 *selected_file.write() = Some(markdown_file.clone());
             }
             Err(e) => {
-                eprintln!(
-                    "Error parsing document {:?}: {e}",
-                    markdown_file.relative_path()
+                RuntimeError::log_and_set(
+                    error_state,
+                    format!("Failed to parse '{}'", markdown_file.relative_path()),
+                    e,
                 );
             }
         },
         Err(e) => {
-            eprintln!(
-                "Error reading file {:?}: {e}",
-                markdown_file.relative_path()
+            RuntimeError::log_and_set(
+                error_state,
+                format!("Failed to read '{}'", markdown_file.relative_path()),
+                e,
             );
         }
     }
@@ -169,7 +253,11 @@ pub fn load_document(
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
+    error_state: &mut Signal<Option<RuntimeError>>,
 ) {
+    // Clear any previous error
+    error_state.set(None);
+
     match io::read_file(markdown_file.relative_path(), notes_path) {
         Ok(content) => match Document::from_bytes(content.as_bytes()) {
             Ok(mut document) => {
@@ -180,9 +268,10 @@ pub fn load_document(
                 *selected_file.write() = Some(markdown_file);
             }
             Err(e) => {
-                eprintln!(
-                    "Error parsing document {:?}: {e}",
-                    markdown_file.relative_path()
+                RuntimeError::log_and_set(
+                    error_state,
+                    format!("Failed to parse '{}'", markdown_file.relative_path()),
+                    e,
                 );
             }
         },
@@ -197,7 +286,11 @@ pub fn load_document(
                     *selected_file.write() = Some(markdown_file);
                 }
                 Err(e) => {
-                    eprintln!("Error creating blank document: {e}");
+                    RuntimeError::log_and_set(
+                        error_state,
+                        "Failed to create new document".to_string(),
+                        e,
+                    );
                 }
             }
         }
@@ -211,6 +304,7 @@ fn navigate_to_path(
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
+    error_state: &mut Signal<Option<RuntimeError>>,
 ) {
     // Convert absolute path to relative
     let relative_path = if let Ok(rel) = file_path.strip_prefix(notes_path) {
@@ -229,6 +323,7 @@ fn navigate_to_path(
         selected_file,
         current_document,
         current_snapshot,
+        error_state,
     );
 }
 
@@ -253,6 +348,7 @@ fn create_command_callback(
     mut current_document: Signal<Option<Arc<Document>>>,
     mut current_snapshot: Signal<Option<Snapshot>>,
     mut file_tree: Signal<FileTree>,
+    mut error_state: Signal<Option<RuntimeError>>,
 ) -> impl FnMut(Cmd) + 'static {
     move |cmd: Cmd| {
         let document_arc = current_document.read().clone();
@@ -274,14 +370,18 @@ fn create_command_callback(
                         if !file_existed {
                             let absolute_path = file.relative_path().to_path(&notes_path);
                             file_tree.write().add_file(&absolute_path, &notes_path);
-                            println!(
+                            log::info!(
                                 "New file created and auto-saved: {:?}",
                                 file.relative_path()
                             );
                         }
                     }
                     Err(e) => {
-                        eprintln!("Error auto-saving file {:?}: {e}", file.relative_path());
+                        RuntimeError::log_and_set(
+                            &mut error_state,
+                            format!("Failed to save '{}'", file.relative_path()),
+                            e,
+                        );
                     }
                 }
             }

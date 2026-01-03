@@ -1,6 +1,5 @@
 use crate::ui::components::EmptyDocument;
 use crate::ui::components::document_content::DocumentContent;
-use dioxus::events::Key;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, Snapshot};
 use markdown_neuraxis_engine::models::MarkdownFile;

@@ -1,4 +1,3 @@
-use dioxus::events::Key;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{BlockKind, Cmd, RenderBlock};
 

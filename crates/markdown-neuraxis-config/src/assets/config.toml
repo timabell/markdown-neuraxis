@@ -1,0 +1,4 @@
+# Default configuration for markdown-neuraxis
+# This file will be used as a fallback if no user config is found
+
+notes_path = "~/markdown-neuraxis"
