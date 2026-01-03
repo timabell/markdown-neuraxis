@@ -2,6 +2,7 @@
 name = "markdown-neuraxis"
 default_platform = "desktop"
 asset_dir = "crates/markdown-neuraxis-dioxus/src/assets"
+android_manifest = "./AndroidManifest.xml"
 
 [application.tools]
 out_dir = "dist"
