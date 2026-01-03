@@ -1,3 +1,6 @@
+use crate::platform::{
+    StoragePermissionStatus, check_storage_permission, request_storage_permission,
+};
 use dioxus::prelude::*;
 use markdown_neuraxis_config::Config;
 use std::path::PathBuf;
@@ -44,6 +47,7 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
     let mut path_input = use_signal(|| DEFAULT_NEW_PATH.to_string());
     let mut error_message = use_signal(|| None::<String>);
     let mut is_saving = use_signal(|| false);
+    let permission_status = use_signal(|| StoragePermissionStatus::Granted);
 
     let handle_new_folder = {
         let mut mode = mode;
@@ -60,10 +64,36 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
         let mut mode = mode;
         let mut path_input = path_input;
         let mut error_message = error_message;
+        let mut permission_status = permission_status;
         move |_| {
+            // Check storage permission before allowing existing folder selection
+            let status = check_storage_permission();
+            log::info!("Storage permission status: {status:?}");
+            permission_status.set(status);
+
             path_input.set(String::new());
             error_message.set(None);
             mode.set(SetupMode::ExistingFolder);
+        }
+    };
+
+    let handle_request_permission = {
+        let mut permission_status = permission_status;
+        move |_| {
+            log::info!("Requesting storage permission...");
+            request_storage_permission();
+            // Note: User will return from settings, we'll re-check on next action
+            // For now, set to Denied so UI shows they need to check again
+            permission_status.set(StoragePermissionStatus::Denied);
+        }
+    };
+
+    let handle_recheck_permission = {
+        let mut permission_status = permission_status;
+        move |_| {
+            let status = check_storage_permission();
+            log::info!("Re-checked permission status: {status:?}");
+            permission_status.set(status);
         }
     };
 
@@ -213,37 +243,80 @@ pub fn SetupScreen(on_complete: EventHandler<PathBuf>) -> Element {
                 },
 
                 SetupMode::ExistingFolder => rsx! {
-                    p { "Enter the path to your existing notes folder." }
+                    match *permission_status.read() {
+                        StoragePermissionStatus::Granted => rsx! {
+                            p { "Enter the path to your existing notes folder." }
 
-                    div {
-                        class: "setup-form",
-                        label { "Existing folder path:" }
-                        input {
-                            r#type: "text",
-                            value: "{path_input}",
-                            oninput: move |evt| path_input.set(evt.value().clone()),
-                            disabled: *is_saving.read(),
-                        }
-                    }
+                            div {
+                                class: "setup-form",
+                                label { "Existing folder path:" }
+                                input {
+                                    r#type: "text",
+                                    value: "{path_input}",
+                                    oninput: move |evt| path_input.set(evt.value().clone()),
+                                    disabled: *is_saving.read(),
+                                }
+                            }
 
-                    if let Some(error) = error_message.read().as_ref() {
-                        p { class: "setup-error", "{error}" }
-                    }
+                            if let Some(error) = error_message.read().as_ref() {
+                                p { class: "setup-error", "{error}" }
+                            }
 
-                    div {
-                        class: "setup-buttons",
-                        button {
-                            class: "setup-btn back",
-                            onclick: handle_back,
-                            disabled: *is_saving.read(),
-                            "Back"
-                        }
-                        button {
-                            class: "setup-btn submit",
-                            onclick: handle_submit,
-                            disabled: *is_saving.read(),
-                            if *is_saving.read() { "Saving..." } else { "Use this folder" }
-                        }
+                            div {
+                                class: "setup-buttons",
+                                button {
+                                    class: "setup-btn back",
+                                    onclick: handle_back,
+                                    disabled: *is_saving.read(),
+                                    "Back"
+                                }
+                                button {
+                                    class: "setup-btn submit",
+                                    onclick: handle_submit,
+                                    disabled: *is_saving.read(),
+                                    if *is_saving.read() { "Saving..." } else { "Use this folder" }
+                                }
+                            }
+                        },
+                        StoragePermissionStatus::Denied | StoragePermissionStatus::NeedsSettingsIntent => rsx! {
+                            div {
+                                class: "permission-notice",
+                                p {
+                                    class: "permission-title",
+                                    "Storage Permission Required"
+                                }
+                                p {
+                                    "To access existing folders, the app needs permission to read files on your device."
+                                }
+                                p {
+                                    class: "permission-instructions",
+                                    if *permission_status.read() == StoragePermissionStatus::NeedsSettingsIntent {
+                                        "On Android 11+, you need to enable 'All files access' in Settings."
+                                    } else {
+                                        "Please grant storage permission in Settings."
+                                    }
+                                }
+                            }
+
+                            div {
+                                class: "setup-buttons",
+                                button {
+                                    class: "setup-btn back",
+                                    onclick: handle_back,
+                                    "Back"
+                                }
+                                button {
+                                    class: "setup-btn secondary",
+                                    onclick: handle_request_permission,
+                                    "Open Settings"
+                                }
+                                button {
+                                    class: "setup-btn submit",
+                                    onclick: handle_recheck_permission,
+                                    "I've granted permission"
+                                }
+                            }
+                        },
                     }
                 },
             }

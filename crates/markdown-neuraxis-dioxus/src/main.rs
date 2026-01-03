@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use std::env;
 use std::path::PathBuf;
 
+mod platform;
 mod ui;
 
 use markdown_neuraxis_config::Config;

@@ -4,4 +4,5 @@ set -e
 
 source set-android-envs.sh
 
+# known issue: this doesn't patch the manifest for permissions
 dx serve --android --package markdown-neuraxis-dioxus
