@@ -1,11 +1,8 @@
 #!/bin/bash
+# Build, install, and run on ARM64 physical device via adb
 set -e
 
-echo "Setting up env vars..."
-source set-android-envs.sh
-
-echo "Building apk..."
-dx build --platform android --target aarch64-linux-android --package markdown-neuraxis-dioxus
+./build-android-dx.sh
 
 echo "Installing via adb..."
 adb install ./target/dx/markdown-neuraxis-dioxus/debug/android/app/app/build/outputs/apk/debug/app-debug.apk
