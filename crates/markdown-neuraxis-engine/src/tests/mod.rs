@@ -10,6 +10,10 @@ pub fn create_test_notes_dir() -> TempDir {
 /// Create a test markdown file with content
 pub fn create_test_file(notes_dir: &TempDir, filename: &str, content: &str) -> PathBuf {
     let file_path = notes_dir.path().join(filename);
+    // Create parent directories if needed
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
     fs::write(&file_path, content).unwrap();
     file_path
 }

@@ -1,96 +1,147 @@
 use crate::models::FileTree;
-use relative_path::RelativePath;
+use relative_path::{RelativePath, RelativePathBuf};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IoError {
     #[error("File not found: {0}")]
-    NotFound(PathBuf),
+    NotFound(String),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Invalid notes directory: {0}")]
     InvalidNotesDir(String),
 }
 
-/// Read a markdown file and return its content
-pub fn read_file(relative_path: &RelativePath, notes_root: &Path) -> Result<String, IoError> {
-    let absolute_path = relative_path.to_path(notes_root);
-    if !absolute_path.exists() {
-        return Err(IoError::NotFound(absolute_path));
-    }
-    fs::read_to_string(&absolute_path).map_err(IoError::Io)
+/// Trait for abstracting file I/O operations.
+///
+/// This allows platform-specific implementations:
+/// - Desktop: StdFsProvider using std::fs with filesystem paths
+/// - Android: SafProvider using ContentResolver via JNI with content URIs
+pub trait IoProvider: Send + Sync {
+    /// Read a file's content
+    fn read_file(&self, relative_path: &RelativePath) -> Result<String, IoError>;
+
+    /// Write content to a file (creates parent directories as needed)
+    fn write_file(&self, relative_path: &RelativePath, content: &str) -> Result<(), IoError>;
+
+    /// List all markdown files recursively, returning relative paths
+    fn list_markdown_files(&self) -> Result<Vec<RelativePathBuf>, IoError>;
+
+    /// Check if a file exists
+    fn exists(&self, relative_path: &RelativePath) -> bool;
+
+    /// Validate that the storage location is accessible
+    fn validate(&self) -> Result<(), IoError>;
+
+    /// Get a display name for the root (e.g., folder name)
+    fn root_display_name(&self) -> String;
 }
 
-/// Write content to a markdown file
-pub fn write_file(
-    relative_path: &RelativePath,
-    notes_root: &Path,
-    content: &str,
-) -> Result<(), IoError> {
-    let absolute_path = relative_path.to_path(notes_root);
-
-    // Create parent directories if they don't exist
-    if let Some(parent) = absolute_path.parent() {
-        fs::create_dir_all(parent).map_err(IoError::Io)?;
-    }
-
-    fs::write(&absolute_path, content).map_err(IoError::Io)
+/// Standard filesystem provider for desktop platforms.
+///
+/// Uses std::fs operations with a root path on the local filesystem.
+pub struct StdFsProvider {
+    notes_root: PathBuf,
 }
 
-/// Scan for markdown files in the notes directory
-pub fn scan_markdown_files(notes_root: &Path) -> Result<Vec<PathBuf>, IoError> {
-    if !notes_root.exists() {
-        return Err(IoError::InvalidNotesDir(
-            "notes directory not found".to_string(),
-        ));
+impl StdFsProvider {
+    pub fn new(notes_root: PathBuf) -> Self {
+        Self { notes_root }
     }
 
-    let mut files = Vec::new();
-    scan_directory_recursive(notes_root, &mut files)?;
-    files.sort();
-    Ok(files)
-}
-
-/// Build a file tree from markdown files in the notes directory
-pub fn build_file_tree(notes_root: &Path) -> Result<FileTree, IoError> {
-    if !notes_root.exists() {
-        return Err(IoError::InvalidNotesDir(
-            "notes directory not found".to_string(),
-        ));
+    pub fn notes_root(&self) -> &Path {
+        &self.notes_root
     }
 
-    let files = scan_markdown_files(notes_root)?;
-    Ok(FileTree::build_from_files(notes_root.to_path_buf(), &files))
-}
+    fn scan_directory_recursive(
+        &self,
+        dir: &Path,
+        files: &mut Vec<RelativePathBuf>,
+    ) -> Result<(), IoError> {
+        let entries = fs::read_dir(dir).map_err(IoError::Io)?;
 
-fn scan_directory_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), IoError> {
-    let entries = fs::read_dir(dir).map_err(IoError::Io)?;
+        for entry in entries {
+            let entry = entry.map_err(IoError::Io)?;
+            let path = entry.path();
 
-    for entry in entries {
-        let entry = entry.map_err(IoError::Io)?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            scan_directory_recursive(&path, files)?;
-        } else if let Some(ext) = path.extension()
-            && ext == "md"
-        {
-            files.push(path);
+            if path.is_dir() {
+                self.scan_directory_recursive(&path, files)?;
+            } else if let Some(ext) = path.extension()
+                && ext == "md"
+                && let Ok(relative) = path.strip_prefix(&self.notes_root)
+            {
+                files.push(RelativePathBuf::from_path(relative).unwrap_or_default());
+            }
         }
-    }
 
-    Ok(())
+        Ok(())
+    }
 }
 
-pub fn validate_notes_dir(path: &Path) -> Result<(), IoError> {
-    if !path.exists() || !path.is_dir() {
-        return Err(IoError::InvalidNotesDir(
-            "Directory does not exist".to_string(),
-        ));
+impl IoProvider for StdFsProvider {
+    fn read_file(&self, relative_path: &RelativePath) -> Result<String, IoError> {
+        let absolute_path = relative_path.to_path(&self.notes_root);
+        if !absolute_path.exists() {
+            return Err(IoError::NotFound(relative_path.to_string()));
+        }
+        fs::read_to_string(&absolute_path).map_err(IoError::Io)
     }
 
-    Ok(())
+    fn write_file(&self, relative_path: &RelativePath, content: &str) -> Result<(), IoError> {
+        let absolute_path = relative_path.to_path(&self.notes_root);
+
+        // Create parent directories if they don't exist
+        if let Some(parent) = absolute_path.parent() {
+            fs::create_dir_all(parent).map_err(IoError::Io)?;
+        }
+
+        fs::write(&absolute_path, content).map_err(IoError::Io)
+    }
+
+    fn list_markdown_files(&self) -> Result<Vec<RelativePathBuf>, IoError> {
+        if !self.notes_root.exists() {
+            return Err(IoError::InvalidNotesDir(
+                "notes directory not found".to_string(),
+            ));
+        }
+
+        let mut files = Vec::new();
+        self.scan_directory_recursive(&self.notes_root, &mut files)?;
+        files.sort();
+        Ok(files)
+    }
+
+    fn exists(&self, relative_path: &RelativePath) -> bool {
+        relative_path.to_path(&self.notes_root).exists()
+    }
+
+    fn validate(&self) -> Result<(), IoError> {
+        if !self.notes_root.exists() || !self.notes_root.is_dir() {
+            return Err(IoError::InvalidNotesDir(
+                "Directory does not exist".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn root_display_name(&self) -> String {
+        self.notes_root
+            .file_name()
+            .unwrap_or_else(|| self.notes_root.as_os_str())
+            .to_string_lossy()
+            .to_string()
+    }
+}
+
+/// Build a file tree from an IoProvider
+pub fn build_file_tree(provider: &dyn IoProvider) -> Result<FileTree, IoError> {
+    provider.validate()?;
+    let files = provider.list_markdown_files()?;
+    Ok(FileTree::build_from_relative_paths(
+        provider.root_display_name(),
+        &files,
+    ))
 }
 
 #[cfg(test)]
@@ -99,26 +150,28 @@ mod tests {
     use crate::tests::{create_test_file, create_test_notes_dir};
 
     #[test]
-    fn test_scan_and_load_files() {
+    fn test_list_markdown_files() {
         // Given a notes directory with markdown files
         let notes_dir = create_test_notes_dir();
         create_test_file(&notes_dir, "test1.md", "- First item\n- Second item");
         create_test_file(&notes_dir, "test2.md", "- Parent\n  - Child");
 
-        // When scanning for files
-        let files = scan_markdown_files(notes_dir.path()).unwrap();
+        // When listing files via provider
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
+        let files = provider.list_markdown_files().unwrap();
 
         // Then we find the expected files
         assert_eq!(files.len(), 2);
-        assert!(files.iter().any(|f| f.file_name().unwrap() == "test1.md"));
-        assert!(files.iter().any(|f| f.file_name().unwrap() == "test2.md"));
+        assert!(files.iter().any(|f| f.as_str() == "test1.md"));
+        assert!(files.iter().any(|f| f.as_str() == "test2.md"));
     }
 
     #[test]
     fn test_handle_invalid_notes_directory() {
         let nonexistent_path = PathBuf::from("/this/path/does/not/exist");
 
-        let result = scan_markdown_files(&nonexistent_path);
+        let provider = StdFsProvider::new(nonexistent_path);
+        let result = provider.list_markdown_files();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("notes directory"));
     }
@@ -135,13 +188,14 @@ mod tests {
         let nested_file = sub_dir.join("nested.md");
         std::fs::write(&nested_file, "# Nested file").unwrap();
 
-        // When scanning for files
-        let files = scan_markdown_files(notes_dir.path()).unwrap();
+        // When listing files via provider
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
+        let files = provider.list_markdown_files().unwrap();
 
         // Then we find both root and nested files
         assert_eq!(files.len(), 2);
-        assert!(files.iter().any(|f| f.file_name().unwrap() == "root.md"));
-        assert!(files.iter().any(|f| f.file_name().unwrap() == "nested.md"));
+        assert!(files.iter().any(|f| f.as_str() == "root.md"));
+        assert!(files.iter().any(|f| f.as_str() == "subfolder/nested.md"));
     }
 
     #[test]
@@ -152,24 +206,27 @@ mod tests {
         create_test_file(&notes_dir, "image.png", "fake image data");
         create_test_file(&notes_dir, "config.json", "{}");
 
-        // When scanning for files
-        let files = scan_markdown_files(notes_dir.path()).unwrap();
+        // When listing files via provider
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
+        let files = provider.list_markdown_files().unwrap();
 
         // Then we only find markdown files
         assert_eq!(files.len(), 1);
-        assert_eq!(files[0].file_name().unwrap(), "document.md");
+        assert_eq!(files[0].as_str(), "document.md");
     }
 
     #[test]
     fn test_validate_notes_dir_exists() {
         let notes_dir = create_test_notes_dir();
-        let result = validate_notes_dir(notes_dir.path());
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
+        let result = provider.validate();
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_validate_notes_dir_not_exists() {
-        let result = validate_notes_dir(Path::new("/nonexistent/path"));
+        let provider = StdFsProvider::new(PathBuf::from("/nonexistent/path"));
+        let result = provider.validate();
         assert!(result.is_err());
         assert!(matches!(result, Err(IoError::InvalidNotesDir(_))));
     }
@@ -179,16 +236,18 @@ mod tests {
         let notes_dir = create_test_notes_dir();
         let _file_path = create_test_file(&notes_dir, "test.md", "# Test Content\n\nParagraph");
 
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
         let relative_path = RelativePath::new("test.md");
-        let content = read_file(relative_path, notes_dir.path()).unwrap();
+        let content = provider.read_file(relative_path).unwrap();
         assert_eq!(content, "# Test Content\n\nParagraph");
     }
 
     #[test]
     fn test_read_file_not_found() {
         let notes_dir = create_test_notes_dir();
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
         let relative_path = RelativePath::new("nonexistent.md");
-        let result = read_file(relative_path, notes_dir.path());
+        let result = provider.read_file(relative_path);
         assert!(result.is_err());
         assert!(matches!(result, Err(IoError::NotFound(_))));
     }
@@ -196,30 +255,32 @@ mod tests {
     #[test]
     fn test_write_file_success() {
         let notes_dir = create_test_notes_dir();
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
         let relative_path = RelativePath::new("new_file.md");
         let content = "# New File\n\nThis is new content";
 
         // Write the file
-        let result = write_file(relative_path, notes_dir.path(), content);
+        let result = provider.write_file(relative_path, content);
         assert!(result.is_ok());
 
         // Verify file exists and has correct content
-        let written_content = read_file(relative_path, notes_dir.path()).unwrap();
+        let written_content = provider.read_file(relative_path).unwrap();
         assert_eq!(written_content, content);
     }
 
     #[test]
     fn test_write_file_creates_parent_directories() {
         let notes_dir = create_test_notes_dir();
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
         let relative_path = RelativePath::new("folder/subfolder/new_file.md");
         let content = "# New File in Nested Folder";
 
         // Write the file - this should create the parent directories
-        let result = write_file(relative_path, notes_dir.path(), content);
+        let result = provider.write_file(relative_path, content);
         assert!(result.is_ok());
 
         // Verify file exists and has correct content
-        let written_content = read_file(relative_path, notes_dir.path()).unwrap();
+        let written_content = provider.read_file(relative_path).unwrap();
         assert_eq!(written_content, content);
 
         // Verify parent directories were created
@@ -233,15 +294,60 @@ mod tests {
         let notes_dir = create_test_notes_dir();
         create_test_file(&notes_dir, "existing.md", "# Original Content");
 
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
         let relative_path = RelativePath::new("existing.md");
         let new_content = "# Updated Content\n\nThis is new";
 
         // Overwrite the existing file
-        let result = write_file(relative_path, notes_dir.path(), new_content);
+        let result = provider.write_file(relative_path, new_content);
         assert!(result.is_ok());
 
         // Verify content was updated
-        let written_content = read_file(relative_path, notes_dir.path()).unwrap();
+        let written_content = provider.read_file(relative_path).unwrap();
         assert_eq!(written_content, new_content);
+    }
+
+    #[test]
+    fn test_exists() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "existing.md", "# Content");
+
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
+
+        assert!(provider.exists(RelativePath::new("existing.md")));
+        assert!(!provider.exists(RelativePath::new("nonexistent.md")));
+    }
+
+    #[test]
+    fn test_root_display_name() {
+        let notes_dir = create_test_notes_dir();
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
+
+        // TempDir creates a random name, just check it's not empty
+        assert!(!provider.root_display_name().is_empty());
+    }
+
+    #[test]
+    fn test_build_file_tree() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "root.md", "# Root");
+        create_test_file(&notes_dir, "folder/nested.md", "# Nested");
+
+        let provider = StdFsProvider::new(notes_dir.path().to_path_buf());
+        let tree = build_file_tree(&provider).unwrap();
+        let items = tree.get_items();
+
+        // Should have folder first (folders before files), then root.md
+        assert_eq!(items.len(), 2);
+
+        // First item should be the folder
+        assert!(items[0].node.is_folder);
+        assert_eq!(items[0].node.name, "folder");
+        assert_eq!(items[0].node.relative_path.as_str(), "folder");
+
+        // Second item should be the file
+        assert!(!items[1].node.is_folder);
+        assert_eq!(items[1].node.name, "root");
+        assert_eq!(items[1].node.relative_path.as_str(), "root.md");
     }
 }

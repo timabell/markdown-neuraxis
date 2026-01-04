@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use tempfile::TempDir;
 
 use markdown_neuraxis_engine::editing::{AnchorId, Document};
-use markdown_neuraxis_engine::io;
+use markdown_neuraxis_engine::io::{IoProvider, StdFsProvider};
 use markdown_neuraxis_engine::models::MarkdownFile;
 // Note: Dioxus UI component testing would require more complex setup
 // For now, focusing on integration boundary testing through the public API
@@ -140,7 +140,8 @@ fn test_snapshot_block_anchor_uniqueness() {
     let (temp_dir, file) = create_test_markdown_file(content);
 
     // Parse the document using the same path as the UI does
-    let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
+    let provider = StdFsProvider::new(temp_dir.path().to_path_buf());
+    let file_content = provider.read_file(file.relative_path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
     let snapshot = document.snapshot();
@@ -201,7 +202,8 @@ fn test_focus_state_integration_single_textarea_invariant() {
   - Nested Item 2.1"#;
 
     let (temp_dir, file) = create_test_markdown_file(content);
-    let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
+    let provider = StdFsProvider::new(temp_dir.path().to_path_buf());
+    let file_content = provider.read_file(file.relative_path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
     let snapshot = document.snapshot();
@@ -274,7 +276,8 @@ fn test_nested_list_anchor_hierarchy() {
   - Child Item 3"#;
 
     let (temp_dir, file) = create_test_markdown_file(content);
-    let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
+    let provider = StdFsProvider::new(temp_dir.path().to_path_buf());
+    let file_content = provider.read_file(file.relative_path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
     let snapshot = document.snapshot();
@@ -328,7 +331,8 @@ fn test_list_item_click_simulation_anchor_uniqueness() {
     - Item D"#;
 
     let (temp_dir, file) = create_test_markdown_file(content);
-    let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
+    let provider = StdFsProvider::new(temp_dir.path().to_path_buf());
+    let file_content = provider.read_file(file.relative_path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
     let snapshot = document.snapshot();

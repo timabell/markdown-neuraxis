@@ -1,10 +1,29 @@
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::{
-    Document, FileTree, MarkdownFile, Snapshot, editing::commands::Cmd, io,
+    Document, FileTree, MarkdownFile, Snapshot,
+    editing::commands::Cmd,
+    io::{self, IoProvider, StdFsProvider},
 };
 use relative_path::RelativePathBuf;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
+
+/// Wrapper for IoProvider that implements PartialEq for Dioxus component props
+#[derive(Clone)]
+pub struct IoProviderRef(pub Arc<dyn IoProvider>);
+
+impl PartialEq for IoProviderRef {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl std::ops::Deref for IoProviderRef {
+    type Target = dyn IoProvider;
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
 
 const SOLARIZED_LIGHT_CSS: &str = include_str!("../assets/solarized-light.css");
 
@@ -38,23 +57,30 @@ pub fn App(notes_path: PathBuf) -> Element {
         notes_path.display()
     );
 
+    // Create IO provider for file operations
+    let io_provider = IoProviderRef(Arc::new(StdFsProvider::new(notes_path.clone())));
+
     // Error state for runtime errors
     let mut error_state = use_signal(|| None::<RuntimeError>);
 
     // Build file tree
-    let mut file_tree = use_signal(|| {
-        log::info!("Building file tree for: {}", notes_path.display());
-        match io::build_file_tree(&notes_path) {
-            Ok(tree) => {
-                log::info!("File tree built successfully");
-                tree
+    let mut file_tree = {
+        let provider = io_provider.clone();
+        let notes_path_for_fallback = notes_path.clone();
+        use_signal(move || {
+            log::info!("Building file tree for: {}", provider.root_display_name());
+            match io::build_file_tree(provider.0.as_ref()) {
+                Ok(tree) => {
+                    log::info!("File tree built successfully");
+                    tree
+                }
+                Err(e) => {
+                    log::error!("Error building file tree: {e}");
+                    FileTree::new(notes_path_for_fallback.clone())
+                }
             }
-            Err(e) => {
-                log::error!("Error building file tree: {e}");
-                FileTree::new(notes_path.clone())
-            }
-        }
-    });
+        })
+    };
 
     let selected_file = use_signal(|| None::<MarkdownFile>);
     let current_document = use_signal(|| None::<Arc<Document>>);
@@ -65,7 +91,7 @@ pub fn App(notes_path: PathBuf) -> Element {
 
     // Create callbacks outside the rsx! block for cleaner code
     let on_sidebar_file_select = {
-        let notes_path = notes_path.clone();
+        let provider = io_provider.clone();
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
@@ -74,7 +100,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         move |markdown_file: MarkdownFile| {
             load_existing_document(
                 &markdown_file,
-                &notes_path,
+                provider.0.as_ref(),
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
@@ -87,14 +113,21 @@ pub fn App(notes_path: PathBuf) -> Element {
 
     let on_file_navigate = {
         let notes_path = notes_path.clone();
+        let provider = io_provider.clone();
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
         move |file_path: PathBuf| {
+            // Convert absolute path to relative for navigation
+            let relative_path = if let Ok(rel) = file_path.strip_prefix(&notes_path) {
+                RelativePathBuf::from_path(rel).unwrap_or_default()
+            } else {
+                RelativePathBuf::from_path(&file_path).unwrap_or_default()
+            };
             navigate_to_path(
-                file_path,
-                &notes_path,
+                relative_path,
+                provider.0.as_ref(),
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
@@ -104,16 +137,16 @@ pub fn App(notes_path: PathBuf) -> Element {
     };
 
     let on_wikilink_navigate = {
-        let notes_path = notes_path.clone();
+        let provider = io_provider.clone();
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
         move |target: String| {
-            let markdown_file = resolve_wikilink(&target, &notes_path);
+            let markdown_file = resolve_wikilink(&target);
             load_document(
                 markdown_file,
-                &notes_path,
+                provider.0.as_ref(),
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
@@ -123,7 +156,7 @@ pub fn App(notes_path: PathBuf) -> Element {
     };
 
     let on_command = create_command_callback(
-        notes_path.clone(),
+        io_provider,
         selected_file,
         current_document,
         current_snapshot,
@@ -206,7 +239,7 @@ pub fn App(notes_path: PathBuf) -> Element {
 /// Helper function to load and parse a document from an existing file
 fn load_existing_document(
     markdown_file: &MarkdownFile,
-    notes_path: &Path,
+    provider: &dyn IoProvider,
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
@@ -215,7 +248,7 @@ fn load_existing_document(
     // Clear any previous error
     error_state.set(None);
 
-    match io::read_file(markdown_file.relative_path(), notes_path) {
+    match provider.read_file(markdown_file.relative_path()) {
         Ok(content) => match Document::from_bytes(content.as_bytes()) {
             Ok(mut document) => {
                 // Create anchors for the document blocks
@@ -249,7 +282,7 @@ fn load_existing_document(
 /// Load a document or create a blank one if it doesn't exist
 pub fn load_document(
     markdown_file: MarkdownFile,
-    notes_path: &Path,
+    provider: &dyn IoProvider,
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
@@ -258,7 +291,7 @@ pub fn load_document(
     // Clear any previous error
     error_state.set(None);
 
-    match io::read_file(markdown_file.relative_path(), notes_path) {
+    match provider.read_file(markdown_file.relative_path()) {
         Ok(content) => match Document::from_bytes(content.as_bytes()) {
             Ok(mut document) => {
                 document.create_anchors_from_tree();
@@ -297,29 +330,20 @@ pub fn load_document(
     }
 }
 
-/// Navigate to a file from an absolute path
+/// Navigate to a file from a relative path
 fn navigate_to_path(
-    file_path: PathBuf,
-    notes_path: &Path,
+    relative_path: RelativePathBuf,
+    provider: &dyn IoProvider,
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
     error_state: &mut Signal<Option<RuntimeError>>,
 ) {
-    // Convert absolute path to relative
-    let relative_path = if let Ok(rel) = file_path.strip_prefix(notes_path) {
-        rel.to_path_buf()
-    } else {
-        // Fallback for paths outside notes root
-        file_path.clone()
-    };
-    let relative_path_buf =
-        RelativePathBuf::from_path(&relative_path).expect("Failed to create relative path");
-    let markdown_file = MarkdownFile::new(relative_path_buf);
+    let markdown_file = MarkdownFile::new(relative_path);
 
     load_document(
         markdown_file,
-        notes_path,
+        provider,
         selected_file,
         current_document,
         current_snapshot,
@@ -328,7 +352,7 @@ fn navigate_to_path(
 }
 
 /// Resolve a wikilink target to a markdown file
-pub fn resolve_wikilink(target: &str, _notes_path: &Path) -> MarkdownFile {
+pub fn resolve_wikilink(target: &str) -> MarkdownFile {
     // Ensure .md extension is present
     let filename = if target.ends_with(".md") {
         target.to_string()
@@ -336,14 +360,13 @@ pub fn resolve_wikilink(target: &str, _notes_path: &Path) -> MarkdownFile {
         format!("{}.md", target)
     };
 
-    let relative_path =
-        RelativePathBuf::from_path(&filename).expect("Failed to create relative path");
+    let relative_path = RelativePathBuf::from(filename);
     MarkdownFile::new(relative_path)
 }
 
 /// Create a command callback for document editing
 fn create_command_callback(
-    notes_path: PathBuf,
+    provider: IoProviderRef,
     selected_file: Signal<Option<MarkdownFile>>,
     mut current_document: Signal<Option<Arc<Document>>>,
     mut current_snapshot: Signal<Option<Snapshot>>,
@@ -363,13 +386,14 @@ fn create_command_callback(
                 let content = document.text();
 
                 // Check if file exists before writing
-                let file_existed = io::read_file(file.relative_path(), &notes_path).is_ok();
+                let file_existed = provider.0.exists(file.relative_path());
 
-                match io::write_file(file.relative_path(), &notes_path, &content) {
+                match provider.0.write_file(file.relative_path(), &content) {
                     Ok(()) => {
                         if !file_existed {
-                            let absolute_path = file.relative_path().to_path(&notes_path);
-                            file_tree.write().add_file(&absolute_path, &notes_path);
+                            file_tree
+                                .write()
+                                .add_file_relative(file.relative_path().to_owned());
                             log::info!(
                                 "New file created and auto-saved: {:?}",
                                 file.relative_path()
@@ -395,36 +419,31 @@ fn create_command_callback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn test_resolve_wikilink_adds_md_extension() {
-        let notes_path = Path::new("/test");
-        let result = resolve_wikilink("my-note", notes_path);
+        let result = resolve_wikilink("my-note");
 
         assert_eq!(result.relative_path().as_str(), "my-note.md");
     }
 
     #[test]
     fn test_resolve_wikilink_preserves_md_extension() {
-        let notes_path = Path::new("/test");
-        let result = resolve_wikilink("my-note.md", notes_path);
+        let result = resolve_wikilink("my-note.md");
 
         assert_eq!(result.relative_path().as_str(), "my-note.md");
     }
 
     #[test]
     fn test_resolve_wikilink_with_path_separators() {
-        let notes_path = Path::new("/test");
-        let result = resolve_wikilink("folder/my-note", notes_path);
+        let result = resolve_wikilink("folder/my-note");
 
         assert_eq!(result.relative_path().as_str(), "folder/my-note.md");
     }
 
     #[test]
     fn test_resolve_wikilink_with_path_separators_and_extension() {
-        let notes_path = Path::new("/test");
-        let result = resolve_wikilink("folder/my-note.md", notes_path);
+        let result = resolve_wikilink("folder/my-note.md");
 
         assert_eq!(result.relative_path().as_str(), "folder/my-note.md");
     }

@@ -5,7 +5,10 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use markdown_neuraxis_config::Config;
-use markdown_neuraxis_engine::{Document, FileTree, FileTreeItem, io};
+use markdown_neuraxis_engine::{
+    Document, FileTree, FileTreeItem,
+    io::{self, IoProvider, StdFsProvider},
+};
 use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
@@ -15,10 +18,10 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 use relative_path::RelativePathBuf;
-use std::{env, io::stdout, path::PathBuf, process};
+use std::{env, io::stdout, path::PathBuf, process, sync::Arc};
 
 struct App {
-    notes_path: PathBuf,
+    io_provider: Arc<StdFsProvider>,
     file_tree: FileTree,
     tree_items: Vec<FileTreeItem>,
     file_list_state: ListState,
@@ -28,11 +31,12 @@ struct App {
 
 impl App {
     fn new(notes_path: PathBuf) -> Result<Self> {
-        let file_tree = io::build_file_tree(&notes_path)?;
+        let io_provider = Arc::new(StdFsProvider::new(notes_path));
+        let file_tree = io::build_file_tree(io_provider.as_ref())?;
         let tree_items = file_tree.get_items();
 
         let mut app = Self {
-            notes_path,
+            io_provider,
             file_tree,
             tree_items,
             file_list_state: ListState::default(),
@@ -87,7 +91,7 @@ impl App {
                 self.selected_document = None;
             } else if let Some(ref file) = item.node.markdown_file {
                 // Load and display file content
-                match io::read_file(file.relative_path(), &self.notes_path) {
+                match self.io_provider.read_file(file.relative_path()) {
                     Ok(content) => match Document::from_bytes(content.as_bytes()) {
                         Ok(mut document) => {
                             document.create_anchors_from_tree();
@@ -242,8 +246,9 @@ fn main() -> Result<()> {
         process::exit(1);
     };
 
-    // Validate notes directory using engine
-    if let Err(e) = io::validate_notes_dir(&notes_path) {
+    // Validate notes directory using provider
+    let provider = StdFsProvider::new(notes_path.clone());
+    if let Err(e) = provider.validate() {
         let source = if from_config {
             format!(" from config file '{}'", config_path.display())
         } else {

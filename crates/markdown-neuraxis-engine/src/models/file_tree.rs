@@ -73,6 +73,43 @@ impl FileTreeNode {
         }
     }
 
+    /// Insert a file using a RelativePath (for IoProvider abstraction)
+    pub fn insert_file_relative(&mut self, relative_path: &RelativePath) {
+        let components: Vec<_> = relative_path.components().collect();
+        if components.is_empty() {
+            return;
+        }
+
+        let first_component = components[0].as_str().to_string();
+
+        if components.len() == 1 {
+            // This is a file in the current directory
+            let file_relative_path = if self.relative_path.as_str().is_empty() {
+                RelativePathBuf::from(&first_component)
+            } else {
+                self.relative_path.join(&first_component)
+            };
+
+            self.children.insert(
+                first_component.clone(),
+                FileTreeNode::new_file(first_component, file_relative_path),
+            );
+        } else {
+            // This is a folder, recurse
+            let remaining: RelativePathBuf = components[1..].iter().collect();
+            let folder_relative_path = if self.relative_path.as_str().is_empty() {
+                RelativePathBuf::from(&first_component)
+            } else {
+                self.relative_path.join(&first_component)
+            };
+
+            self.children
+                .entry(first_component.clone())
+                .or_insert_with(|| FileTreeNode::new_folder(first_component, folder_relative_path))
+                .insert_file_relative(&remaining);
+        }
+    }
+
     pub fn toggle_expanded(&mut self, relative_path: &RelativePath) -> bool {
         if self.relative_path == relative_path {
             self.is_expanded = !self.is_expanded;
@@ -179,6 +216,13 @@ impl FileTree {
         }
     }
 
+    /// Create a new empty file tree with the given root name
+    pub fn new_with_name(root_name: String) -> Self {
+        let mut root = FileTreeNode::new_folder(root_name, RelativePathBuf::new());
+        root.is_expanded = true;
+        Self { root }
+    }
+
     pub fn build_from_files(root_path: PathBuf, files: &[PathBuf]) -> Self {
         let root_name = root_path
             .file_name()
@@ -193,6 +237,18 @@ impl FileTree {
             if let Ok(relative_path) = file.strip_prefix(&root_path) {
                 root.insert_file(relative_path);
             }
+        }
+
+        Self { root }
+    }
+
+    /// Build a file tree from relative paths (used by IoProvider abstraction)
+    pub fn build_from_relative_paths(root_name: String, files: &[RelativePathBuf]) -> Self {
+        let mut root = FileTreeNode::new_folder(root_name, RelativePathBuf::new());
+        root.is_expanded = true;
+
+        for file in files {
+            root.insert_file_relative(file);
         }
 
         Self { root }
@@ -215,6 +271,11 @@ impl FileTree {
         if let Ok(relative_path) = file_path.strip_prefix(notes_root) {
             self.root.insert_file(relative_path);
         }
+    }
+
+    /// Add a new file to the tree using a relative path
+    pub fn add_file_relative(&mut self, relative_path: RelativePathBuf) {
+        self.root.insert_file_relative(&relative_path);
     }
 
     pub fn get_items(&self) -> Vec<FileTreeItem> {
