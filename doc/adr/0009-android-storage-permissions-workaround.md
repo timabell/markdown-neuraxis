@@ -1,7 +1,7 @@
 # ADR-0009: Android Storage Permissions Workaround
 
 ## Status
-Accepted
+Superseded by [ADR-0011](0011-android-saf-io-abstraction.md)
 
 ## Context
 

@@ -2843,6 +2843,7 @@ dependencies = [
  "pretty_assertions",
  "relative-path 2.0.1",
  "tempfile",
+ "urlencoding",
 ]
 
 [[package]]

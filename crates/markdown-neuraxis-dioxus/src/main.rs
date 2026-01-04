@@ -2,12 +2,10 @@ use dioxus::prelude::*;
 use std::env;
 use std::path::PathBuf;
 
-mod platform;
-mod ui;
-
 use markdown_neuraxis_config::Config;
-use ui::App;
-use ui::components::{ErrorScreen, SetupScreen};
+use markdown_neuraxis_dioxus::StorageLocation;
+use markdown_neuraxis_dioxus::ui::App;
+use markdown_neuraxis_dioxus::ui::components::{ErrorScreen, SetupScreen};
 
 const SOLARIZED_LIGHT_CSS: &str = include_str!("assets/solarized-light.css");
 
@@ -25,7 +23,7 @@ enum AppState {
     /// No config found, show setup screen
     NeedsSetup,
     /// Config loaded successfully, show main app
-    Ready(PathBuf),
+    Ready(StorageLocation),
     /// Error occurred during initialization
     Error(AppError),
 }
@@ -101,7 +99,7 @@ fn get_initial_state() -> AppState {
             let args: Vec<String> = env::args().collect();
             let path = PathBuf::from(&args[1]);
             log::info!("Using notes path from CLI argument: {}", path.display());
-            return AppState::Ready(path);
+            return AppState::Ready(StorageLocation::Path(path));
         }
         #[cfg(target_os = "android")]
         {
@@ -121,11 +119,24 @@ fn get_initial_state() -> AppState {
     log::info!("No CLI argument provided, checking config file");
     match Config::load() {
         Ok(Some(config)) => {
-            log::info!(
-                "Loaded notes path from config: {}",
-                config.notes_path.display()
-            );
-            AppState::Ready(config.notes_path)
+            // On Android, prefer notes_uri (SAF) if available
+            #[cfg(target_os = "android")]
+            if let Some(uri) = config.notes_uri {
+                log::info!("Loaded notes URI from config: {}", uri);
+                return AppState::Ready(StorageLocation::Uri(uri));
+            }
+
+            // Fall back to notes_path
+            if !config.notes_path.as_os_str().is_empty() {
+                log::info!(
+                    "Loaded notes path from config: {}",
+                    config.notes_path.display()
+                );
+                return AppState::Ready(StorageLocation::Path(config.notes_path));
+            }
+
+            log::info!("Config exists but no valid storage location, showing setup");
+            AppState::NeedsSetup
         }
         Ok(None) => {
             log::info!("No config file found, showing setup screen");
@@ -153,22 +164,30 @@ fn app_root() -> Element {
             rsx! {
                 style { {SOLARIZED_LIGHT_CSS} }
                 SetupScreen {
-                    on_complete: move |path: PathBuf| {
-                        log::info!("Setup complete, transitioning to app with path: {}", path.display());
-                        app_state.set(AppState::Ready(path));
+                    on_complete: move |location: StorageLocation| {
+                        log::info!("Setup complete, transitioning to app");
+                        app_state.set(AppState::Ready(location));
                     }
                 }
             }
         }
-        AppState::Ready(path) => {
-            log::info!(
-                "app_root() creating App component with path: {}",
-                path.display()
-            );
-            rsx! {
-                App { notes_path: path }
+        AppState::Ready(location) => match location {
+            StorageLocation::Path(path) => {
+                log::info!(
+                    "app_root() creating App component with path: {}",
+                    path.display()
+                );
+                rsx! {
+                    App { notes_path: Some(path) }
+                }
             }
-        }
+            StorageLocation::Uri(uri) => {
+                log::info!("app_root() creating App component with URI: {}", uri);
+                rsx! {
+                    App { notes_uri: Some(uri) }
+                }
+            }
+        },
         AppState::Error(error) => {
             log::error!("app_root() error: {} - {}", error.title, error.message);
             rsx! {

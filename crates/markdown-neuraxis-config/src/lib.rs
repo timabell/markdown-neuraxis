@@ -22,7 +22,18 @@ pub enum ConfigError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
+    /// Path to the notes directory (desktop platforms)
+    #[serde(default, skip_serializing_if = "is_default_path")]
     pub notes_path: PathBuf,
+
+    /// Content URI for notes directory (Android SAF)
+    /// When present on Android, this takes precedence over notes_path
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes_uri: Option<String>,
+}
+
+fn is_default_path(path: &Path) -> bool {
+    path.as_os_str().is_empty()
 }
 
 impl Config {
@@ -117,12 +128,32 @@ mod tests {
     fn test_config_serialization_roundtrip() {
         let original = Config {
             notes_path: PathBuf::from("/tmp/test-notes"),
+            notes_uri: None,
         };
 
         let toml_str = toml::to_string(&original).unwrap();
         let deserialized: Config = toml::from_str(&toml_str).unwrap();
 
         assert_eq!(original.notes_path, deserialized.notes_path);
+        assert_eq!(original.notes_uri, deserialized.notes_uri);
+    }
+
+    #[test]
+    fn test_config_with_uri() {
+        let original = Config {
+            notes_path: PathBuf::new(),
+            notes_uri: Some(
+                "content://com.android.externalstorage.documents/tree/primary%3ADocuments"
+                    .to_string(),
+            ),
+        };
+
+        let toml_str = toml::to_string(&original).unwrap();
+        let deserialized: Config = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(original.notes_uri, deserialized.notes_uri);
+        // Empty path should not be serialized
+        assert!(!toml_str.contains("notes_path"));
     }
 
     #[test]
@@ -186,6 +217,7 @@ mod tests {
         let config_file = temp_dir.path().join("config.toml");
         let test_config = Config {
             notes_path: PathBuf::from("/tmp/test-notes"),
+            notes_uri: None,
         };
 
         // Test saving
@@ -237,6 +269,7 @@ notes_path = "$NOTES_ROOT/my-notes"
         let config_file = temp_dir.path().join("config.toml");
         let test_config = Config {
             notes_path: PathBuf::from("/tmp/test-notes"),
+            notes_uri: None,
         };
 
         // Test that save_to_path and save produce the same result

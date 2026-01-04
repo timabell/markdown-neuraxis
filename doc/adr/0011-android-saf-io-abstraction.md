@@ -1,7 +1,7 @@
 # ADR-0011: Android Storage Access Framework IO Abstraction
 
 ## Status
-Proposed
+Accepted
 
 ## Context
 

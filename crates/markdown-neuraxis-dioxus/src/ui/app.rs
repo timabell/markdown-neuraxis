@@ -8,6 +8,9 @@ use relative_path::RelativePathBuf;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[cfg(target_os = "android")]
+use crate::platform::SafProvider;
+
 /// Wrapper for IoProvider that implements PartialEq for Dioxus component props
 #[derive(Clone)]
 pub struct IoProviderRef(pub Arc<dyn IoProvider>);
@@ -51,14 +54,21 @@ impl RuntimeError {
 }
 
 #[component]
-pub fn App(notes_path: PathBuf) -> Element {
-    log::info!(
-        "App component initialized with path: {}",
-        notes_path.display()
-    );
+pub fn App(
+    /// Path to notes directory (desktop platforms)
+    #[props(default)]
+    notes_path: Option<PathBuf>,
+    /// Content URI for notes directory (Android SAF)
+    #[props(default)]
+    notes_uri: Option<String>,
+) -> Element {
+    // Create IO provider based on what's available
+    let io_provider = create_io_provider(notes_path.clone(), notes_uri.clone());
 
-    // Create IO provider for file operations
-    let io_provider = IoProviderRef(Arc::new(StdFsProvider::new(notes_path.clone())));
+    log::info!(
+        "App component initialized with provider: {}",
+        io_provider.root_display_name()
+    );
 
     // Error state for runtime errors
     let mut error_state = use_signal(|| None::<RuntimeError>);
@@ -66,7 +76,6 @@ pub fn App(notes_path: PathBuf) -> Element {
     // Build file tree
     let mut file_tree = {
         let provider = io_provider.clone();
-        let notes_path_for_fallback = notes_path.clone();
         use_signal(move || {
             log::info!("Building file tree for: {}", provider.root_display_name());
             match io::build_file_tree(provider.0.as_ref()) {
@@ -76,7 +85,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 }
                 Err(e) => {
                     log::error!("Error building file tree: {e}");
-                    FileTree::new(notes_path_for_fallback.clone())
+                    FileTree::new_with_name(provider.root_display_name())
                 }
             }
         })
@@ -119,9 +128,15 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
         move |file_path: PathBuf| {
-            // Convert absolute path to relative for navigation
-            let relative_path = if let Ok(rel) = file_path.strip_prefix(&notes_path) {
-                RelativePathBuf::from_path(rel).unwrap_or_default()
+            // Convert path to relative for navigation
+            // On desktop with notes_path, strip the prefix
+            // On Android or without notes_path, treat as relative directly
+            let relative_path = if let Some(ref notes_root) = notes_path {
+                if let Ok(rel) = file_path.strip_prefix(notes_root) {
+                    RelativePathBuf::from_path(rel).unwrap_or_default()
+                } else {
+                    RelativePathBuf::from_path(&file_path).unwrap_or_default()
+                }
             } else {
                 RelativePathBuf::from_path(&file_path).unwrap_or_default()
             };
@@ -206,7 +221,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                     super::components::MainPanel {
                         file: file.clone(),
                         snapshot: snapshot.clone(),
-                        notes_path: notes_path.clone(),
+                        notes_path: notes_path.clone().unwrap_or_default(),
                         document: document.clone(),
                         on_file_select: Some(Callback::new(on_file_navigate)),
                         on_command,
@@ -413,6 +428,38 @@ fn create_command_callback(
             *current_document.write() = Some(document_arc);
             *current_snapshot.write() = Some(new_snapshot);
         }
+    }
+}
+
+/// Create the appropriate IoProvider based on platform and available configuration.
+///
+/// On Android, prefers notes_uri (SAF) if available.
+/// On desktop, uses notes_path with StdFsProvider.
+fn create_io_provider(notes_path: Option<PathBuf>, notes_uri: Option<String>) -> IoProviderRef {
+    #[cfg(target_os = "android")]
+    {
+        if let Some(uri) = notes_uri {
+            log::info!("Creating SafProvider with URI: {}", uri);
+            return IoProviderRef(Arc::new(SafProvider::new(uri)));
+        }
+        // Fallback to StdFsProvider if no URI (for backwards compatibility)
+        if let Some(path) = notes_path {
+            log::info!(
+                "Falling back to StdFsProvider with path: {}",
+                path.display()
+            );
+            return IoProviderRef(Arc::new(StdFsProvider::new(path)));
+        }
+        panic!("No notes_path or notes_uri provided");
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        // Suppress unused warning for notes_uri on desktop
+        let _ = notes_uri;
+        let path = notes_path.expect("notes_path required on desktop");
+        log::info!("Creating StdFsProvider with path: {}", path.display());
+        IoProviderRef(Arc::new(StdFsProvider::new(path)))
     }
 }
 

@@ -7,7 +7,7 @@ ANDROID_PROJECT="target/dx/markdown-neuraxis-dioxus/debug/android/app"
 JAVA_SRC_DIR="$ANDROID_PROJECT/app/src/main/java/co/rustworkshop/markdown_neuraxis"
 
 # Generate Android project with Rust native library
-# Uses custom AndroidManifest.xml via Dioxus.toml (see ADR-0009)
+# Uses custom AndroidManifest.xml via Dioxus.toml (see ADR-0011 for SAF integration)
 dx build --platform android --target aarch64-linux-android --package markdown-neuraxis-dioxus
 
 # Copy FolderPickerActivity.java to generated project (see ADR-0010)
@@ -27,6 +27,4 @@ cd - > /dev/null
 echo ""
 echo "APK built at: $ANDROID_PROJECT/app/build/outputs/apk/debug/app-debug.apk"
 echo ""
-echo "IMPORTANT: For MANAGE_EXTERNAL_STORAGE permission on Android 11+, users must:"
-echo "  1. Go to Settings > Apps > markdown-neuraxis > Permissions"
-echo "  2. Enable 'All files access'"
+echo "Note: Uses Storage Access Framework (SAF) for folder access - no manual permissions required."
