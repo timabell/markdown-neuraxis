@@ -26,3 +26,6 @@ sudo kvm-ok
 # cargo-ndk for building Rust libraries for Android (UniFFI bindings)
 # https://github.com/nickelc/cargo-ndk
 cargo install cargo-ndk
+
+# Gradle for generating gradle wrapper (or just open in Android Studio)
+sudo apt install gradle

@@ -18,11 +18,11 @@ cp target/aarch64-linux-android/release/libmarkdown_neuraxis_ffi.so \
    android/app/src/main/jniLibs/arm64-v8a/
 
 # Generate Kotlin bindings
+# UniFFI creates package structure: uniffi/markdown_neuraxis_ffi/
 echo "Generating Kotlin bindings..."
-mkdir -p android/app/src/main/java/co/rustworkshop/markdownneuraxis/ffi/
 cargo run -p markdown-neuraxis-ffi --bin uniffi-bindgen generate \
   --library target/aarch64-linux-android/release/libmarkdown_neuraxis_ffi.so \
   --language kotlin \
-  --out-dir android/app/src/main/java/co/rustworkshop/markdownneuraxis/ffi/
+  --out-dir android/app/src/main/java/
 
 echo "Done! Built arm64-v8a and generated Kotlin bindings."
