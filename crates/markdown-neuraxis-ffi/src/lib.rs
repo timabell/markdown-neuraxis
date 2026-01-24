@@ -13,10 +13,11 @@ uniffi::setup_scaffolding!();
 // ============ Errors ============
 
 /// Errors that can cross the FFI boundary
+/// Note: Field is named `reason` not `message` to avoid conflict with Throwable.message in Kotlin
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum FfiError {
-    #[error("Parse error: {message}")]
-    ParseError { message: String },
+    #[error("Parse error: {reason}")]
+    ParseError { reason: String },
 }
 
 // ============ Document Handle ============
@@ -37,7 +38,7 @@ impl DocumentHandle {
     pub fn from_string(content: String) -> Result<Self, FfiError> {
         let mut doc =
             Document::from_bytes(content.as_bytes()).map_err(|e| FfiError::ParseError {
-                message: e.to_string(),
+                reason: e.to_string(),
             })?;
         doc.create_anchors_from_tree();
 

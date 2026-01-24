@@ -245,7 +245,7 @@ fun FileViewScreen(
 
 @Composable
 fun RenderBlock(block: RenderBlockDto) {
-    val indent = (block.depth * 16).dp
+    val indent = (block.depth.toInt() * 16).dp
 
     when (block.kind) {
         "heading" -> {

@@ -25,4 +25,14 @@ cargo run -p markdown-neuraxis-ffi --bin uniffi-bindgen generate \
   --language kotlin \
   --out-dir android/app/src/main/java/
 
-echo "Done! Built arm64-v8a and generated Kotlin bindings."
+# Ensure gradle wrapper exists
+if [ ! -f android/gradlew ]; then
+    echo "Generating gradle wrapper..."
+    (cd android && gradle wrapper --gradle-version 8.9)
+fi
+
+# Build the APK
+echo "Building APK..."
+(cd android && ./gradlew assembleDebug)
+
+echo "Done! APK at android/app/build/outputs/apk/debug/app-debug.apk"

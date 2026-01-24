@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "co.rustworkshop.markdownneuraxis"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "co.rustworkshop.markdownneuraxis"
