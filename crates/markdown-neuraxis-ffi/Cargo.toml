@@ -1,0 +1,24 @@
+[package]
+name = "markdown-neuraxis-ffi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "UniFFI bindings for markdown-neuraxis mobile apps"
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "markdown_neuraxis_ffi"
+
+[dependencies]
+markdown-neuraxis-engine = { path = "../markdown-neuraxis-engine" }
+uniffi = { workspace = true, features = ["cli"] }
+thiserror.workspace = true
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
