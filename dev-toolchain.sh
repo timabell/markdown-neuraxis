@@ -22,3 +22,7 @@ sudo apt install libwebkit2gtk-4.1-dev \
 # https://developer.android.com/studio/run/emulator-acceleration#vm-linux-check-kvm
 egrep -c '(vmx|svm)' /proc/cpuinfo
 sudo kvm-ok
+
+# cargo-ndk for building Rust libraries for Android (UniFFI bindings)
+# https://github.com/nickelc/cargo-ndk
+cargo install cargo-ndk
