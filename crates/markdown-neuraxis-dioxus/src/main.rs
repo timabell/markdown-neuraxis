@@ -31,82 +31,27 @@ enum AppState {
 }
 
 fn main() {
-    // Initialize logging
-    #[cfg(target_os = "android")]
-    {
-        android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(log::LevelFilter::Debug)
-                .with_tag("MarkdownNeuraxis"),
-        );
-    }
-
-    #[cfg(not(target_os = "android"))]
-    {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Info)
-            .init();
-    }
-
-    // Set up panic hook to log panics before abort (especially useful on Android)
-    #[cfg(target_os = "android")]
-    {
-        use markdown_neuraxis_config::ANDROID_PACKAGE_NAME;
-
-        std::panic::set_hook(Box::new(|panic_info| {
-            let msg = panic_info.to_string();
-            log::error!("PANIC: {}", msg);
-
-            // Also write to a crash log file for post-crash inspection
-            let crash_path = format!("/data/data/{}/files/crash.log", ANDROID_PACKAGE_NAME);
-            let crash_path = std::path::Path::new(&crash_path);
-            if let Some(parent) = crash_path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let _ = std::fs::write(crash_path, &msg);
-        }));
-    }
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Info)
+        .init();
 
     log::info!("markdown-neuraxis starting up!");
 
-    #[cfg(not(target_os = "android"))]
-    {
-        log::info!("About to launch Dioxus app for desktop");
-        dioxus::LaunchBuilder::desktop()
-            .with_cfg(make_window_config())
-            .launch(app_root);
-    }
-
-    #[cfg(target_os = "android")]
-    {
-        log::info!("Launching Dioxus app for Android");
-        dioxus::launch(app_root);
-        log::info!("Dioxus launch completed");
-    }
+    dioxus::LaunchBuilder::desktop()
+        .with_cfg(make_window_config())
+        .launch(app_root);
 }
 
 /// Determine initial app state from CLI args and config
 fn get_initial_state() -> AppState {
-    // On Android, env::args() can cause capacity overflow, so handle args more carefully
-    #[cfg(target_os = "android")]
-    let args_count = 1; // Android apps typically don't receive CLI args
-
-    #[cfg(not(target_os = "android"))]
     let args_count = env::args().count();
 
-    // Check for CLI argument first (desktop only)
+    // Check for CLI argument first
     if args_count == 2 {
-        #[cfg(not(target_os = "android"))]
-        {
-            let args: Vec<String> = env::args().collect();
-            let path = PathBuf::from(&args[1]);
-            log::info!("Using notes path from CLI argument: {}", path.display());
-            return AppState::Ready(path);
-        }
-        #[cfg(target_os = "android")]
-        {
-            unreachable!("Android should not have CLI args");
-        }
+        let args: Vec<String> = env::args().collect();
+        let path = PathBuf::from(&args[1]);
+        log::info!("Using notes path from CLI argument: {}", path.display());
+        return AppState::Ready(path);
     }
 
     if args_count > 2 {

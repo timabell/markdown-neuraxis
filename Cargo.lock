@@ -33,23 +33,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
-name = "android_log-sys"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84521a3cf562bc62942e294181d9eef17eb38ceb8c68677bc49f144e4c3d4f8d"
-
-[[package]]
-name = "android_logger"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbb4e440d04be07da1f1bf44fb4495ebd58669372fe0cffa6e48595ac5bd88a3"
-dependencies = [
- "android_log-sys",
- "env_filter",
- "log",
-]
-
-[[package]]
 name = "anes"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2956,16 +2939,13 @@ dependencies = [
 name = "markdown-neuraxis-dioxus"
 version = "0.1.0"
 dependencies = [
- "android_logger",
  "dioxus",
  "dioxus-ssr",
  "env_logger",
  "insta",
- "jni",
  "log",
  "markdown-neuraxis-config",
  "markdown-neuraxis-engine",
- "ndk-context",
  "pretty_assertions",
  "relative-path 2.0.1",
  "tempfile",
