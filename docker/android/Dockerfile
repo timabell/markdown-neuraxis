@@ -23,6 +23,11 @@ RUN wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-
     rm /tmp/gradle.zip && \
     ln -s "/opt/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle
 
+# Install ktlint for Kotlin formatting (used by UniFFI bindgen)
+ENV KTLINT_VERSION=1.5.0
+RUN wget -q "https://github.com/pinterest/ktlint/releases/download/${KTLINT_VERSION}/ktlint" -O /usr/local/bin/ktlint && \
+    chmod +x /usr/local/bin/ktlint
+
 # Set up Android SDK
 ENV ANDROID_HOME=/opt/android-sdk
 ENV PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
