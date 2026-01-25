@@ -1,24 +1,14 @@
 # Cargo configuration for Android cross-compilation
-# This file is used by the Docker build environment
+# Used by Docker build environment
 
 [target.aarch64-linux-android]
 linker = "aarch64-linux-android30-clang"
-
-[target.armv7-linux-androideabi]
-linker = "armv7a-linux-androideabi30-clang"
-
-[target.i686-linux-android]
-linker = "i686-linux-android30-clang"
 
 [target.x86_64-linux-android]
 linker = "x86_64-linux-android30-clang"
 
 [env]
 CC_aarch64-linux-android = "aarch64-linux-android30-clang"
-CC_armv7-linux-androideabi = "armv7a-linux-androideabi30-clang"
-CC_i686-linux-android = "i686-linux-android30-clang"
 CC_x86_64-linux-android = "x86_64-linux-android30-clang"
 AR_aarch64-linux-android = "llvm-ar"
-AR_armv7-linux-androideabi = "llvm-ar"
-AR_i686-linux-android = "llvm-ar"
 AR_x86_64-linux-android = "llvm-ar"

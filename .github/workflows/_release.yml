@@ -48,6 +48,18 @@ jobs:
           name: markdown-neuraxis-macos
           path: ./release-artifacts
 
+      - name: Download macOS ARM64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: markdown-neuraxis-macos-arm64
+          path: ./release-artifacts
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: markdown-neuraxis-android
+          path: ./release-artifacts
+
       - name: Generate checksums
         run: |
           cd release-artifacts
@@ -63,4 +75,5 @@ jobs:
           files: |
             release-artifacts/markdown-neuraxis-cli-*
             release-artifacts/markdown-neuraxis-dioxus-*
+            release-artifacts/markdown-neuraxis-android.apk
             release-artifacts/checksums.txt

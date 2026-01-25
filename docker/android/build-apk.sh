@@ -2,6 +2,7 @@
 set -e
 
 # Script to build Android APK using Docker
+# Builds native Kotlin app with UniFFI bindings to Rust core
 # Usage: ./build-apk.sh [--debug|--release] [--cached|--rebuild]
 
 show_usage() {
@@ -86,19 +87,23 @@ elif [[ "$CACHE_FLAG" == "cached" ]]; then
     fi
 fi
 
-# Create output directory
+# Create output and cache directories
 mkdir -p "$OUTPUT_DIR"
+mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
 
-# Build command based on type - specify the dioxus package explicitly
+# Gradle task based on build type
 if [ "$BUILD_TYPE" == "release" ]; then
-    BUILD_CMD="dx build --platform android --package markdown-neuraxis-dioxus --release"
-    APK_PATH="target/dx/markdown-neuraxis-dioxus/release/android/app/app/build/outputs/apk/release/app-release.apk"
+    GRADLE_TASK="assembleRelease"
+    APK_PATH="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+    OUTPUT_APK="markdown-neuraxis-release.apk"
 else
-    BUILD_CMD="dx build --platform android --package markdown-neuraxis-dioxus"
-    APK_PATH="target/dx/markdown-neuraxis-dioxus/debug/android/app/app/build/outputs/apk/debug/app-debug.apk"
+    GRADLE_TASK="assembleDebug"
+    APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+    OUTPUT_APK="markdown-neuraxis-debug.apk"
 fi
 
 # Run Docker container to build APK
+# Note: We don't share host's ~/.gradle to avoid lock conflicts with host Gradle processes
 echo "Running build in Docker container..."
 docker run --rm \
     -v "$PROJECT_ROOT:/workspace" \
@@ -111,41 +116,69 @@ docker run --rm \
         echo 'Verifying Android toolchain...'
         if ! which aarch64-linux-android30-clang > /dev/null 2>&1; then
             echo 'ERROR: aarch64-linux-android30-clang not found in PATH'
-            echo 'NDK_HOME: '\$NDK_HOME
-            echo 'PATH: '\$PATH
-            echo 'Expected location: '\$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
-            ls -la \$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang 2>/dev/null || echo 'File does not exist at expected location'
             exit 1
         fi
-        echo 'SUCCESS: Android toolchain verified'
+        echo 'Android toolchain verified'
         echo ''
-        echo 'Building APK...'
-        cd /workspace
 
-        # Build the APK
-        $BUILD_CMD
+        # Build Rust FFI for arm64 (devices)
+        echo 'Building Rust FFI for aarch64-linux-android (arm64-v8a)...'
+        cargo ndk -t aarch64-linux-android build --release -p markdown-neuraxis-ffi
 
-        # Check if APK was created
-        if [ -f '$APK_PATH' ]; then
+        # Build Rust FFI for x86_64 (emulators)
+        echo 'Building Rust FFI for x86_64-linux-android (x86_64)...'
+        cargo ndk -t x86_64-linux-android build --release -p markdown-neuraxis-ffi
+
+        # Create jniLibs directory structure
+        mkdir -p android/app/src/main/jniLibs/arm64-v8a
+        mkdir -p android/app/src/main/jniLibs/x86_64
+
+        # Copy .so files
+        cp target/aarch64-linux-android/release/libmarkdown_neuraxis_ffi.so \
+           android/app/src/main/jniLibs/arm64-v8a/
+        cp target/x86_64-linux-android/release/libmarkdown_neuraxis_ffi.so \
+           android/app/src/main/jniLibs/x86_64/
+
+        # Generate Kotlin bindings with UniFFI
+        echo 'Generating Kotlin bindings...'
+        cargo run -p markdown-neuraxis-ffi --bin uniffi-bindgen generate \
+          --library target/aarch64-linux-android/release/libmarkdown_neuraxis_ffi.so \
+          --language kotlin \
+          --out-dir android/app/src/main/java/
+
+        # Generate gradle wrapper if needed
+        if [ ! -f android/gradlew ]; then
+            echo 'Generating gradle wrapper...'
+            cd android
+            gradle wrapper --gradle-version 8.9
+            cd ..
+        fi
+
+        # Build APK with Gradle
+        echo 'Building APK with Gradle...'
+        cd android
+        ./gradlew $GRADLE_TASK
+        cd ..
+
+        # Copy APK to output
+        if [ -f $APK_PATH ]; then
             echo 'APK built successfully!'
-            cp '$APK_PATH' '/workspace/build/android/markdown-neuraxis-${BUILD_TYPE}.apk'
-            echo 'APK copied to build/android/'
+            cp $APK_PATH build/android/$OUTPUT_APK
         else
             echo 'Error: APK not found at expected location'
-            echo 'Checking for APK files...'
-            find target/dx -name '*.apk' -type f 2>/dev/null || true
+            find android -name '*.apk' -type f 2>/dev/null || true
             exit 1
         fi
     "
 
-if [ -f "$OUTPUT_DIR/markdown-neuraxis-${BUILD_TYPE}.apk" ]; then
+if [ -f "$OUTPUT_DIR/$OUTPUT_APK" ]; then
     echo ""
-    echo "✅ APK built successfully!"
-    echo "📦 Output: $OUTPUT_DIR/markdown-neuraxis-${BUILD_TYPE}.apk"
+    echo "APK built successfully!"
+    echo "Output: $OUTPUT_DIR/$OUTPUT_APK"
     echo ""
     echo "To install on a connected device:"
-    echo "  adb install $OUTPUT_DIR/markdown-neuraxis-${BUILD_TYPE}.apk"
+    echo "  adb install $OUTPUT_DIR/$OUTPUT_APK"
 else
-    echo "❌ Build failed - APK not found"
+    echo "Build failed - APK not found"
     exit 1
 fi
