@@ -10,12 +10,19 @@ source "$(dirname "$0")/set-android-envs.sh"
 echo "Building for aarch64-linux-android (arm64-v8a)..."
 cargo ndk -t aarch64-linux-android build --release -p markdown-neuraxis-ffi
 
+# Build for x86_64 (emulator)
+echo "Building for x86_64-linux-android (x86_64)..."
+cargo ndk -t x86_64-linux-android build --release -p markdown-neuraxis-ffi
+
 # Create jniLibs directory structure
 mkdir -p android/app/src/main/jniLibs/arm64-v8a
+mkdir -p android/app/src/main/jniLibs/x86_64
 
-# Copy .so to Android jniLibs
+# Copy .so files to Android jniLibs
 cp target/aarch64-linux-android/release/libmarkdown_neuraxis_ffi.so \
    android/app/src/main/jniLibs/arm64-v8a/
+cp target/x86_64-linux-android/release/libmarkdown_neuraxis_ffi.so \
+   android/app/src/main/jniLibs/x86_64/
 
 # Generate Kotlin bindings
 # UniFFI creates package structure: uniffi/markdown_neuraxis_ffi/

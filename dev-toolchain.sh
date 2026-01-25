@@ -27,5 +27,8 @@ sudo kvm-ok
 # https://github.com/nickelc/cargo-ndk
 cargo install cargo-ndk
 
+# Android Rust cross-compilation targets
+"$(dirname "$0")/dev-android-targets.sh"
+
 # Gradle for generating gradle wrapper (or just open in Android Studio)
 sudo apt install gradle
