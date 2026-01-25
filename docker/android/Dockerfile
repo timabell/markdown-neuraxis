@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     openjdk-17-jdk \
+    gradle \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up Android SDK
