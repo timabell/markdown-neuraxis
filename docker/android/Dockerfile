@@ -14,8 +14,14 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     openjdk-17-jdk \
-    gradle \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Gradle (newer than Ubuntu's package, needed to generate wrapper)
+ENV GRADLE_VERSION=8.9
+RUN wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O /tmp/gradle.zip && \
+    unzip -q /tmp/gradle.zip -d /opt && \
+    rm /tmp/gradle.zip && \
+    ln -s "/opt/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle
 
 # Set up Android SDK
 ENV ANDROID_HOME=/opt/android-sdk
