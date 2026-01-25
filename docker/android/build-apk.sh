@@ -87,9 +87,8 @@ elif [[ "$CACHE_FLAG" == "cached" ]]; then
     fi
 fi
 
-# Create output and cache directories
+# Create output directory (owned by current user)
 mkdir -p "$OUTPUT_DIR"
-mkdir -p "$HOME/.cargo/registry" "$HOME/.cargo/git"
 
 # Gradle task based on build type
 if [ "$BUILD_TYPE" == "release" ]; then
@@ -103,12 +102,15 @@ else
 fi
 
 # Run Docker container to build APK
-# Note: We don't share host's ~/.gradle to avoid lock conflicts with host Gradle processes
+# Named volumes for caches (fast, isolated), bind mount for output
 echo "Running build in Docker container..."
 docker run --rm \
+    -e HOST_UID="$(id -u)" \
+    -e HOST_GID="$(id -g)" \
+    -v markdown-neuraxis-cargo-cache:/root/.cargo \
+    -v markdown-neuraxis-gradle-cache:/root/.gradle \
+    -v "$OUTPUT_DIR:/output" \
     -v "$PROJECT_ROOT:/workspace" \
-    -v "$HOME/.cargo/registry:/root/.cargo/registry" \
-    -v "$HOME/.cargo/git:/root/.cargo/git" \
     -w /workspace \
     $DOCKER_IMAGE \
     bash -c "
@@ -160,10 +162,11 @@ docker run --rm \
         ./gradlew $GRADLE_TASK
         cd ..
 
-        # Copy APK to output
+        # Copy APK to output and fix ownership
         if [ -f $APK_PATH ]; then
             echo 'APK built successfully!'
-            cp $APK_PATH build/android/$OUTPUT_APK
+            cp $APK_PATH /output/$OUTPUT_APK
+            chown \$HOST_UID:\$HOST_GID /output/$OUTPUT_APK
         else
             echo 'Error: APK not found at expected location'
             find android -name '*.apk' -type f 2>/dev/null || true
