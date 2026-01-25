@@ -46,7 +46,7 @@ fn generate_nested_content(remaining_depth: usize, current_level: usize) -> Stri
     content.push('\n');
 
     // Add code block occasionally
-    if current_level % 3 == 0 {
+    if current_level.is_multiple_of(3) {
         content.push_str("```rust\nfn benchmark_function() {\n    // Example code\n    let value = 42;\n    println!(\"{}\", value);\n}\n```\n\n");
     }
 
