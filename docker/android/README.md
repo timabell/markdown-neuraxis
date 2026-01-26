@@ -2,6 +2,14 @@
 
 This directory contains a Docker-based build system for creating Android APKs without installing Android SDK/NDK on your host machine.
 
+## Architecture
+
+The Android app is a native Kotlin app using Jetpack Compose, with UniFFI bindings to the Rust core engine. The build process:
+
+1. Cross-compiles `markdown-neuraxis-ffi` crate for Android (arm64 + x86_64)
+2. Generates Kotlin bindings using UniFFI
+3. Builds the Kotlin app with Gradle
+
 ## Prerequisites
 
 - Docker installed on your system
@@ -14,14 +22,14 @@ This directory contains a Docker-based build system for creating Android APKs wi
 From the project root, run:
 
 ```bash
-# Build debug APK (default)
-./build-android.sh
+# Build debug APK with cached Docker image
+./docker/android/build-apk.sh --debug --cached
 
 # Build release APK
-./build-android.sh release
+./docker/android/build-apk.sh --release --cached
 
 # Rebuild Docker image and build APK
-./build-android.sh debug --rebuild
+./docker/android/build-apk.sh --debug --rebuild
 ```
 
 ### Output
@@ -35,25 +43,35 @@ The APK will be created in `build/android/`:
 The Docker image contains:
 - Ubuntu 22.04 base
 - OpenJDK 17
-- Android SDK (API 34)
+- Android SDK (API 35)
 - Android NDK 25.2.9519653
-- Rust with Android targets
-- Dioxus CLI
+- Rust with Android targets (arm64, x86_64)
+- cargo-ndk for cross-compilation
+
+## Local Build (without Docker)
+
+If you have the Android SDK/NDK set up locally:
+
+```bash
+# Set environment variables (adjust paths as needed)
+source set-android-envs.sh
+
+# Build and install
+./build-android.sh
+adb install android/app/build/outputs/apk/debug/app-debug.apk
+```
 
 ## Troubleshooting
 
-### Build Fails Silently
+### Build Fails with NDK Error
 
-If the build fails without clear error:
-1. Check if the Dioxus.toml exists in project root
-2. Ensure the crates structure is correct
-3. Check the build script output for errors
+Ensure the NDK version matches what's expected (25.2.9519653). Check the Dockerfile.
 
 ### APK Not Found
 
-The APK location might vary. Check:
-- `target/dx/*/android/app/app/build/outputs/apk/`
-- Look for `app-debug.apk` or `app-release.apk`
+The APK location is:
+- Debug: `android/app/build/outputs/apk/debug/app-debug.apk`
+- Release: `android/app/build/outputs/apk/release/app-release-unsigned.apk`
 
 ### Docker Image Size
 
@@ -64,12 +82,5 @@ The image is cached after first build.
 
 If you get permission errors, ensure Docker has access to:
 - Project directory
-- Cargo cache directories
-
-## Advantages of Docker Build
-
-1. **Clean Host**: No Android SDK/NDK installed on your machine
-2. **Reproducible**: Same environment for all developers
-3. **Version Control**: Dockerfile tracks exact versions
-4. **CI/CD Ready**: Can use same image in CI pipelines
-5. **asdf Compatible**: Doesn't interfere with asdf or rustup on host
+- Cargo cache directories (`~/.cargo/registry`, `~/.cargo/git`)
+- Gradle cache directory (`~/.gradle`)

@@ -63,7 +63,7 @@ notes/               # Markdown files can be anywhere in root
 ### Technology Stack
 - **Language**: Rust (for fast, native performance)
 - **GUI Framework**: Dioxus desktop 0.6 (switched from egui, see ADR-0001)
-- **Markdown Parsing**: `pulldown-cmark` 0.11 with hierarchical outline processing
+- **Markdown Parsing**: `tree-sitter-md` for incremental parsing (ADR-0004 editing architecture)
 - **File System**: Direct OS filesystem access, cross-platform
 - **State Management**: In-memory signals for UI state, file scanning on startup
 - **Testing**: `rstest` for parameterized tests, `insta` for snapshot testing, `pretty_assertions`
@@ -76,9 +76,11 @@ src/
 ├── models/              # Core data structures
 │   ├── document.rs      # Document with ContentBlock enum (headings, lists, etc.)
 │   └── mod.rs
-├── parsing/             # Markdown processing
-│   ├── mod.rs           # pulldown-cmark integration, hierarchy building
-│   └── README.md        # Explains tree building challenges and solutions
+├── editing/             # Core editing model (ADR-0004)
+│   ├── document.rs      # xi-rope buffer + tree-sitter parsing
+│   ├── commands.rs      # Edit command compilation
+│   ├── anchors.rs       # Stable block identity system
+│   └── snapshot.rs      # UI-ready document view
 ├── io/                  # File system operations
 │   └── mod.rs           # File scanning, validation, reading
 ├── ui/                  # Dioxus components

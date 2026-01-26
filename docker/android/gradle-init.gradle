@@ -1,0 +1,24 @@
+// Gradle init script for Docker builds
+// Adds generated sources from /build and redirects build output
+
+allprojects {
+    // Redirect build directory to /build volume
+    buildDir = file("/build/android/${project.name}/build")
+}
+
+projectsEvaluated {
+    rootProject.subprojects { project ->
+        project.plugins.withId('com.android.application') {
+            project.android {
+                sourceSets {
+                    main {
+                        // Add generated jniLibs from /build
+                        jniLibs.srcDirs += '/build/jniLibs'
+                        // Add generated Kotlin sources from /build
+                        java.srcDirs += '/build/uniffi'
+                    }
+                }
+            }
+        }
+    }
+}
