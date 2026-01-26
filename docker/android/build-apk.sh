@@ -74,6 +74,7 @@ OUTPUT_DIR="$PROJECT_ROOT/build/android"
 # Named volumes for caching
 CARGO_CACHE_VOLUME="markdown-neuraxis-cargo-cache"
 GRADLE_CACHE_VOLUME="markdown-neuraxis-gradle-cache"
+BUILD_VOLUME="markdown-neuraxis-build"
 
 echo "Building Android APK for markdown-neuraxis (${BUILD_TYPE} mode)"
 echo "Project root: $PROJECT_ROOT"
@@ -81,7 +82,7 @@ echo "Project root: $PROJECT_ROOT"
 # Handle Docker image based on cache flag
 if [[ "$CACHE_FLAG" == "rebuild" ]]; then
     echo "Rebuilding Docker image and clearing caches..."
-    docker volume rm "$CARGO_CACHE_VOLUME" "$GRADLE_CACHE_VOLUME" 2>/dev/null || true
+    docker volume rm "$CARGO_CACHE_VOLUME" "$GRADLE_CACHE_VOLUME" "$BUILD_VOLUME" 2>/dev/null || true
     docker build -t "$DOCKER_IMAGE" -f "$PROJECT_ROOT/docker/android/Dockerfile" "$PROJECT_ROOT/docker/android"
 elif [[ "$CACHE_FLAG" == "cached" ]]; then
     if ! docker image inspect "$DOCKER_IMAGE" > /dev/null 2>&1; then
@@ -107,18 +108,24 @@ else
 fi
 
 # Run Docker container to build APK
-# Named volumes for caches (fast, isolated), bind mount for output
+# Source mounted read-only at /src to:
+#   1. Keep Docker build isolated - can't modify host files
+#   2. Prevent root-owned files leaking into the source tree
+# Build script creates /workspace with symlinks to source, allowing
+# Kotlin/Gradle to create .kotlin/, .gradle/ in writable space
 echo "Running build in Docker container..."
 docker run --rm \
     -e HOST_UID="$(id -u)" \
     -e HOST_GID="$(id -g)" \
+    -e CARGO_TARGET_DIR=/build/target \
     -v "$CARGO_CACHE_VOLUME:/root/.cargo" \
     -v "$GRADLE_CACHE_VOLUME:/root/.gradle" \
+    -v "$BUILD_VOLUME:/build" \
     -v "$OUTPUT_DIR:/output" \
-    -v "$PROJECT_ROOT:/workspace" \
+    -v "$PROJECT_ROOT:/src:ro" \
     -w /workspace \
     "$DOCKER_IMAGE" \
-    /workspace/docker/android/build-inside-container.sh "$GRADLE_TASK" "$APK_PATH" "$OUTPUT_APK"
+    /src/docker/android/build-inside-container.sh "$GRADLE_TASK" "$APK_PATH" "$OUTPUT_APK"
 
 if [ -f "$OUTPUT_DIR/$OUTPUT_APK" ]; then
     echo ""
