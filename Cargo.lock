@@ -2927,7 +2927,6 @@ name = "markdown-neuraxis-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "glob",
  "serde",
  "shellexpand",
  "tempfile",

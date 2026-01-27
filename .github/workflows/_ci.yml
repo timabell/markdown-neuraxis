@@ -84,7 +84,7 @@ jobs:
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             os: windows
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             os: macos
           - runner: macos-latest
@@ -221,6 +221,11 @@ jobs:
           version="${{ inputs.release_tag }}"
           version="${version#v}"
           sed -i "s/versionName = .*/versionName = \"$version\"/" android/app/build.gradle.kts
+
+      - name: Generate gradle wrapper
+        run: |
+          cd android
+          gradle wrapper --gradle-version 8.9
 
       - name: Build Android APK
         run: |

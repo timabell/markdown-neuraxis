@@ -109,8 +109,8 @@ mod tests {
 
         // Should not contain tilde anymore
         assert!(!path_str.starts_with('~'));
-        // Should contain the expected config file name
-        assert!(path_str.ends_with(".config/markdown-neuraxis/config.toml"));
+        // Should contain the expected config file name (cross-platform)
+        assert!(config_path.ends_with(Path::new(".config/markdown-neuraxis/config.toml")));
     }
 
     #[test]
