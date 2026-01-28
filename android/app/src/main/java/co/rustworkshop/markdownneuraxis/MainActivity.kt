@@ -17,7 +17,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.ui.theme.MarkdownNeuraxisTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
@@ -37,18 +44,21 @@ private const val TAG = "MarkdownNeuraxis"
 private const val PREFS_NAME = "markdown_neuraxis_prefs"
 private const val KEY_NOTES_URI = "notes_uri"
 private const val FILE_SCAN_BATCH_SIZE = 20
+private const val FILE_CACHE_NAME = "file_cache.txt"
 
 /**
- * Represents a node in the file tree - either a folder or a file
+ * Represents a node in the file tree - either a folder or a file.
+ * Stores relative path for cache persistence; DocumentFile resolved on demand.
  */
 sealed class FileTreeNode {
     abstract val name: String
     abstract val depth: Int
+    abstract val relativePath: String
 
     data class Folder(
         override val name: String,
         override val depth: Int,
-        val documentFile: DocumentFile,
+        override val relativePath: String,
         val children: MutableList<FileTreeNode> = mutableListOf(),
         var isExpanded: Boolean = false
     ) : FileTreeNode()
@@ -56,7 +66,8 @@ sealed class FileTreeNode {
     data class File(
         override val name: String,
         override val depth: Int,
-        val documentFile: DocumentFile
+        override val relativePath: String,
+        var documentFile: DocumentFile? = null // Resolved on demand
     ) : FileTreeNode()
 }
 
@@ -66,9 +77,36 @@ sealed class FileTreeNode {
 class FileTree {
     private val root: MutableList<FileTreeNode> = mutableListOf()
     private val folderMap: MutableMap<String, FileTreeNode.Folder> = mutableMapOf()
+    private val fileMap: MutableMap<String, FileTreeNode.File> = mutableMapOf()
 
+    /**
+     * Add a file from path segments only (for cache loading).
+     * DocumentFile will be null until resolved on demand.
+     */
+    fun addFilePath(pathSegments: List<String>) {
+        addFileInternal(pathSegments, null)
+    }
+
+    /**
+     * Add a file with its DocumentFile (from scanning).
+     */
     fun addFile(file: DocumentFile, pathSegments: List<String>) {
+        addFileInternal(pathSegments, file)
+    }
+
+    private fun addFileInternal(pathSegments: List<String>, documentFile: DocumentFile?) {
         if (pathSegments.isEmpty()) return
+
+        val relativePath = pathSegments.joinToString("/")
+
+        // Skip if already exists (cache may have it, scan will update)
+        if (fileMap.containsKey(relativePath)) {
+            // Update DocumentFile if we now have one
+            if (documentFile != null) {
+                fileMap[relativePath]?.documentFile = documentFile
+            }
+            return
+        }
 
         var currentChildren = root
         var currentDepth = 0
@@ -85,17 +123,12 @@ class FileTree {
                 val newFolder = FileTreeNode.Folder(
                     name = folderName,
                     depth = currentDepth,
-                    documentFile = file, // Will be replaced when we have actual folder DocumentFile
+                    relativePath = pathKey,
                     isExpanded = false // Start collapsed
                 )
                 folderMap[pathKey] = newFolder
                 currentChildren.add(newFolder)
-                currentChildren.sortBy { node ->
-                    when (node) {
-                        is FileTreeNode.Folder -> "0_${node.name.lowercase()}"
-                        is FileTreeNode.File -> "1_${node.name.lowercase()}"
-                    }
-                }
+                sortChildren(currentChildren)
                 currentChildren = newFolder.children
             }
             currentDepth++
@@ -106,10 +139,16 @@ class FileTree {
         val fileNode = FileTreeNode.File(
             name = fileName,
             depth = currentDepth,
-            documentFile = file
+            relativePath = relativePath,
+            documentFile = documentFile
         )
+        fileMap[relativePath] = fileNode
         currentChildren.add(fileNode)
-        currentChildren.sortBy { node ->
+        sortChildren(currentChildren)
+    }
+
+    private fun sortChildren(children: MutableList<FileTreeNode>) {
+        children.sortBy { node ->
             when (node) {
                 is FileTreeNode.Folder -> "0_${node.name.lowercase()}"
                 is FileTreeNode.File -> "1_${node.name.lowercase()}"
@@ -121,6 +160,71 @@ class FileTree {
 
     fun toggleFolder(folder: FileTreeNode.Folder) {
         folder.isExpanded = !folder.isExpanded
+    }
+
+    /**
+     * Get all file relative paths for cache saving.
+     */
+    fun getAllFilePaths(): List<String> = fileMap.keys.toList().sorted()
+
+    fun getFileCount(): Int = fileMap.size
+
+    /**
+     * Remove files that are no longer present (not in scannedPaths).
+     * Returns count of removed files.
+     */
+    fun removeStaleFiles(scannedPaths: Set<String>): Int {
+        val stalePaths = fileMap.keys.filter { it !in scannedPaths }
+        for (path in stalePaths) {
+            removeFile(path)
+        }
+        return stalePaths.size
+    }
+
+    private fun removeFile(relativePath: String) {
+        val fileNode = fileMap.remove(relativePath) ?: return
+
+        // Find and remove from parent's children
+        val segments = relativePath.split("/")
+        if (segments.size == 1) {
+            // Root level file
+            root.removeIf { it is FileTreeNode.File && it.relativePath == relativePath }
+        } else {
+            // Nested file - find parent folder
+            val parentPath = segments.dropLast(1).joinToString("/")
+            val parentFolder = folderMap[parentPath]
+            parentFolder?.children?.removeIf { it is FileTreeNode.File && it.relativePath == relativePath }
+
+            // Clean up empty folders
+            cleanupEmptyFolders()
+        }
+    }
+
+    private fun cleanupEmptyFolders() {
+        // Remove empty folders from deepest to shallowest
+        val foldersToRemove = mutableListOf<String>()
+        for ((path, folder) in folderMap) {
+            if (folder.children.isEmpty()) {
+                foldersToRemove.add(path)
+            }
+        }
+
+        for (path in foldersToRemove.sortedByDescending { it.count { c -> c == '/' } }) {
+            val folder = folderMap.remove(path) ?: continue
+            val segments = path.split("/")
+            if (segments.size == 1) {
+                root.removeIf { it is FileTreeNode.Folder && it.relativePath == path }
+            } else {
+                val parentPath = segments.dropLast(1).joinToString("/")
+                val parentFolder = folderMap[parentPath]
+                parentFolder?.children?.removeIf { it is FileTreeNode.Folder && it.relativePath == path }
+            }
+        }
+
+        // Recursively clean if we removed folders that made parent folders empty
+        if (foldersToRemove.isNotEmpty()) {
+            cleanupEmptyFolders()
+        }
     }
 
     fun getFlattenedList(): List<FileTreeNode> {
@@ -166,8 +270,17 @@ fun App() {
     var notesUri by remember { mutableStateOf(getValidNotesUri(context)) }
     var selectedFile by remember { mutableStateOf<DocumentFile?>(null) }
 
+    // Hoist discovery state to App level so it persists across navigation
+    var discoveryState by remember { mutableStateOf(FileDiscoveryState()) }
+    var treeVersion by remember { mutableIntStateOf(0) }
+    var hasScannedThisSession by remember { mutableStateOf(false) }
+
     when {
         notesUri == null -> {
+            // Reset state when folder changes
+            discoveryState = FileDiscoveryState()
+            hasScannedThisSession = false
+
             SetupScreen(
                 onFolderSelected = { uri ->
                     saveNotesUri(context, uri)
@@ -184,6 +297,12 @@ fun App() {
         else -> {
             FileListScreen(
                 notesUri = notesUri!!,
+                discoveryState = discoveryState,
+                onDiscoveryStateChange = { discoveryState = it },
+                treeVersion = treeVersion,
+                onTreeVersionIncrement = { treeVersion++ },
+                hasScannedThisSession = hasScannedThisSession,
+                onHasScannedChange = { hasScannedThisSession = it },
                 onFileSelected = { file -> selectedFile = file },
                 onChangeFolder = {
                     notesUri = null
@@ -245,35 +364,86 @@ fun SetupScreen(onFolderSelected: (Uri) -> Unit) {
 @Composable
 fun FileListScreen(
     notesUri: Uri,
+    discoveryState: FileDiscoveryState,
+    onDiscoveryStateChange: (FileDiscoveryState) -> Unit,
+    treeVersion: Int,
+    onTreeVersionIncrement: () -> Unit,
+    hasScannedThisSession: Boolean,
+    onHasScannedChange: (Boolean) -> Unit,
     onFileSelected: (DocumentFile) -> Unit,
     onChangeFolder: () -> Unit
 ) {
     val context = LocalContext.current
-    var discoveryState by remember { mutableStateOf(FileDiscoveryState()) }
-    // Force recomposition when tree structure changes
-    var treeVersion by remember { mutableIntStateOf(0) }
+    val coroutineScope = rememberCoroutineScope()
+    // Local state for live scanning count (updates immediately, unlike hoisted state)
+    var scanningFileCount by remember { mutableIntStateOf(0) }
 
-    // Progressive file scanning using LaunchedEffect
-    LaunchedEffect(notesUri) {
-        val tree = FileTree()
-        discoveryState = FileDiscoveryState(tree = tree, isScanning = true)
+    // Function to perform scan (used by initial load and pull-to-refresh)
+    // Adds new files and removes files that no longer exist
+    suspend fun performScan(isRefresh: Boolean) {
+        val tree = if (isRefresh) discoveryState.tree else FileTree()
+        val scannedPaths = mutableSetOf<String>()
+
+        scanningFileCount = 0
+        onDiscoveryStateChange(discoveryState.copy(tree = tree, isScanning = true))
+        onTreeVersionIncrement()
         try {
             scanMarkdownFilesProgressively(context, notesUri) { batch ->
                 for (fileWithPath in batch) {
+                    val path = fileWithPath.pathSegments.joinToString("/")
+                    scannedPaths.add(path)
                     tree.addFile(fileWithPath.file, fileWithPath.pathSegments)
                 }
-                discoveryState = discoveryState.copy(
-                    fileCount = discoveryState.fileCount + batch.size
-                )
-                treeVersion++
+                // Update local count with scanned count for responsive UI
+                scanningFileCount = scannedPaths.size
+                // Also update hoisted state
+                onDiscoveryStateChange(FileDiscoveryState(tree = tree, fileCount = tree.getFileCount(), isScanning = true))
+                onTreeVersionIncrement()
             }
-            discoveryState = discoveryState.copy(isScanning = false)
+
+            // Remove files that no longer exist
+            val removedCount = tree.removeStaleFiles(scannedPaths)
+            if (removedCount > 0) {
+                Log.d(TAG, "Removed $removedCount stale files")
+                onTreeVersionIncrement()
+            }
+
+            saveFileCache(context, tree.getAllFilePaths())
+            onDiscoveryStateChange(discoveryState.copy(tree = tree, fileCount = tree.getFileCount(), isScanning = false))
+            onHasScannedChange(true)
         } catch (e: Exception) {
             Log.e(TAG, "Error scanning files", e)
-            discoveryState = discoveryState.copy(
+            onDiscoveryStateChange(discoveryState.copy(
                 isScanning = false,
-                error = e.message ?: "Unknown error"
-            )
+                error = if (!isRefresh && discoveryState.fileCount == 0) e.message ?: "Unknown error" else null
+            ))
+        }
+    }
+
+    // Load cache only if tree is empty (first time entering this screen)
+    LaunchedEffect(Unit) {
+        // Skip if we already have data
+        if (discoveryState.fileCount > 0) {
+            Log.d(TAG, "Using existing tree with ${discoveryState.fileCount} files")
+            return@LaunchedEffect
+        }
+
+        val tree = FileTree()
+
+        // Load from cache instantly
+        val cachedPaths = loadFileCache(context)
+        if (cachedPaths.isNotEmpty()) {
+            for (path in cachedPaths) {
+                tree.addFilePath(path.split("/"))
+            }
+            onDiscoveryStateChange(FileDiscoveryState(tree = tree, fileCount = tree.getFileCount()))
+            onTreeVersionIncrement()
+            Log.d(TAG, "Loaded ${cachedPaths.size} files from cache")
+        }
+
+        // Only scan on first app startup (no cache) and never scanned this session
+        if (cachedPaths.isEmpty() && !hasScannedThisSession) {
+            performScan(isRefresh = false)
         }
     }
 
@@ -330,30 +500,77 @@ fun FileListScreen(
                     discoveryState.tree.getFlattenedList()
                 }
 
-                Box(modifier = Modifier.padding(padding)) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(flattenedNodes.size) { index ->
-                            val node = flattenedNodes[index]
-                            FileTreeNodeItem(
-                                node = node,
-                                onFileSelected = onFileSelected,
-                                onFolderToggle = {
-                                    discoveryState.tree.toggleFolder(it)
-                                    treeVersion++
-                                }
-                            )
+                // Pull-to-refresh with spring effect
+                val pullToRefreshState = rememberPullToRefreshState()
+                val pullProgress = pullToRefreshState.distanceFraction
+                // Track if scan was triggered - reset only when pull returns to idle
+                var scanTriggered by remember { mutableStateOf(false) }
+                if (pullProgress == 0f) {
+                    scanTriggered = false
+                }
+
+                PullToRefreshBox(
+                    isRefreshing = discoveryState.isScanning,
+                    onRefresh = {
+                        scanTriggered = true
+                        coroutineScope.launch {
+                            performScan(isRefresh = true)
+                        }
+                    },
+                    state = pullToRefreshState,
+                    modifier = Modifier.padding(padding),
+                    indicator = {
+                        // Show "Refresh" only while user is actively pulling (before scan triggers)
+                        if (pullProgress > 0f && !scanTriggered) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        alpha = pullProgress.coerceIn(0f, 1f)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Refresh",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Content moves down with pull (only before scan triggers)
+                        val translation = if (scanTriggered || pullProgress == 0f) 0f else pullProgress * 60f
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    translationY = translation.dp.toPx()
+                                }
+                        ) {
+                            items(flattenedNodes.size) { index ->
+                                val node = flattenedNodes[index]
+                                FileTreeNodeItem(
+                                    node = node,
+                                    notesUri = notesUri,
+                                    onFileSelected = onFileSelected,
+                                    onFolderToggle = {
+                                        discoveryState.tree.toggleFolder(it)
+                                        onTreeVersionIncrement()
+                                    }
+                                )
+                            }
+                        }
 
-                    // Status toast overlay in top-right
-                    if (discoveryState.isScanning) {
-                        StatusToast(
-                            message = "Scanning... ${discoveryState.fileCount} files",
-                            showProgress = true,
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        )
+                        // Status toast overlay in top-right
+                        if (discoveryState.isScanning) {
+                            StatusToast(
+                                message = "Scanning... $scanningFileCount files",
+                                showProgress = true,
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            )
+                        }
                     }
                 }
             }
@@ -364,9 +581,11 @@ fun FileListScreen(
 @Composable
 fun FileTreeNodeItem(
     node: FileTreeNode,
+    notesUri: Uri,
     onFileSelected: (DocumentFile) -> Unit,
     onFolderToggle: (FileTreeNode.Folder) -> Unit
 ) {
+    val context = LocalContext.current
     val indentPadding = (node.depth * 16).dp
 
     when (node) {
@@ -402,7 +621,17 @@ fun FileTreeNodeItem(
                     }
                 },
                 modifier = Modifier
-                    .clickable { onFileSelected(node.documentFile) }
+                    .clickable {
+                        // Resolve DocumentFile on demand if not already cached
+                        val docFile = node.documentFile
+                            ?: resolveDocumentFile(context, notesUri, node.relativePath)
+                        if (docFile != null) {
+                            node.documentFile = docFile // Cache for next time
+                            onFileSelected(docFile)
+                        } else {
+                            Log.e(TAG, "Could not resolve file: ${node.relativePath}")
+                        }
+                    }
                     .padding(start = indentPadding)
             )
         }
@@ -680,6 +909,52 @@ private fun getValidNotesUri(context: Context): Uri? {
 private fun saveNotesUri(context: Context, uri: Uri) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     prefs.edit().putString(KEY_NOTES_URI, uri.toString()).apply()
+}
+
+/**
+ * Load cached file paths from app storage.
+ * Returns empty list if no cache exists.
+ */
+private fun loadFileCache(context: Context): List<String> {
+    val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
+    return if (cacheFile.exists()) {
+        try {
+            cacheFile.readLines().filter { it.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error loading file cache", e)
+            emptyList()
+        }
+    } else {
+        emptyList()
+    }
+}
+
+/**
+ * Save file paths to cache in app storage.
+ */
+private fun saveFileCache(context: Context, paths: List<String>) {
+    val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
+    try {
+        cacheFile.writeText(paths.joinToString("\n"))
+        Log.d(TAG, "Saved ${paths.size} paths to cache")
+    } catch (e: Exception) {
+        Log.e(TAG, "Error saving file cache", e)
+    }
+}
+
+/**
+ * Resolve a relative path to a DocumentFile by navigating from the root folder.
+ */
+private fun resolveDocumentFile(context: Context, notesUri: Uri, relativePath: String): DocumentFile? {
+    val rootFolder = DocumentFile.fromTreeUri(context, notesUri) ?: return null
+    val segments = relativePath.split("/")
+
+    var current: DocumentFile? = rootFolder
+    for (segment in segments) {
+        current = current?.findFile(segment)
+        if (current == null) break
+    }
+    return current
 }
 
 private fun readFileContent(context: Context, file: DocumentFile): String? {
