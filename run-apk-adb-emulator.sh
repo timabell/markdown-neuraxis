@@ -1,10 +1,9 @@
 #!/bin/bash
-# Build, install, and run on emulator via adb
+# Install and run on emulator via adb
 set -e
 
-./build-android.sh
-
 echo "Installing via adb..."
+# build with ./build-android.sh to create this file
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 echo "Starting app..."
