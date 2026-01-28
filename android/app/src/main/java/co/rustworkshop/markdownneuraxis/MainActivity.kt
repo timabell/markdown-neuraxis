@@ -27,12 +27,126 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.ui.theme.MarkdownNeuraxisTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
 import uniffi.markdown_neuraxis_ffi.RenderBlockDto
 
 private const val TAG = "MarkdownNeuraxis"
 private const val PREFS_NAME = "markdown_neuraxis_prefs"
 private const val KEY_NOTES_URI = "notes_uri"
+private const val FILE_SCAN_BATCH_SIZE = 20
+
+/**
+ * Represents a node in the file tree - either a folder or a file
+ */
+sealed class FileTreeNode {
+    abstract val name: String
+    abstract val depth: Int
+
+    data class Folder(
+        override val name: String,
+        override val depth: Int,
+        val documentFile: DocumentFile,
+        val children: MutableList<FileTreeNode> = mutableListOf(),
+        var isExpanded: Boolean = false
+    ) : FileTreeNode()
+
+    data class File(
+        override val name: String,
+        override val depth: Int,
+        val documentFile: DocumentFile
+    ) : FileTreeNode()
+}
+
+/**
+ * Manages the file tree structure for progressive loading
+ */
+class FileTree {
+    private val root: MutableList<FileTreeNode> = mutableListOf()
+    private val folderMap: MutableMap<String, FileTreeNode.Folder> = mutableMapOf()
+
+    fun addFile(file: DocumentFile, pathSegments: List<String>) {
+        if (pathSegments.isEmpty()) return
+
+        var currentChildren = root
+        var currentDepth = 0
+
+        // Navigate/create folders for all but the last segment
+        for (i in 0 until pathSegments.size - 1) {
+            val folderName = pathSegments[i]
+            val pathKey = pathSegments.subList(0, i + 1).joinToString("/")
+
+            val existingFolder = folderMap[pathKey]
+            if (existingFolder != null) {
+                currentChildren = existingFolder.children
+            } else {
+                val newFolder = FileTreeNode.Folder(
+                    name = folderName,
+                    depth = currentDepth,
+                    documentFile = file, // Will be replaced when we have actual folder DocumentFile
+                    isExpanded = false // Start collapsed
+                )
+                folderMap[pathKey] = newFolder
+                currentChildren.add(newFolder)
+                currentChildren.sortBy { node ->
+                    when (node) {
+                        is FileTreeNode.Folder -> "0_${node.name.lowercase()}"
+                        is FileTreeNode.File -> "1_${node.name.lowercase()}"
+                    }
+                }
+                currentChildren = newFolder.children
+            }
+            currentDepth++
+        }
+
+        // Add the file
+        val fileName = pathSegments.last()
+        val fileNode = FileTreeNode.File(
+            name = fileName,
+            depth = currentDepth,
+            documentFile = file
+        )
+        currentChildren.add(fileNode)
+        currentChildren.sortBy { node ->
+            when (node) {
+                is FileTreeNode.Folder -> "0_${node.name.lowercase()}"
+                is FileTreeNode.File -> "1_${node.name.lowercase()}"
+            }
+        }
+    }
+
+    fun getRootNodes(): List<FileTreeNode> = root.toList()
+
+    fun toggleFolder(folder: FileTreeNode.Folder) {
+        folder.isExpanded = !folder.isExpanded
+    }
+
+    fun getFlattenedList(): List<FileTreeNode> {
+        val result = mutableListOf<FileTreeNode>()
+        fun flatten(nodes: List<FileTreeNode>) {
+            for (node in nodes) {
+                result.add(node)
+                if (node is FileTreeNode.Folder && node.isExpanded) {
+                    flatten(node.children)
+                }
+            }
+        }
+        flatten(root)
+        return result
+    }
+}
+
+/**
+ * State for progressive file discovery
+ */
+data class FileDiscoveryState(
+    val tree: FileTree = FileTree(),
+    val fileCount: Int = 0,
+    val isScanning: Boolean = false,
+    val error: String? = null
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -135,9 +249,32 @@ fun FileListScreen(
     onChangeFolder: () -> Unit
 ) {
     val context = LocalContext.current
-    // Note: Only lists files in the root folder, not recursively in subfolders
-    val files = remember(notesUri) {
-        listMarkdownFiles(context, notesUri)
+    var discoveryState by remember { mutableStateOf(FileDiscoveryState()) }
+    // Force recomposition when tree structure changes
+    var treeVersion by remember { mutableIntStateOf(0) }
+
+    // Progressive file scanning using LaunchedEffect
+    LaunchedEffect(notesUri) {
+        val tree = FileTree()
+        discoveryState = FileDiscoveryState(tree = tree, isScanning = true)
+        try {
+            scanMarkdownFilesProgressively(context, notesUri) { batch ->
+                for (fileWithPath in batch) {
+                    tree.addFile(fileWithPath.file, fileWithPath.pathSegments)
+                }
+                discoveryState = discoveryState.copy(
+                    fileCount = discoveryState.fileCount + batch.size
+                )
+                treeVersion++
+            }
+            discoveryState = discoveryState.copy(isScanning = false)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error scanning files", e)
+            discoveryState = discoveryState.copy(
+                isScanning = false,
+                error = e.message ?: "Unknown error"
+            )
+        }
     }
 
     Scaffold(
@@ -152,27 +289,159 @@ fun FileListScreen(
             )
         }
     ) { padding ->
-        if (files.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No markdown files found in root folder")
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.padding(padding)
-            ) {
-                items(files) { file ->
-                    ListItem(
-                        headlineContent = { Text(file.name ?: "Unknown") },
-                        modifier = Modifier.clickable { onFileSelected(file) }
-                    )
-                    HorizontalDivider()
+        when {
+            discoveryState.error != null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Error: ${discoveryState.error}")
                 }
             }
+            discoveryState.isScanning && discoveryState.fileCount == 0 -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Scanning for markdown files...")
+                    }
+                }
+            }
+            !discoveryState.isScanning && discoveryState.fileCount == 0 -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No markdown files found")
+                }
+            }
+            else -> {
+                // Use treeVersion to force recomposition when tree changes
+                val flattenedNodes = remember(treeVersion) {
+                    discoveryState.tree.getFlattenedList()
+                }
+
+                Box(modifier = Modifier.padding(padding)) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(flattenedNodes.size) { index ->
+                            val node = flattenedNodes[index]
+                            FileTreeNodeItem(
+                                node = node,
+                                onFileSelected = onFileSelected,
+                                onFolderToggle = {
+                                    discoveryState.tree.toggleFolder(it)
+                                    treeVersion++
+                                }
+                            )
+                        }
+                    }
+
+                    // Status toast overlay in top-right
+                    if (discoveryState.isScanning) {
+                        StatusToast(
+                            message = "Scanning... ${discoveryState.fileCount} files",
+                            showProgress = true,
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FileTreeNodeItem(
+    node: FileTreeNode,
+    onFileSelected: (DocumentFile) -> Unit,
+    onFolderToggle: (FileTreeNode.Folder) -> Unit
+) {
+    val indentPadding = (node.depth * 16).dp
+
+    when (node) {
+        is FileTreeNode.Folder -> {
+            ListItem(
+                headlineContent = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (node.isExpanded) "▼" else "▶",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.width(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = node.name,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .clickable { onFolderToggle(node) }
+                    .padding(start = indentPadding)
+            )
+        }
+        is FileTreeNode.File -> {
+            ListItem(
+                headlineContent = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(modifier = Modifier.width(20.dp))
+                        Text(node.name)
+                    }
+                },
+                modifier = Modifier
+                    .clickable { onFileSelected(node.documentFile) }
+                    .padding(start = indentPadding)
+            )
+        }
+    }
+    HorizontalDivider()
+}
+
+/**
+ * Reusable status toast overlay for showing transient status messages.
+ * Appears as a small pill in the corner without affecting layout.
+ */
+@Composable
+fun StatusToast(
+    message: String,
+    modifier: Modifier = Modifier,
+    showProgress: Boolean = false
+) {
+    Surface(
+        modifier = modifier.padding(8.dp),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 2.dp,
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (showProgress) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }
@@ -326,6 +595,65 @@ fun RenderBlock(block: RenderBlockDto) {
 // ============ Helper Functions ============
 
 /**
+ * Data class to hold file with its path segments for tree building
+ */
+data class FileWithPath(
+    val file: DocumentFile,
+    val pathSegments: List<String>
+)
+
+/**
+ * Progressively scan for markdown files, calling onBatch for each batch of files found.
+ * This allows the UI to update as files are discovered rather than waiting for the full scan.
+ */
+private suspend fun scanMarkdownFilesProgressively(
+    context: Context,
+    folderUri: Uri,
+    onBatch: (List<FileWithPath>) -> Unit
+) {
+    withContext(Dispatchers.IO) {
+        val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext
+        val batch = mutableListOf<FileWithPath>()
+        // Wrap callback to ensure UI updates happen on main thread
+        val mainThreadCallback: suspend (List<FileWithPath>) -> Unit = { files ->
+            withContext(Dispatchers.Main) {
+                onBatch(files)
+            }
+        }
+        scanFolderRecursively(folder, emptyList(), batch, mainThreadCallback)
+        // Emit any remaining files in the final batch
+        if (batch.isNotEmpty()) {
+            mainThreadCallback(batch.toList())
+        }
+    }
+}
+
+/**
+ * Recursively scan a folder for markdown files, emitting batches as they're found.
+ */
+private suspend fun scanFolderRecursively(
+    folder: DocumentFile,
+    pathPrefix: List<String>,
+    batch: MutableList<FileWithPath>,
+    onBatch: suspend (List<FileWithPath>) -> Unit
+) {
+    for (file in folder.listFiles().orEmpty()) {
+        if (file.isDirectory) {
+            val folderName = file.name ?: continue
+            scanFolderRecursively(file, pathPrefix + folderName, batch, onBatch)
+        } else if (file.name?.endsWith(".md") == true) {
+            val fileName = file.name ?: continue
+            batch.add(FileWithPath(file, pathPrefix + fileName))
+            if (batch.size >= FILE_SCAN_BATCH_SIZE) {
+                onBatch(batch.toList())
+                batch.clear()
+                yield() // Allow UI thread to process updates
+            }
+        }
+    }
+}
+
+/**
  * Get the saved notes URI if it exists and the permission is still valid.
  * Returns null if no URI saved or permission was revoked.
  */
@@ -352,13 +680,6 @@ private fun getValidNotesUri(context: Context): Uri? {
 private fun saveNotesUri(context: Context, uri: Uri) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     prefs.edit().putString(KEY_NOTES_URI, uri.toString()).apply()
-}
-
-private fun listMarkdownFiles(context: Context, folderUri: Uri): List<DocumentFile> {
-    val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return emptyList()
-    return folder.listFiles()
-        .filter { it.isFile && it.name?.endsWith(".md") == true }
-        .sortedBy { it.name }
 }
 
 private fun readFileContent(context: Context, file: DocumentFile): String? {
