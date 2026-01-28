@@ -69,3 +69,60 @@ Following the outside-in testing approach outlined in `design.md`:
 - Integration tests for all user-facing features
 - Unit tests for internal modules and functions
 - No feature delivery without passing tests
+
+## Conventional Commits
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for changelog generation via [git-cliff](https://git-cliff.org/).
+
+**Not every commit needs a conventional prefix.** Only use prefixes for changes that should appear in release notes. A branch or PR only needs one conventional commit per user-facing change. Commits without prefixes ("unconventional commits") are filtered out of the changelog - use these freely for work-in-progress, refactoring steps, or internal changes that don't warrant a release note.
+
+### Format
+
+```
+type(scope): description
+
+[optional body]
+
+[optional footer]
+```
+
+### Types
+
+- `feat` - New features
+- `fix` - Bug fixes
+- `refactor` - Code refactoring
+- `perf` - Performance improvements
+- `doc` - Documentation changes
+- `style` - Code style/formatting
+- `chore` - Maintenance tasks
+- `security` - Security fixes
+
+### Scopes
+
+Use scopes to indicate which component is affected:
+
+- `android` - Android app (`android/`)
+- `desktop` - Desktop app (Dioxus)
+- `cli` - CLI tool (`crates/markdown-neuraxis-cli/`)
+- `engine` - Core engine (`crates/markdown-neuraxis-engine/`)
+- No scope - Core/cross-cutting changes
+
+### Examples
+
+```
+feat(android): Add progressive file loading
+fix(cli): Handle missing file gracefully
+refactor(engine): Simplify markdown parser
+feat: Add FileModel for workspace support
+```
+
+### Changelog Generation
+
+Release notes are generated from conventional commits using git-cliff. Configuration is in [.github/cliff.toml](../.github/cliff.toml).
+
+Commits are grouped by scope (Android, Desktop, Cli, Core) then by type (Features, Bug Fixes, etc.).
+
+To generate a changelog:
+```bash
+git cliff --unreleased
+```
