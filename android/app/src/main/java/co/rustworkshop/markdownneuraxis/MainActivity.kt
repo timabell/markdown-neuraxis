@@ -1,6 +1,7 @@
 package co.rustworkshop.markdownneuraxis
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -14,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FolderOpen
@@ -28,8 +30,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.ui.theme.MarkdownNeuraxisTheme
@@ -39,6 +47,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
 import uniffi.markdown_neuraxis_ffi.RenderBlockDto
+import uniffi.markdown_neuraxis_ffi.TextSegmentDto
 
 private const val TAG = "MarkdownNeuraxis"
 private const val PREFS_NAME = "markdown_neuraxis_prefs"
@@ -741,6 +750,89 @@ fun FileViewScreen(
     }
 }
 
+/**
+ * Build an AnnotatedString from segments with styled/clickable links.
+ * Returns a pair of (AnnotatedString, list of URL annotations for click handling).
+ */
+@Composable
+fun buildSegmentedText(
+    segments: List<TextSegmentDto>,
+    baseStyle: TextStyle = LocalTextStyle.current
+): AnnotatedString {
+    val linkColor = MaterialTheme.colorScheme.primary
+
+    return buildAnnotatedString {
+        for (segment in segments) {
+            when (segment.kind) {
+                "text" -> append(segment.content)
+                "wiki_link" -> {
+                    // Style wiki-links with brackets and link color
+                    pushStringAnnotation(tag = "wiki_link", annotation = segment.content)
+                    withStyle(SpanStyle(color = linkColor)) {
+                        append("[[${segment.content}]]")
+                    }
+                    pop()
+                }
+                "url" -> {
+                    // Style URLs with link color and underline
+                    pushStringAnnotation(tag = "url", annotation = segment.content)
+                    withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
+                        append(segment.content)
+                    }
+                    pop()
+                }
+                else -> append(segment.content)
+            }
+        }
+    }
+}
+
+/**
+ * Render inline segments as clickable text with styled links.
+ * Falls back to plain content if segments are empty.
+ */
+@Composable
+fun RenderSegments(
+    segments: List<TextSegmentDto>,
+    content: String,
+    style: TextStyle = LocalTextStyle.current,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    // Fall back to plain text if no segments
+    if (segments.isEmpty()) {
+        Text(text = content, style = style, modifier = modifier)
+        return
+    }
+
+    val annotatedText = buildSegmentedText(segments, style)
+
+    ClickableText(
+        text = annotatedText,
+        style = style,
+        modifier = modifier,
+        onClick = { offset ->
+            // Check for URL clicks
+            annotatedText.getStringAnnotations(tag = "url", start = offset, end = offset)
+                .firstOrNull()?.let { annotation ->
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error opening URL: ${annotation.item}", e)
+                    }
+                }
+            // Wiki-links could be handled here in the future for navigation
+            annotatedText.getStringAnnotations(tag = "wiki_link", start = offset, end = offset)
+                .firstOrNull()?.let { annotation ->
+                    Log.d(TAG, "Wiki-link clicked: ${annotation.item}")
+                    // TODO: Navigate to wiki page when navigation is implemented
+                }
+        }
+    )
+}
+
 @Composable
 fun RenderBlock(block: RenderBlockDto) {
     val indent = (block.depth.toInt() * 16).dp
@@ -755,10 +847,10 @@ fun RenderBlock(block: RenderBlockDto) {
                 5 -> MaterialTheme.typography.titleMedium
                 else -> MaterialTheme.typography.titleSmall
             }
-            Text(
-                text = block.content,
-                style = style,
-                fontWeight = FontWeight.Bold,
+            RenderSegments(
+                segments = block.segments,
+                content = block.content,
+                style = style.copy(fontWeight = FontWeight.Bold),
                 modifier = Modifier.padding(vertical = 8.dp)
             )
         }
@@ -768,12 +860,16 @@ fun RenderBlock(block: RenderBlockDto) {
                     text = block.listMarker ?: "-",
                     modifier = Modifier.width(24.dp)
                 )
-                Text(text = block.content)
+                RenderSegments(
+                    segments = block.segments,
+                    content = block.content
+                )
             }
         }
         "paragraph" -> {
-            Text(
-                text = block.content,
+            RenderSegments(
+                segments = block.segments,
+                content = block.content,
                 modifier = Modifier.padding(vertical = 4.dp)
             )
         }
@@ -800,11 +896,10 @@ fun RenderBlock(block: RenderBlockDto) {
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
             ) {
-                Text(
-                    text = block.content,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Light
-                    ),
+                RenderSegments(
+                    segments = block.segments,
+                    content = block.content,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
                 )
             }
