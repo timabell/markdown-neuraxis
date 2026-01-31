@@ -3,6 +3,7 @@ package co.rustworkshop.markdownneuraxis
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -392,7 +393,11 @@ fun FileListScreen(
                 for (fileWithPath in batch) {
                     val path = fileWithPath.pathSegments.joinToString("/")
                     scannedPaths.add(path)
-                    tree.addFile(fileWithPath.file, fileWithPath.pathSegments)
+                    if (fileWithPath.file != null) {
+                        tree.addFile(fileWithPath.file, fileWithPath.pathSegments)
+                    } else {
+                        tree.addFilePath(fileWithPath.pathSegments)
+                    }
                 }
                 // Update local count with scanned count for responsive UI
                 scanningFileCount = scannedPaths.size
@@ -824,16 +829,19 @@ fun RenderBlock(block: RenderBlockDto) {
 // ============ Helper Functions ============
 
 /**
- * Data class to hold file with its path segments for tree building
+ * Data class to hold file path segments for tree building.
+ * DocumentFile is no longer resolved during scanning for performance;
+ * it is resolved on demand when the user clicks a file.
  */
 data class FileWithPath(
-    val file: DocumentFile,
+    val file: DocumentFile?,
     val pathSegments: List<String>
 )
 
 /**
  * Progressively scan for markdown files, calling onBatch for each batch of files found.
- * This allows the UI to update as files are discovered rather than waiting for the full scan.
+ * Uses DocumentsContract + ContentResolver.query() directly instead of DocumentFile.listFiles()
+ * for dramatically better performance (single cursor query per folder vs N+1 queries).
  */
 private suspend fun scanMarkdownFilesProgressively(
     context: Context,
@@ -841,16 +849,14 @@ private suspend fun scanMarkdownFilesProgressively(
     onBatch: (List<FileWithPath>) -> Unit
 ) {
     withContext(Dispatchers.IO) {
-        val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext
+        val rootDocId = DocumentsContract.getTreeDocumentId(folderUri)
         val batch = mutableListOf<FileWithPath>()
-        // Wrap callback to ensure UI updates happen on main thread
         val mainThreadCallback: suspend (List<FileWithPath>) -> Unit = { files ->
             withContext(Dispatchers.Main) {
                 onBatch(files)
             }
         }
-        scanFolderRecursively(folder, emptyList(), batch, mainThreadCallback)
-        // Emit any remaining files in the final batch
+        scanFolderRecursively(context, folderUri, rootDocId, emptyList(), batch, mainThreadCallback)
         if (batch.isNotEmpty()) {
             mainThreadCallback(batch.toList())
         }
@@ -858,25 +864,50 @@ private suspend fun scanMarkdownFilesProgressively(
 }
 
 /**
- * Recursively scan a folder for markdown files, emitting batches as they're found.
+ * Recursively scan a folder for markdown files using DocumentsContract for fast
+ * cursor-based directory listing. Each folder is a single ContentResolver query
+ * instead of creating individual DocumentFile objects per child.
  */
 private suspend fun scanFolderRecursively(
-    folder: DocumentFile,
+    context: Context,
+    treeUri: Uri,
+    parentDocId: String,
     pathPrefix: List<String>,
     batch: MutableList<FileWithPath>,
     onBatch: suspend (List<FileWithPath>) -> Unit
 ) {
-    for (file in folder.listFiles().orEmpty()) {
-        if (file.isDirectory) {
-            val folderName = file.name ?: continue
-            scanFolderRecursively(file, pathPrefix + folderName, batch, onBatch)
-        } else if (file.name?.endsWith(".md") == true) {
-            val fileName = file.name ?: continue
-            batch.add(FileWithPath(file, pathPrefix + fileName))
-            if (batch.size >= FILE_SCAN_BATCH_SIZE) {
-                onBatch(batch.toList())
-                batch.clear()
-                yield() // Allow UI thread to process updates
+    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+    val projection = arrayOf(
+        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+        DocumentsContract.Document.COLUMN_MIME_TYPE
+    )
+
+    val cursor = context.contentResolver.query(childrenUri, projection, null, null, null)
+    if (cursor == null) {
+        Log.w(TAG, "ContentResolver query returned null for: $childrenUri")
+        return
+    }
+
+    cursor.use {
+        val idIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+        val nameIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+        val mimeIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+
+        while (it.moveToNext()) {
+            val docId = it.getString(idIndex) ?: continue
+            val name = it.getString(nameIndex) ?: continue
+            val mimeType = it.getString(mimeIndex) ?: ""
+
+            if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                scanFolderRecursively(context, treeUri, docId, pathPrefix + name, batch, onBatch)
+            } else if (name.endsWith(".md")) {
+                batch.add(FileWithPath(null, pathPrefix + name))
+                if (batch.size >= FILE_SCAN_BATCH_SIZE) {
+                    onBatch(batch.toList())
+                    batch.clear()
+                    yield()
+                }
             }
         }
     }
@@ -944,17 +975,35 @@ private fun saveFileCache(context: Context, paths: List<String>) {
 
 /**
  * Resolve a relative path to a DocumentFile by navigating from the root folder.
+ * Uses DocumentsContract queries for fast lookup instead of DocumentFile.findFile()
+ * which does a full directory listing per path segment.
  */
 private fun resolveDocumentFile(context: Context, notesUri: Uri, relativePath: String): DocumentFile? {
-    val rootFolder = DocumentFile.fromTreeUri(context, notesUri) ?: return null
     val segments = relativePath.split("/")
+    var currentDocId = DocumentsContract.getTreeDocumentId(notesUri)
 
-    var current: DocumentFile? = rootFolder
     for (segment in segments) {
-        current = current?.findFile(segment)
-        if (current == null) break
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(notesUri, currentDocId)
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME
+        )
+        var foundId: String? = null
+        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == segment) {
+                    foundId = cursor.getString(idIndex)
+                    break
+                }
+            }
+        }
+        currentDocId = foundId ?: return null
     }
-    return current
+
+    val docUri = DocumentsContract.buildDocumentUriUsingTree(notesUri, currentDocId)
+    return DocumentFile.fromSingleUri(context, docUri)
 }
 
 private fun readFileContent(context: Context, file: DocumentFile): String? {
