@@ -6,6 +6,9 @@ import android.provider.DocumentsContract
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 
@@ -35,30 +38,25 @@ suspend fun scanMarkdownFilesProgressively(
 ) {
     withContext(Dispatchers.IO) {
         val rootDocId = DocumentsContract.getTreeDocumentId(folderUri)
-        val batch = mutableListOf<FileWithPath>()
         val mainThreadCallback: suspend (List<FileWithPath>) -> Unit = { files ->
             withContext(Dispatchers.Main) {
                 onBatch(files)
             }
         }
-        scanFolderRecursively(context, folderUri, rootDocId, emptyList(), batch, mainThreadCallback)
-        if (batch.isNotEmpty()) {
-            mainThreadCallback(batch.toList())
-        }
+        scanFolderRecursively(context, folderUri, rootDocId, emptyList(), mainThreadCallback)
     }
 }
 
 /**
  * Recursively scan a folder for markdown files using DocumentsContract for fast
- * cursor-based directory listing. Each folder is a single ContentResolver query
- * instead of creating individual DocumentFile objects per child.
+ * cursor-based directory listing. Sibling subfolders are scanned in parallel
+ * using coroutines, so IPC latency is overlapped across branches of the tree.
  */
 private suspend fun scanFolderRecursively(
     context: Context,
     treeUri: Uri,
     parentDocId: String,
     pathPrefix: List<String>,
-    batch: MutableList<FileWithPath>,
     onBatch: suspend (List<FileWithPath>) -> Unit
 ) {
     val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
@@ -74,6 +72,9 @@ private suspend fun scanFolderRecursively(
         return
     }
 
+    val subfolders = mutableListOf<Pair<String, String>>() // docId to name
+    val fileBatch = mutableListOf<FileWithPath>()
+
     cursor.use {
         val idIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
         val nameIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
@@ -85,15 +86,31 @@ private suspend fun scanFolderRecursively(
             val mimeType = it.getString(mimeIndex) ?: ""
 
             if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
-                scanFolderRecursively(context, treeUri, docId, pathPrefix + name, batch, onBatch)
+                subfolders.add(docId to name)
             } else if (name.endsWith(".md")) {
-                batch.add(FileWithPath(null, pathPrefix + name))
-                if (batch.size >= FILE_SCAN_BATCH_SIZE) {
-                    onBatch(batch.toList())
-                    batch.clear()
+                fileBatch.add(FileWithPath(null, pathPrefix + name))
+                if (fileBatch.size >= FILE_SCAN_BATCH_SIZE) {
+                    onBatch(fileBatch.toList())
+                    fileBatch.clear()
                     yield()
                 }
             }
+        }
+    }
+
+    // Emit remaining files from this folder
+    if (fileBatch.isNotEmpty()) {
+        onBatch(fileBatch.toList())
+    }
+
+    // Scan subfolders in parallel
+    if (subfolders.isNotEmpty()) {
+        coroutineScope {
+            subfolders.map { (docId, name) ->
+                async {
+                    scanFolderRecursively(context, treeUri, docId, pathPrefix + name, onBatch)
+                }
+            }.awaitAll()
         }
     }
 }
