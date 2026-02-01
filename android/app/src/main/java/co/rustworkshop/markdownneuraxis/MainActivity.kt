@@ -1,5 +1,6 @@
 package co.rustworkshop.markdownneuraxis
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,7 +53,10 @@ fun App() {
         selectedFile != null -> {
             FileViewScreen(
                 file = selectedFile!!,
-                onBack = { selectedFile = null }
+                fileTree = discoveryState.tree,
+                notesUri = notesUri!!,
+                onBack = { selectedFile = null },
+                onNavigateToFile = { file -> selectedFile = file }
             )
         }
         else -> {
