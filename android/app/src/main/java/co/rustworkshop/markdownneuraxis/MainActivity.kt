@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.documentfile.provider.DocumentFile
+import co.rustworkshop.markdownneuraxis.io.clearFileCache
 import co.rustworkshop.markdownneuraxis.io.getValidNotesUri
 import co.rustworkshop.markdownneuraxis.io.saveNotesUri
 import co.rustworkshop.markdownneuraxis.model.FileDiscoveryState
@@ -47,6 +48,7 @@ fun App() {
             SetupScreen(
                 onFolderSelected = { uri ->
                     previousUri = null
+                    clearFileCache(context)
                     saveNotesUri(context, uri)
                     notesUri = uri
                 },

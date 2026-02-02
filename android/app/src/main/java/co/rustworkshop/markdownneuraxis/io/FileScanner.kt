@@ -173,6 +173,11 @@ fun loadFileCache(context: Context): List<String> {
     }
 }
 
+fun clearFileCache(context: Context) {
+    val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
+    cacheFile.delete()
+}
+
 fun saveFileCache(context: Context, paths: List<String>) {
     val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
     try {
