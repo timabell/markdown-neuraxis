@@ -63,7 +63,7 @@ fun App() {
         when {
             drawerState.isOpen -> scope.launch { drawerState.close() }
             hasMissing -> missingFileName = null
-            hasFile -> fileStack.removeLast()
+            hasFile -> fileStack.removeAt(fileStack.lastIndex)
         }
     }
 
@@ -95,7 +95,7 @@ fun App() {
                     hasFile -> TopAppBar(
                         title = { Text(fileStack.last().name ?: "File") },
                         navigationIcon = {
-                            IconButton(onClick = { fileStack.removeLast() }) {
+                            IconButton(onClick = { fileStack.removeAt(fileStack.lastIndex) }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
                         }

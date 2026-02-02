@@ -1,8 +1,12 @@
-#!/bin/sh -v
+#!/bin/bash -v
 set -e # exit on error
 cargo fmt
 ./clippy-harsh.sh
 cargo deny check licenses
+
+# Android lint
+source ./set-android-envs.sh
+(cd android && ./gradlew lint)
 
 # Check YAML files in .github
 if command -v yamllint >/dev/null 2>&1; then
