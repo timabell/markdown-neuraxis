@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
 fun App() {
     val context = LocalContext.current
     var notesUri by remember { mutableStateOf(getValidNotesUri(context)) }
-    var selectedFile by remember { mutableStateOf<DocumentFile?>(null) }
+    val fileStack = remember { mutableStateListOf<DocumentFile>() }
     var missingFileName by remember { mutableStateOf<String?>(null) }
     var previousUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -65,13 +65,13 @@ fun App() {
                 onBack = { missingFileName = null }
             )
         }
-        selectedFile != null -> {
+        fileStack.isNotEmpty() -> {
             FileViewScreen(
-                file = selectedFile!!,
+                file = fileStack.last(),
                 fileTree = discoveryState.tree,
                 notesUri = notesUri!!,
-                onBack = { selectedFile = null },
-                onNavigateToFile = { file -> selectedFile = file },
+                onBack = { fileStack.removeLast() },
+                onNavigateToFile = { file -> fileStack.add(file) },
                 onMissingFile = { name -> missingFileName = name }
             )
         }
@@ -84,7 +84,7 @@ fun App() {
                 onTreeVersionIncrement = { treeVersion++ },
                 hasScannedThisSession = hasScannedThisSession,
                 onHasScannedChange = { hasScannedThisSession = it },
-                onFileSelected = { file -> selectedFile = file },
+                onFileSelected = { file -> fileStack.add(file) },
                 onChangeFolder = {
                     previousUri = notesUri
                     notesUri = null
