@@ -40,7 +40,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    lint {
+        // Generated UniFFI bindings use APIs not available at minSdk — safe at runtime via JNA
+        lintConfig = file("lint.xml")
+    }
 }
+
 
 dependencies {
     implementation(libs.androidx.core.ktx)
