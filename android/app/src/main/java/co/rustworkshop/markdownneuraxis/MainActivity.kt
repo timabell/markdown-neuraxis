@@ -33,6 +33,7 @@ fun App() {
     val context = LocalContext.current
     var notesUri by remember { mutableStateOf(getValidNotesUri(context)) }
     var selectedFile by remember { mutableStateOf<DocumentFile?>(null) }
+    var previousUri by remember { mutableStateOf<Uri?>(null) }
 
     var discoveryState by remember { mutableStateOf(FileDiscoveryState()) }
     var treeVersion by remember { mutableIntStateOf(0) }
@@ -45,8 +46,12 @@ fun App() {
 
             SetupScreen(
                 onFolderSelected = { uri ->
+                    previousUri = null
                     saveNotesUri(context, uri)
                     notesUri = uri
+                },
+                onCancel = previousUri?.let {
+                    { notesUri = it; previousUri = null }
                 }
             )
         }
@@ -70,6 +75,7 @@ fun App() {
                 onHasScannedChange = { hasScannedThisSession = it },
                 onFileSelected = { file -> selectedFile = file },
                 onChangeFolder = {
+                    previousUri = notesUri
                     notesUri = null
                 }
             )

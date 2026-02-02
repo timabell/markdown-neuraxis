@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SetupScreen(onFolderSelected: (Uri) -> Unit) {
+fun SetupScreen(onFolderSelected: (Uri) -> Unit, onCancel: (() -> Unit)? = null) {
     val context = LocalContext.current
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -55,6 +55,12 @@ fun SetupScreen(onFolderSelected: (Uri) -> Unit) {
                 Icon(Icons.Default.FolderOpen, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Choose Folder")
+            }
+            if (onCancel != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(onClick = onCancel) {
+                    Text("Cancel")
+                }
             }
         }
     }
