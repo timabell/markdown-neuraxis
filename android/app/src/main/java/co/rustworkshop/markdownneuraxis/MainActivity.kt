@@ -14,6 +14,7 @@ import co.rustworkshop.markdownneuraxis.io.saveNotesUri
 import co.rustworkshop.markdownneuraxis.model.FileDiscoveryState
 import co.rustworkshop.markdownneuraxis.ui.screens.FileListScreen
 import co.rustworkshop.markdownneuraxis.ui.screens.FileViewScreen
+import co.rustworkshop.markdownneuraxis.ui.screens.MissingFileScreen
 import co.rustworkshop.markdownneuraxis.ui.screens.SetupScreen
 import co.rustworkshop.markdownneuraxis.ui.theme.MarkdownNeuraxisTheme
 
@@ -34,6 +35,7 @@ fun App() {
     val context = LocalContext.current
     var notesUri by remember { mutableStateOf(getValidNotesUri(context)) }
     var selectedFile by remember { mutableStateOf<DocumentFile?>(null) }
+    var missingFileName by remember { mutableStateOf<String?>(null) }
     var previousUri by remember { mutableStateOf<Uri?>(null) }
 
     var discoveryState by remember { mutableStateOf(FileDiscoveryState()) }
@@ -57,13 +59,20 @@ fun App() {
                 }
             )
         }
+        missingFileName != null -> {
+            MissingFileScreen(
+                fileName = missingFileName!!,
+                onBack = { missingFileName = null }
+            )
+        }
         selectedFile != null -> {
             FileViewScreen(
                 file = selectedFile!!,
                 fileTree = discoveryState.tree,
                 notesUri = notesUri!!,
                 onBack = { selectedFile = null },
-                onNavigateToFile = { file -> selectedFile = file }
+                onNavigateToFile = { file -> selectedFile = file },
+                onMissingFile = { name -> missingFileName = name }
             )
         }
         else -> {

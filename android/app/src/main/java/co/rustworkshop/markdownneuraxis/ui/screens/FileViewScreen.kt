@@ -13,7 +13,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,7 +28,6 @@ import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
 import co.rustworkshop.markdownneuraxis.model.FileTree
-import kotlinx.coroutines.launch
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
 import uniffi.markdown_neuraxis_ffi.RenderBlockDto
 import uniffi.markdown_neuraxis_ffi.TextSegmentDto
@@ -44,14 +42,12 @@ fun FileViewScreen(
     fileTree: FileTree,
     notesUri: Uri,
     onBack: () -> Unit,
-    onNavigateToFile: (DocumentFile) -> Unit
+    onNavigateToFile: (DocumentFile) -> Unit,
+    onMissingFile: (String) -> Unit
 ) {
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-
     val content = remember(file) {
         readFileContent(context, file)
     }
@@ -66,14 +62,10 @@ fun FileViewScreen(
             if (docFile != null) {
                 onNavigateToFile(docFile)
             } else {
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar("\"$linkTarget\" not found")
-                }
+                onMissingFile(linkTarget)
             }
         } else {
-            coroutineScope.launch {
-                snackbarHostState.showSnackbar("\"$linkTarget\" not found")
-            }
+            onMissingFile(linkTarget)
         }
     }
 
@@ -87,8 +79,7 @@ fun FileViewScreen(
                     }
                 }
             )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        }
     ) { padding ->
         when {
             content == null -> {
