@@ -173,6 +173,30 @@ impl TextSegmentDto {
     }
 }
 
+// ============ Standalone Functions ============
+
+/// Resolve a wiki-link target to a file path.
+///
+/// Searches the given file paths for a match (case-insensitive, with or without .md extension).
+/// Returns the matching file path, or None if not found.
+#[uniffi::export]
+pub fn resolve_wikilink(target: String, file_paths: Vec<String>) -> Option<String> {
+    let search_name = target
+        .strip_suffix(".md")
+        .or_else(|| target.strip_suffix(".MD"))
+        .unwrap_or(&target)
+        .to_lowercase();
+
+    file_paths.into_iter().find(|path| {
+        let filename = path.rsplit('/').next().unwrap_or(path);
+        let name_without_ext = filename
+            .strip_suffix(".md")
+            .or_else(|| filename.strip_suffix(".MD"))
+            .unwrap_or(filename);
+        name_without_ext.to_lowercase() == search_name
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,5 +271,36 @@ mod tests {
         let wiki_link = segments.iter().find(|s| s.kind == "wiki_link");
         assert!(wiki_link.is_some());
         assert_eq!(wiki_link.unwrap().content, "My Page");
+    }
+
+    #[test]
+    fn test_resolve_wikilink_exact_match() {
+        let paths = vec![
+            "notes/My Page.md".to_string(),
+            "journal/2024_01_01.md".to_string(),
+        ];
+        let result = resolve_wikilink("My Page".to_string(), paths);
+        assert_eq!(result, Some("notes/My Page.md".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_wikilink_case_insensitive() {
+        let paths = vec!["Notes/my page.md".to_string()];
+        let result = resolve_wikilink("My Page".to_string(), paths);
+        assert_eq!(result, Some("Notes/my page.md".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_wikilink_with_extension() {
+        let paths = vec!["docs/README.md".to_string()];
+        let result = resolve_wikilink("README.md".to_string(), paths);
+        assert_eq!(result, Some("docs/README.md".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_wikilink_not_found() {
+        let paths = vec!["notes/Other.md".to_string()];
+        let result = resolve_wikilink("Missing".to_string(), paths);
+        assert_eq!(result, None);
     }
 }

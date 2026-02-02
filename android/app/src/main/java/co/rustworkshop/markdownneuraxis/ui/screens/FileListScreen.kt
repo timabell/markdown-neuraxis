@@ -4,8 +4,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -36,7 +34,7 @@ fun FileListScreen(
     hasScannedThisSession: Boolean,
     onHasScannedChange: (Boolean) -> Unit,
     onFileSelected: (DocumentFile) -> Unit,
-    onChangeFolder: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -106,124 +104,105 @@ fun FileListScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Notes") },
-                actions = {
-                    IconButton(onClick = onChangeFolder) {
-                        Icon(Icons.Default.FolderOpen, contentDescription = "Change folder")
-                    }
-                }
-            )
+    when {
+        discoveryState.error != null -> {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Error: ${discoveryState.error}")
+            }
         }
-    ) { padding ->
-        when {
-            discoveryState.error != null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Error: ${discoveryState.error}")
+        discoveryState.isScanning && discoveryState.fileCount == 0 -> {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Scanning for markdown files...")
                 }
             }
-            discoveryState.isScanning && discoveryState.fileCount == 0 -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Scanning for markdown files...")
-                    }
-                }
+        }
+        !discoveryState.isScanning && discoveryState.fileCount == 0 -> {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No markdown files found")
             }
-            !discoveryState.isScanning && discoveryState.fileCount == 0 -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No markdown files found")
-                }
+        }
+        else -> {
+            val flattenedNodes = remember(treeVersion) {
+                discoveryState.tree.getFlattenedList()
             }
-            else -> {
-                val flattenedNodes = remember(treeVersion) {
-                    discoveryState.tree.getFlattenedList()
-                }
 
-                val pullToRefreshState = rememberPullToRefreshState()
-                val pullProgress = pullToRefreshState.distanceFraction
-                var scanTriggered by remember { mutableStateOf(false) }
-                if (pullProgress == 0f) {
-                    scanTriggered = false
-                }
+            val pullToRefreshState = rememberPullToRefreshState()
+            val pullProgress = pullToRefreshState.distanceFraction
+            var scanTriggered by remember { mutableStateOf(false) }
+            if (pullProgress == 0f) {
+                scanTriggered = false
+            }
 
-                PullToRefreshBox(
-                    isRefreshing = discoveryState.isScanning,
-                    onRefresh = {
-                        scanTriggered = true
-                        coroutineScope.launch {
-                            performScan(isRefresh = true)
-                        }
-                    },
-                    state = pullToRefreshState,
-                    modifier = Modifier.padding(padding),
-                    indicator = {
-                        if (pullProgress > 0f && !scanTriggered) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .graphicsLayer {
-                                        alpha = pullProgress.coerceIn(0f, 1f)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Refresh",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+            PullToRefreshBox(
+                isRefreshing = discoveryState.isScanning,
+                onRefresh = {
+                    scanTriggered = true
+                    coroutineScope.launch {
+                        performScan(isRefresh = true)
                     }
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        val translation = if (scanTriggered || pullProgress == 0f) 0f else pullProgress * 60f
-                        LazyColumn(
+                },
+                state = pullToRefreshState,
+                modifier = modifier,
+                indicator = {
+                    if (pullProgress > 0f && !scanTriggered) {
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
                                 .graphicsLayer {
-                                    translationY = translation.dp.toPx()
-                                }
+                                    alpha = pullProgress.coerceIn(0f, 1f)
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            items(flattenedNodes.size) { index ->
-                                val node = flattenedNodes[index]
-                                FileTreeNodeItem(
-                                    node = node,
-                                    notesUri = notesUri,
-                                    onFileSelected = onFileSelected,
-                                    onFolderToggle = {
-                                        discoveryState.tree.toggleFolder(it)
-                                        onTreeVersionIncrement()
-                                    }
-                                )
-                            }
-                        }
-
-                        if (discoveryState.isScanning) {
-                            StatusToast(
-                                message = "Scanning... $scanningFileCount files",
-                                showProgress = true,
-                                modifier = Modifier.align(Alignment.TopEnd)
+                            Text(
+                                text = "Refresh",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val translation = if (scanTriggered || pullProgress == 0f) 0f else pullProgress * 60f
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                translationY = translation.dp.toPx()
+                            }
+                    ) {
+                        items(flattenedNodes.size) { index ->
+                            val node = flattenedNodes[index]
+                            FileTreeNodeItem(
+                                node = node,
+                                notesUri = notesUri,
+                                onFileSelected = onFileSelected,
+                                onFolderToggle = {
+                                    discoveryState.tree.toggleFolder(it)
+                                    onTreeVersionIncrement()
+                                }
+                            )
+                        }
+                    }
+
+                    if (discoveryState.isScanning) {
+                        StatusToast(
+                            message = "Scanning... $scanningFileCount files",
+                            showProgress = true,
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        )
                     }
                 }
             }
