@@ -3,13 +3,10 @@ package co.rustworkshop.markdownneuraxis.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.ClickableText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -35,18 +32,15 @@ import uniffi.markdown_neuraxis_ffi.resolveWikilink
 
 private const val TAG = "MarkdownNeuraxis"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileViewScreen(
     file: DocumentFile,
     fileTree: FileTree,
     notesUri: Uri,
-    onBack: () -> Unit,
     onNavigateToFile: (DocumentFile) -> Unit,
-    onMissingFile: (String) -> Unit
+    onMissingFile: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    BackHandler(onBack = onBack)
-
     val context = LocalContext.current
     val content = remember(file) {
         readFileContent(context, file)
@@ -69,49 +63,31 @@ fun FileViewScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(file.name ?: "File") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
+    when {
+        content == null -> {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Error reading file")
+            }
         }
-    ) { padding ->
-        when {
-            content == null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Error reading file")
-                }
+        snapshot == null -> {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Error parsing document")
             }
-            snapshot == null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Error parsing document")
-                }
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(horizontal = 16.dp)
-                ) {
-                    items(snapshot) { block ->
-                        RenderBlock(block, onWikiLinkClick)
-                    }
+        }
+        else -> {
+            LazyColumn(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                items(snapshot) { block ->
+                    RenderBlock(block, onWikiLinkClick)
                 }
             }
         }
