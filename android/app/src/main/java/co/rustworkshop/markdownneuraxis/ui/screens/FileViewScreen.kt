@@ -150,7 +150,7 @@ private fun RenderSegments(
                 "wiki_link" -> {
                     pushStringAnnotation(tag = "wiki_link", annotation = segment.content)
                     withStyle(SpanStyle(color = linkColor)) {
-                        append("[[${segment.content}]]")
+                        append(segment.content)
                     }
                     pop()
                 }
