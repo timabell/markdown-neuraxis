@@ -18,12 +18,20 @@ Tim's personal journey through various tools (GTD+Trello → Sunsama → journal
 
 ## Current Status
 
-The project has evolved from documentation-only to a basic working implementation:
+The project has evolved from documentation-only to working implementations on multiple platforms:
+
+### Desktop (Rust/Dioxus)
 - **GUI Framework**: Switched from egui to Dioxus (see ADR-0001)
 - **Basic functionality**: File browser, markdown parsing, outline display
 - **Build system**: Rust with Dioxus desktop framework
-- **Current branch**: `main` (Dioxus implementation merged)
-- Task list lives in `TASKS.md`
+
+### Android (Kotlin/Compose)
+- **GUI Framework**: Jetpack Compose with Material 3
+- **Functionality**: File browser, markdown rendering, wiki-link navigation
+- **FFI Integration**: UniFFI bindings to shared Rust parsing library
+- **Status**: Read-only viewer with full wiki-link support
+
+Task list lives in `TASKS.md`
 
 ## File Structure & Methodology
 
@@ -61,14 +69,25 @@ notes/               # Markdown files can be anywhere in root
 ## Architecture
 
 ### Technology Stack
-- **Language**: Rust (for fast, native performance)
-- **GUI Framework**: Dioxus desktop 0.6 (switched from egui, see ADR-0001)
+
+**Shared Core (Rust)**:
 - **Markdown Parsing**: `tree-sitter-md` for incremental parsing (ADR-0004 editing architecture)
-- **File System**: Direct OS filesystem access, cross-platform
-- **State Management**: In-memory signals for UI state, file scanning on startup
+- **FFI**: UniFFI for generating cross-platform bindings (Kotlin, Swift)
 - **Testing**: `rstest` for parameterized tests, `insta` for snapshot testing, `pretty_assertions`
 
-### Code Organization
+**Desktop (Rust/Dioxus)**:
+- **GUI Framework**: Dioxus desktop 0.6 (switched from egui, see ADR-0001)
+- **File System**: Direct OS filesystem access
+- **State Management**: In-memory signals for UI state
+
+**Android (Kotlin/Compose)**:
+- **Language**: Kotlin 2.0
+- **GUI Framework**: Jetpack Compose with Material 3
+- **FFI**: JNA 5.15 for Rust library calls via UniFFI
+- **File System**: Storage Access Framework (DocumentFile API)
+- **Min SDK**: 29 (Android 10), Target SDK: 35 (Android 15)
+
+### Desktop Code Organization
 ```
 src/
 ├── main.rs              # Entry point, CLI argument handling, window config
@@ -98,6 +117,52 @@ src/
 └── snapshots/           # Insta snapshot test files
 ```
 
+### Android Code Organization
+```
+android/
+├── app/src/main/java/co/rustworkshop/markdownneuraxis/
+│   ├── MainActivity.kt              # Entry point, navigation, state management
+│   ├── ui/
+│   │   ├── screens/
+│   │   │   ├── SetupScreen.kt       # Initial folder selection
+│   │   │   ├── FileListScreen.kt    # File browser with tree view
+│   │   │   ├── FileViewScreen.kt    # Markdown content viewer
+│   │   │   └── MissingFileScreen.kt # Broken wiki-link placeholder
+│   │   ├── components/
+│   │   │   ├── AppBottomBar.kt      # Bottom nav with menu/home
+│   │   │   ├── AppDrawer.kt         # Navigation drawer
+│   │   │   ├── FileTreeNodeItem.kt  # Expandable tree items
+│   │   │   └── StatusToast.kt       # Scanning progress overlay
+│   │   └── theme/Theme.kt           # Solarized color scheme
+│   ├── model/FileTree.kt            # Hierarchical file tree structure
+│   ├── io/
+│   │   ├── FileScanner.kt           # High-performance directory scanning
+│   │   └── Preferences.kt           # URI persistence via SharedPreferences
+│   └── uniffi/markdown_neuraxis_ffi/ # Auto-generated Rust FFI bindings
+├── app/build.gradle.kts             # App configuration (SDK 29-35)
+├── gradle/libs.versions.toml        # Dependency versions (Compose 2024.12)
+└── lint.xml                         # Lint rules for UniFFI compatibility
+```
+
+### Android Architecture
+- **Framework**: Jetpack Compose with Material 3 design system
+- **FFI**: UniFFI-generated Kotlin bindings via JNA to shared Rust library
+- **State**: Composable state with file stack for navigation history
+- **Storage**: Storage Access Framework (SAF) with DocumentFile API
+- **Performance**: Cursor-based directory queries, batch processing, file caching
+
+### Android Features
+- ✅ Folder selection with persistent URI permissions
+- ✅ Progressive file scanning with real-time UI updates
+- ✅ Hierarchical file browser with expand/collapse
+- ✅ Markdown rendering (headings, lists, code blocks, quotes)
+- ✅ Wiki-link resolution and navigation
+- ✅ URL click handling (opens external browser)
+- ✅ Pull-to-refresh scanning
+- ✅ Dark/light theme support (Solarized)
+- ❌ File editing (not yet implemented)
+- ❌ Search functionality (not yet implemented)
+
 ### Data Flow Architecture
 1. **Startup**: CLI validates notes directory structure via `io::validate_notes_dir()`
 2. **File Discovery**: `io::scan_markdown_files()` recursively finds `.md` files in notes root directory
@@ -116,7 +181,7 @@ src/
 - **Local-first** - No cloud dependencies in MVP
 - **Plain text primacy** - Markdown files remain readable outside the app
 
-### Current Implementation Status
+### Desktop Implementation Status
 - ✅ **CLI Interface**: Single argument for notes folder path
 - ✅ **File Browser**: Recursive markdown file discovery and selection
 - ✅ **Markdown Parsing**: Hierarchical bullet point outline extraction
@@ -133,9 +198,17 @@ src/
 - All commits must have passing tests, be formatted, and include prompt history
 
 ### Build Requirements
+
+**Desktop (Rust/Dioxus)**:
 - System dependencies for Dioxus desktop (WebKit, GTK, etc.)
 - See `doc/development.md` for full setup instructions
 - Run `./dev-setup.sh` for automated Ubuntu/Debian setup
+
+**Android**:
+- Android Studio with SDK 35
+- JDK 11+
+- UniFFI library built for target architecture (ARM64/x86_64)
+- Run `./lint.sh` to check both Rust and Android linting
 
 ### Testing Strategy
 - Outside-in integration tests for all features (as per design doc)
@@ -150,10 +223,17 @@ src/
 
 ## Getting Started
 
-Current usage:
+### Desktop
 1. Install system dependencies (see `doc/development.md`)
-2. Clone the repository 
+2. Clone the repository
 3. Run: `cargo run <path-to-notes-folder>`
 4. The app will open showing markdown files from the notes root directory
 
 The executable takes a single argument - path to the root notes folder. Markdown files can be organized anywhere within this directory using any folder structure you prefer.
+
+### Android
+1. Open the `android/` directory in Android Studio
+2. Build the UniFFI library: `cargo build --release --features ffi`
+3. Copy the native library to `android/app/src/main/jniLibs/`
+4. Build and run from Android Studio
+5. On first launch, select your notes folder via the document picker
