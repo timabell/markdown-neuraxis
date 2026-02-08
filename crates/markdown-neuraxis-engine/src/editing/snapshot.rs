@@ -755,35 +755,19 @@ fn extract_code_fence_language(doc: &Document, node: &tree_sitter::Node) -> Opti
 
 /// Extract content range for a fenced code block (the code inside)
 fn extract_code_fence_content_range(
-    doc: &Document,
+    _doc: &Document,
     node: &tree_sitter::Node,
 ) -> std::ops::Range<usize> {
-    let byte_range = node.byte_range();
-    let text = doc.slice_to_cow(byte_range.clone());
-
-    // Find the end of the first line (opening fence)
-    let content_start = if let Some(first_newline) = text.find('\n') {
-        byte_range.start + first_newline + 1
-    } else {
-        byte_range.start
-    };
-
-    // Find the start of the last line (closing fence)
-    let content_end = if let Some(last_newline) = text.rfind('\n') {
-        // Check if there's a closing fence
-        let potential_close = &text[last_newline + 1..];
-        if potential_close.trim_start().starts_with("```")
-            || potential_close.trim_start().starts_with("~~~")
-        {
-            byte_range.start + last_newline
-        } else {
-            byte_range.end
+    // Tree-sitter's fenced_code_block has a "code_fence_content" child node
+    // that contains just the code content without fences
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "code_fence_content" {
+            return child.byte_range();
         }
-    } else {
-        byte_range.end
-    };
-
-    content_start..content_end
+    }
+    // Fallback to full node range if no content child found
+    node.byte_range()
 }
 
 /// Strip all leading blockquote markers (> or "> ") from a line

@@ -20,11 +20,13 @@ pub fn SingleBlock(
     let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
 
     if is_focused {
+        // Get raw markdown bytes from document for lossless editing (ADR-0004)
+        let raw_content = document.slice(block.byte_range.clone());
         rsx! {
             EditorBlock {
                 key: "{group_index}-editor",
                 block: block.clone(),
-                content_text: block.content.clone(),
+                content_text: raw_content,
                 on_command,
                 on_cancel: {
                     let mut focused_anchor_id = focused_anchor_id;
