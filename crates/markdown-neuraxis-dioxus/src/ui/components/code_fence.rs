@@ -12,9 +12,6 @@ pub fn CodeFence(block: RenderBlock, lang: Option<String>, on_focus: Callback<()
         div {
             class: "code-block clickable-block",
             onclick: move |_| on_focus.call(()),
-            if let Some(lang_str) = lang {
-                div { class: "code-language", "{lang_str}" }
-            }
             pre {
                 code {
                     class: "{code_class}",

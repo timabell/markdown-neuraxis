@@ -273,15 +273,6 @@ hr {
     overflow-x: auto;
 }
 
-.code-language {
-    background-color: var(--base1);
-    color: var(--base02);
-    padding: 4px 12px;
-    font-size: 0.85em;
-    font-weight: 500;
-    border-bottom: 1px solid var(--base0);
-}
-
 .code-block pre {
     margin: 0;
     padding: 12px;
