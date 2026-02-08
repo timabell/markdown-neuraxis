@@ -59,8 +59,8 @@ pub fn ListGroup(
                 }
             }
         }
-        EditorContentGroup::SingleBlock(_) => {
-            // This should not happen for render_list_group but handle gracefully
+        EditorContentGroup::SingleBlock(_) | EditorContentGroup::BlockQuoteGroup { .. } => {
+            // This should not happen for ListGroup but handle gracefully
             rsx! { div { "Invalid list group content" } }
         }
     }

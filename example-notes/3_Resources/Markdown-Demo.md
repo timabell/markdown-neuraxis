@@ -317,12 +317,20 @@ pulldown-cmark = "0.11"
 > This can span multiple lines
 
 > Nested quotes work too
->> Like this deeper quote
+>> Like this deeper quote  
+>> With newlines
+>>
+>> ... and multiple
+>>
+>> ... paragraphs
 >>> And even deeper
 
 > **Bold text in quotes** and *italic text*
 > 
 > With code: `inline code in quotes`
+
+>Missing spaces
+>>More missing spaces
 
 ### Tables
 

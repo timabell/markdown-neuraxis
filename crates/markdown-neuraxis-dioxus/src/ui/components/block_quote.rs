@@ -1,8 +1,7 @@
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::RenderBlock;
 
-/// Component for rendering blockquotes (> quoted text)
-/// Renders as a clickable/editable <blockquote> element
+/// Fallback component for single blockquotes (nested ones use BlockquoteGroup)
 #[component]
 pub fn BlockQuote(block: RenderBlock, on_focus: Callback<()>) -> Element {
     rsx! {
@@ -15,7 +14,6 @@ pub fn BlockQuote(block: RenderBlock, on_focus: Callback<()>) -> Element {
                     on_focus.call(());
                 }
             },
-            // Render the content (which includes the > markers)
             "{block.content}"
         }
     }

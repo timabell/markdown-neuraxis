@@ -1,5 +1,6 @@
 pub mod block;
 pub mod block_quote;
+pub mod blockquote_group;
 pub mod code_fence;
 pub mod content_group;
 pub mod document_content;
