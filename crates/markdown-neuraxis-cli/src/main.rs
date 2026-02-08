@@ -195,6 +195,10 @@ impl App {
                     lines.push("---".to_string());
                     lines.push(String::new());
                 }
+                markdown_neuraxis_engine::editing::snapshot::BlockKind::HtmlBlock => {
+                    lines.push(block.content.clone());
+                    lines.push(String::new());
+                }
                 markdown_neuraxis_engine::editing::snapshot::BlockKind::UnhandledMarkdown => {
                     lines.push(format!("[Unhandled] {}", block.content));
                     lines.push(String::new());

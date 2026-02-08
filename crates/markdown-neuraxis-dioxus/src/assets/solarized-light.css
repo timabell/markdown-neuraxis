@@ -537,6 +537,17 @@ hr {
     outline: none;
 }
 
+/* HTML block styles - valid markdown, displayed as plain text */
+.html-block {
+    margin: 12px 0;
+    color: var(--base01);
+    white-space: pre-wrap;
+}
+
+.html-block:focus {
+    outline: 2px solid var(--cyan);
+}
+
 /* Unhandled markdown styles */
 .unhandled-markdown {
     margin: 12px 0;

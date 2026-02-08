@@ -7,6 +7,7 @@ pub mod editor_block;
 pub mod empty_document;
 pub mod error_screen;
 pub mod heading;
+pub mod html_block;
 pub mod list_children;
 pub mod list_component;
 pub mod list_group;

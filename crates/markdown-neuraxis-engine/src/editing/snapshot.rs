@@ -141,6 +141,8 @@ pub enum BlockKind {
     ThematicBreak,
     /// Block quote (> quoted text)
     BlockQuote,
+    /// Raw HTML block (valid markdown, rendered as monospace)
+    HtmlBlock,
     /// Fallback for unrecognized Markdown elements
     UnhandledMarkdown,
 }
@@ -409,6 +411,21 @@ fn collect_render_blocks_recursive(
             for child in node.children(&mut cursor) {
                 collect_render_blocks_recursive(doc, child, blocks, current_depth);
             }
+        }
+        "html_block" => {
+            // Raw HTML in markdown - valid content, render as monospace
+            let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
+            let content = doc.slice_to_cow(byte_range.clone()).to_string();
+
+            blocks.push(RenderBlock {
+                id: anchor_id,
+                kind: BlockKind::HtmlBlock,
+                byte_range: byte_range.clone(),
+                content_range: byte_range,
+                depth: current_depth,
+                content,
+                segments: None,
+            });
         }
         _ => {
             // Skip empty ranges (these are often parser artifacts)
@@ -2561,5 +2578,40 @@ mod tests {
             }
         );
         assert_eq!(segments[2], TextSegment::Text(" for updates".to_string()));
+    }
+
+    #[test]
+    fn test_html_block_recognized() {
+        let mut doc =
+            Document::from_bytes(b"<div class=\"note\">\nSome content\n</div>\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+
+        // HTML blocks are valid markdown content
+        assert_eq!(block.kind, BlockKind::HtmlBlock);
+        assert!(block.content.contains("<div"));
+    }
+
+    #[test]
+    fn test_html_self_closing_tag() {
+        let mut doc = Document::from_bytes(b"<hr/>\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        assert_eq!(snapshot.blocks[0].kind, BlockKind::HtmlBlock);
+    }
+
+    #[test]
+    fn test_html_unclosed_tag() {
+        let mut doc = Document::from_bytes(b"<div>\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        assert_eq!(snapshot.blocks[0].kind, BlockKind::HtmlBlock);
     }
 }
