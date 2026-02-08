@@ -1,5 +1,7 @@
 # markdown-neuraxis
 
+Abbreviations: MdNX, Madnax.
+
 ⚠️⚠️ WARNING: This tool is in early development and will 100% corrupt your markdown files and possibly more. Only run this against data you have backed up, or throw-away copies for testing. There are known editing bugs that will lose markdown content due to read/write of markdown items that are not yet properly supported ⚠️⚠️
 
 **The central nervous system for your digital life, built on plain-text markdown.**
