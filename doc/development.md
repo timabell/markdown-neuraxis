@@ -65,10 +65,37 @@ cargo run <path-to-notes-folder>
 
 ## Testing
 
-Following the outside-in testing approach outlined in `design.md`:
-- Integration tests for all user-facing features
-- Unit tests for internal modules and functions
-- No feature delivery without passing tests
+### Philosophy
+
+The ultimate goal is **outside-in testing for near-perfect regression detection**. What matters is user-perceived functionality, not internal implementation details. As features accumulate, we need confidence that all previously delivered features remain intact. - See: https://0x5.uk/2024/03/27/why-do-automated-tests-matter/
+
+The goal is comprehensive end-to-end coverage where tests verify complete features from the user's perspective. However full outside-in coverage is an accepted technical debt being addressed incrementally due to the exploratory nature of the architecture. Once it's clear that the architecture works as intended then there can be some effort to bring regression tests up to a better level.
+
+### Current Approach
+
+| Layer | Purpose | Location |
+|-------|---------|----------|
+| **Integration Tests** | Verify public API contracts and feature behavior | `crates/*/tests/` |
+| **Inline Unit Tests** | Test implementation details where useful | `#[cfg(test)]` modules in source files |
+| **Benchmarks** | Performance measurement (not regression enforcement) | `crates/markdown-neuraxis-engine/benches/` |
+
+### Test Structure
+
+- **Integration tests**: `crates/*/tests/*.rs` - separate files testing public API
+- **Inline unit tests**: `#[cfg(test)] mod tests` at end of source files
+- **Benchmarks**: `crates/markdown-neuraxis-engine/benches/` - Criterion performance tests
+- **Test data**: `crates/*/test_data/` - real markdown files that triggered bugs
+
+### Testing Libraries
+
+| Library | Purpose |
+|---------|---------|
+| `rstest` | Parameterized/data-driven tests |
+| `insta` | Snapshot testing for regression detection |
+| `pretty_assertions` | Better diff output for assertion failures |
+| `tempfile` | Temporary directory fixtures for I/O tests |
+| `criterion` | Performance benchmarking |
+| `dioxus-ssr` | Server-side rendering for component testing |
 
 ## Conventional Commits
 
