@@ -477,7 +477,7 @@ This demo file showcases the comprehensive markdown support in markdown-neuraxis
 ✅ **Code Highlighting**: Multi-language syntax support  
 ✅ **Advanced Lists**: Deep nesting with mixed content types  
 
-This creates a powerful, flexible system for personal knowledge management and task organization that works entirely with plain text files.
+The above checkbox bullets all have a forced linebreak at the end due to two trailing spaces on every line, and should be rendered on individual lines.
 
 *Generated: 2024-01-15 | System: markdown-neuraxis v0.1.0*
 
