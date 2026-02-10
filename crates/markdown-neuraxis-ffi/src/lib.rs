@@ -123,6 +123,7 @@ impl RenderBlockDto {
             BlockKind::CodeFence { .. } => ("code_fence".to_string(), 0, None),
             BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None),
             BlockKind::BlockQuote => ("block_quote".to_string(), 0, None),
+            BlockKind::HtmlBlock => ("html_block".to_string(), 0, None),
             BlockKind::UnhandledMarkdown => ("unhandled".to_string(), 0, None),
         };
 

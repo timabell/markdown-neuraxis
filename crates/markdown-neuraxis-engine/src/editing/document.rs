@@ -297,6 +297,11 @@ impl Document {
         self.buffer.to_string()
     }
 
+    /// Get a slice of the document as a string (for raw editing)
+    pub fn slice(&self, range: std::ops::Range<usize>) -> String {
+        self.slice_to_cow(range).to_string()
+    }
+
     /// Get the buffer length
     pub(crate) fn len(&self) -> usize {
         self.buffer.len()

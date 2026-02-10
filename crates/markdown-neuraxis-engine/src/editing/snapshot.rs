@@ -12,8 +12,19 @@ pub enum ContentGroup {
     SingleBlock(RenderBlock),
     /// Consecutive bullet list items grouped for `<ul>` rendering
     BulletListGroup { items: Vec<ListItem> },
-    /// Consecutive numbered list items grouped for `<ol>` rendering  
+    /// Consecutive numbered list items grouped for `<ol>` rendering
     NumberedListGroup { items: Vec<ListItem> },
+    /// Nested blockquote structure for `<blockquote>` rendering
+    BlockQuoteGroup { items: Vec<BlockQuoteItem> },
+}
+
+/// Hierarchical blockquote item with nested children
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockQuoteItem {
+    /// The render block for this blockquote's content
+    pub block: RenderBlock,
+    /// Child blockquotes at deeper nesting levels
+    pub children: Vec<BlockQuoteItem>,
 }
 
 /// Hierarchical list item with nested children (ADR-0004)
@@ -53,6 +64,9 @@ pub struct ListItem {
 ///         },
 ///         ContentGroup::NumberedListGroup { items } => {
 ///             println!("Numbered list with {} items", items.len());
+///         },
+///         ContentGroup::BlockQuoteGroup { items } => {
+///             println!("Blockquote with {} items", items.len());
 ///         },
 ///         ContentGroup::SingleBlock(block) => {
 ///             println!("Single block: {}", block.content);
@@ -141,6 +155,8 @@ pub enum BlockKind {
     ThematicBreak,
     /// Block quote (> quoted text)
     BlockQuote,
+    /// Raw HTML block (valid markdown, rendered as monospace)
+    HtmlBlock,
     /// Fallback for unrecognized Markdown elements
     UnhandledMarkdown,
 }
@@ -373,28 +389,85 @@ fn collect_render_blocks_recursive(
             });
         }
         "block_quote" => {
-            // > Quoted text
+            // > Quoted text - collect all paragraph children, then recurse into nested quotes
             let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
-            let content = doc.slice_to_cow(byte_range.clone()).to_string();
-            let segments = parse_text_segments(&content);
-            let segments = if segments
-                .iter()
-                .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
-            {
-                Some(segments)
-            } else {
-                None
-            };
 
-            blocks.push(RenderBlock {
-                id: anchor_id,
-                kind: BlockKind::BlockQuote,
-                byte_range: byte_range.clone(),
-                content_range: byte_range,
-                depth: current_depth,
-                content,
-                segments,
-            });
+            // Collect all paragraph content (multiple paragraphs separated by blank lines)
+            let mut cursor = node.walk();
+            let mut paragraphs: Vec<String> = Vec::new();
+            let mut nested_quotes: Vec<tree_sitter::Node> = Vec::new();
+
+            for child in node.children(&mut cursor) {
+                if child.kind() == "paragraph" {
+                    let para_range = child.byte_range();
+                    let raw = doc.slice_to_cow(para_range);
+                    let para_content: String = raw
+                        .lines()
+                        .map(strip_blockquote_markers)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        .trim()
+                        .to_string();
+                    if !para_content.is_empty() {
+                        paragraphs.push(para_content);
+                    }
+                } else if child.kind() == "block_quote" {
+                    nested_quotes.push(child);
+                }
+            }
+
+            // Create one block with all paragraphs joined by blank lines
+            if !paragraphs.is_empty() {
+                let content = paragraphs.join("\n\n");
+                let segments = parse_text_segments(&content);
+                let segments = if segments
+                    .iter()
+                    .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
+                {
+                    Some(segments)
+                } else {
+                    None
+                };
+
+                blocks.push(RenderBlock {
+                    id: anchor_id,
+                    kind: BlockKind::BlockQuote,
+                    byte_range: byte_range.clone(),
+                    content_range: byte_range.clone(),
+                    depth: current_depth,
+                    content,
+                    segments,
+                });
+            }
+
+            // Recurse into nested blockquotes
+            for nested in &nested_quotes {
+                collect_render_blocks_recursive(doc, *nested, blocks, current_depth + 1);
+            }
+
+            // Fallback if no paragraphs and no nested quotes
+            if paragraphs.is_empty() && nested_quotes.is_empty() {
+                let content = doc.slice_to_cow(byte_range.clone()).to_string();
+                let segments = parse_text_segments(&content);
+                let segments = if segments
+                    .iter()
+                    .any(|s| matches!(s, TextSegment::WikiLink { .. } | TextSegment::Url { .. }))
+                {
+                    Some(segments)
+                } else {
+                    None
+                };
+
+                blocks.push(RenderBlock {
+                    id: anchor_id,
+                    kind: BlockKind::BlockQuote,
+                    byte_range: byte_range.clone(),
+                    content_range: byte_range,
+                    depth: current_depth,
+                    content,
+                    segments,
+                });
+            }
         }
         "document" | "section" => {
             // Container nodes - just process children
@@ -409,6 +482,21 @@ fn collect_render_blocks_recursive(
             for child in node.children(&mut cursor) {
                 collect_render_blocks_recursive(doc, child, blocks, current_depth);
             }
+        }
+        "html_block" => {
+            // Raw HTML in markdown - valid content, render as monospace
+            let anchor_id = find_existing_anchor_for_node(doc, &node, &byte_range);
+            let content = doc.slice_to_cow(byte_range.clone()).to_string();
+
+            blocks.push(RenderBlock {
+                id: anchor_id,
+                kind: BlockKind::HtmlBlock,
+                byte_range: byte_range.clone(),
+                content_range: byte_range,
+                depth: current_depth,
+                content,
+                segments: None,
+            });
         }
         _ => {
             // Skip empty ranges (these are often parser artifacts)
@@ -667,35 +755,34 @@ fn extract_code_fence_language(doc: &Document, node: &tree_sitter::Node) -> Opti
 
 /// Extract content range for a fenced code block (the code inside)
 fn extract_code_fence_content_range(
-    doc: &Document,
+    _doc: &Document,
     node: &tree_sitter::Node,
 ) -> std::ops::Range<usize> {
-    let byte_range = node.byte_range();
-    let text = doc.slice_to_cow(byte_range.clone());
-
-    // Find the end of the first line (opening fence)
-    let content_start = if let Some(first_newline) = text.find('\n') {
-        byte_range.start + first_newline + 1
-    } else {
-        byte_range.start
-    };
-
-    // Find the start of the last line (closing fence)
-    let content_end = if let Some(last_newline) = text.rfind('\n') {
-        // Check if there's a closing fence
-        let potential_close = &text[last_newline + 1..];
-        if potential_close.trim_start().starts_with("```")
-            || potential_close.trim_start().starts_with("~~~")
-        {
-            byte_range.start + last_newline
-        } else {
-            byte_range.end
+    // Tree-sitter's fenced_code_block has a "code_fence_content" child node
+    // that contains just the code content without fences
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "code_fence_content" {
+            return child.byte_range();
         }
-    } else {
-        byte_range.end
-    };
+    }
+    // Fallback to full node range if no content child found
+    node.byte_range()
+}
 
-    content_start..content_end
+/// Strip all leading blockquote markers (> or "> ") from a line
+fn strip_blockquote_markers(line: &str) -> &str {
+    let mut result = line;
+    loop {
+        if let Some(rest) = result.strip_prefix("> ") {
+            result = rest;
+        } else if let Some(rest) = result.strip_prefix('>') {
+            result = rest;
+        } else {
+            break;
+        }
+    }
+    result
 }
 
 /// Parse text content and extract wiki-links and URLs, returning segments
@@ -858,6 +945,23 @@ fn group_blocks_for_rendering(blocks: &[RenderBlock]) -> Vec<ContentGroup> {
 
                 groups.push(group);
             }
+            BlockKind::BlockQuote => {
+                // Start a new blockquote group - collect all consecutive blockquotes
+                let quote_start = i;
+                while i < blocks.len() {
+                    if matches!(blocks[i].kind, BlockKind::BlockQuote) {
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Group the blockquotes into a nested structure
+                let quote_blocks = &blocks[quote_start..i];
+                let quote_items = build_nested_blockquote_structure(quote_blocks);
+
+                groups.push(ContentGroup::BlockQuoteGroup { items: quote_items });
+            }
             _ => {
                 // Single non-list block (including UnhandledMarkdown)
                 groups.push(ContentGroup::SingleBlock(block.clone()));
@@ -867,6 +971,39 @@ fn group_blocks_for_rendering(blocks: &[RenderBlock]) -> Vec<ContentGroup> {
     }
 
     groups
+}
+
+/// Build nested blockquote structure from flat depth-annotated blocks
+fn build_nested_blockquote_structure(blocks: &[RenderBlock]) -> Vec<BlockQuoteItem> {
+    let mut result = Vec::new();
+    let mut i = 0;
+
+    while i < blocks.len() {
+        let block = &blocks[i];
+        let block_depth = block.depth;
+
+        // Find all children (blocks at deeper levels immediately following)
+        let child_start = i + 1;
+        let mut child_end = child_start;
+        while child_end < blocks.len() && blocks[child_end].depth > block_depth {
+            child_end += 1;
+        }
+
+        let children = if child_end > child_start {
+            build_nested_blockquote_structure(&blocks[child_start..child_end])
+        } else {
+            Vec::new()
+        };
+
+        result.push(BlockQuoteItem {
+            block: block.clone(),
+            children,
+        });
+
+        i = child_end;
+    }
+
+    result
 }
 
 /// Check if two markers represent the same list type (numbered vs bullet)
@@ -2561,5 +2698,103 @@ mod tests {
             }
         );
         assert_eq!(segments[2], TextSegment::Text(" for updates".to_string()));
+    }
+
+    #[test]
+    fn test_html_block_recognized() {
+        let mut doc =
+            Document::from_bytes(b"<div class=\"note\">\nSome content\n</div>\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+
+        // HTML blocks are valid markdown content
+        assert_eq!(block.kind, BlockKind::HtmlBlock);
+        assert!(block.content.contains("<div"));
+    }
+
+    #[test]
+    fn test_html_self_closing_tag() {
+        let mut doc = Document::from_bytes(b"<hr/>\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        assert_eq!(snapshot.blocks[0].kind, BlockKind::HtmlBlock);
+    }
+
+    #[test]
+    fn test_html_unclosed_tag() {
+        let mut doc = Document::from_bytes(b"<div>\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        assert_eq!(snapshot.blocks[0].kind, BlockKind::HtmlBlock);
+    }
+
+    #[test]
+    fn test_blockquote_content_strips_markers() {
+        let mut doc = Document::from_bytes(b"> Quoted text\n> Second line\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        assert_eq!(snapshot.blocks[0].kind, BlockKind::BlockQuote);
+        assert_eq!(snapshot.blocks[0].content, "Quoted text\nSecond line");
+    }
+
+    #[test]
+    fn test_nested_blockquote() {
+        let mut doc = Document::from_bytes(b"> Level 1\n>> Level 2\n").unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Nested blockquotes should produce blocks with increasing depth
+        assert_eq!(snapshot.blocks.len(), 2);
+        assert_eq!(snapshot.blocks[0].kind, BlockKind::BlockQuote);
+        assert_eq!(snapshot.blocks[0].depth, 0);
+        assert_eq!(snapshot.blocks[0].content, "Level 1");
+        assert_eq!(snapshot.blocks[1].kind, BlockKind::BlockQuote);
+        assert_eq!(snapshot.blocks[1].depth, 1);
+        assert_eq!(snapshot.blocks[1].content, "Level 2");
+    }
+
+    #[test]
+    fn test_complex_nested_blockquote() {
+        let input = b"> Nested quotes work too
+>> Like this deeper quote
+>> With newlines
+>>
+>> ... and multiple
+>>
+>> ... paragraphs
+>>> And even deeper
+";
+        let mut doc = Document::from_bytes(input).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 3);
+
+        // Outer quote
+        assert_eq!(snapshot.blocks[0].kind, BlockKind::BlockQuote);
+        assert_eq!(snapshot.blocks[0].depth, 0);
+        assert_eq!(snapshot.blocks[0].content, "Nested quotes work too");
+
+        // Nested quote with all paragraphs combined
+        assert_eq!(snapshot.blocks[1].kind, BlockKind::BlockQuote);
+        assert_eq!(snapshot.blocks[1].depth, 1);
+        assert_eq!(
+            snapshot.blocks[1].content,
+            "Like this deeper quote\nWith newlines\n\n... and multiple\n\n... paragraphs"
+        );
+
+        // Deepest nested quote
+        assert_eq!(snapshot.blocks[2].kind, BlockKind::BlockQuote);
+        assert_eq!(snapshot.blocks[2].depth, 2);
+        assert_eq!(snapshot.blocks[2].content, "And even deeper");
     }
 }

@@ -1,6 +1,6 @@
 use crate::ui::components::{
-    block_quote::BlockQuote, code_fence::CodeFence, heading::Heading, paragraph::Paragraph,
-    thematic_break::ThematicBreak, unhandled_markdown::UnhandledMarkdown,
+    block_quote::BlockQuote, code_fence::CodeFence, heading::Heading, html_block::HtmlBlock,
+    paragraph::Paragraph, thematic_break::ThematicBreak, unhandled_markdown::UnhandledMarkdown,
 };
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{BlockKind, RenderBlock};
@@ -52,6 +52,12 @@ pub fn Block(
         },
         BlockKind::BlockQuote => rsx! {
             BlockQuote {
+                block: block.clone(),
+                on_focus
+            }
+        },
+        BlockKind::HtmlBlock => rsx! {
+            HtmlBlock {
                 block: block.clone(),
                 on_focus
             }

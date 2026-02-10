@@ -317,12 +317,20 @@ pulldown-cmark = "0.11"
 > This can span multiple lines
 
 > Nested quotes work too
->> Like this deeper quote
+>> Like this deeper quote  
+>> With newlines
+>>
+>> ... and multiple
+>>
+>> ... paragraphs
 >>> And even deeper
 
 > **Bold text in quotes** and *italic text*
 > 
 > With code: `inline code in quotes`
+
+>Missing spaces
+>>More missing spaces
 
 ### Tables
 
@@ -477,7 +485,7 @@ This demo file showcases the comprehensive markdown support in markdown-neuraxis
 ✅ **Code Highlighting**: Multi-language syntax support  
 ✅ **Advanced Lists**: Deep nesting with mixed content types  
 
-This creates a powerful, flexible system for personal knowledge management and task organization that works entirely with plain text files.
+The above checkbox bullets all have a forced linebreak at the end due to two trailing spaces on every line, and should be rendered on individual lines.
 
 *Generated: 2024-01-15 | System: markdown-neuraxis v0.1.0*
 

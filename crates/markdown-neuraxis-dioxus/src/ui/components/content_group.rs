@@ -1,3 +1,4 @@
+use crate::ui::components::blockquote_group::BlockquoteGroup;
 use crate::ui::components::list_group::ListGroup;
 use crate::ui::components::single_block::SingleBlock;
 use dioxus::prelude::*;
@@ -41,6 +42,12 @@ pub fn ContentGroup(
                 on_file_select,
                 on_command,
                 on_wikilink_click
+            }
+        },
+        EditorContentGroup::BlockQuoteGroup { items } => rsx! {
+            BlockquoteGroup {
+                items,
+                on_focus: move |_| {}
             }
         },
     }
