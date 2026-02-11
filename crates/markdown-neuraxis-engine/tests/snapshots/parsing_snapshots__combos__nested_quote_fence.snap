@@ -1,0 +1,41 @@
+---
+source: crates/markdown-neuraxis-engine/tests/parsing_snapshots.rs
+expression: snap
+---
+blocks:
+  - kind: Paragraph
+    span:
+      - 0
+      - 6
+    containers:
+      - Quote(1)
+    text: "> foo\n"
+    inline:
+      - kind: Text
+        span:
+          - 2
+          - 6
+        text: "foo\n"
+        parts: {}
+  - kind: FencedCode(Backticks)
+    span:
+      - 6
+      - 37
+    containers:
+      - Quote(1)
+    text: "> ```rust\n> const x = 1;\n> ```\n"
+    inline: []
+  - kind: Paragraph
+    span:
+      - 37
+      - 43
+    containers:
+      - Quote(1)
+    text: "> bar\n"
+    inline:
+      - kind: Text
+        span:
+          - 39
+          - 43
+        text: "bar\n"
+        parts: {}

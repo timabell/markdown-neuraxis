@@ -2962,6 +2962,7 @@ dependencies = [
  "regex",
  "relative-path 2.0.1",
  "rstest",
+ "serde",
  "tempfile",
  "thiserror 2.0.17",
  "tree-sitter",

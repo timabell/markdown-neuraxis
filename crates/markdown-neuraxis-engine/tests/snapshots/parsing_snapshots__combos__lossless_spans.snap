@@ -1,0 +1,33 @@
+---
+source: crates/markdown-neuraxis-engine/tests/parsing_snapshots.rs
+expression: snap
+---
+blocks:
+  - kind: Paragraph
+    span:
+      - 0
+      - 17
+    containers: []
+    text: "Hello [[world]]!\n"
+    inline:
+      - kind: Text
+        span:
+          - 0
+          - 6
+        text: "Hello "
+        parts: {}
+      - kind: WikiLink
+        span:
+          - 6
+          - 15
+        text: "[[world]]"
+        parts:
+          target:
+            - 8
+            - 13
+      - kind: Text
+        span:
+          - 15
+          - 17
+        text: "!\n"
+        parts: {}
