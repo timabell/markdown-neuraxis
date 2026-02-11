@@ -1,0 +1,51 @@
+---
+source: crates/markdown-neuraxis-engine/tests/parsing_snapshots.rs
+expression: snap
+---
+blocks:
+  - kind: Paragraph
+    span:
+      - 0
+      - 44
+    containers: []
+    text: "Text [[target|alias]] and `[[not a link]]`.\n"
+    inline:
+      - kind: Text
+        span:
+          - 0
+          - 5
+        text: "Text "
+        parts: {}
+      - kind: WikiLink
+        span:
+          - 5
+          - 21
+        text: "[[target|alias]]"
+        parts:
+          alias:
+            - 14
+            - 19
+          target:
+            - 7
+            - 13
+      - kind: Text
+        span:
+          - 21
+          - 26
+        text: " and "
+        parts: {}
+      - kind: CodeSpan
+        span:
+          - 26
+          - 42
+        text: "`[[not a link]]`"
+        parts:
+          inner:
+            - 27
+            - 41
+      - kind: Text
+        span:
+          - 42
+          - 44
+        text: ".\n"
+        parts: {}

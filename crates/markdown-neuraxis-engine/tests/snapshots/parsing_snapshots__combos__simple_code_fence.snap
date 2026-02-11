@@ -1,0 +1,12 @@
+---
+source: crates/markdown-neuraxis-engine/tests/parsing_snapshots.rs
+expression: snap
+---
+blocks:
+  - kind: FencedCode(Backticks)
+    span:
+      - 0
+      - 25
+    containers: []
+    text: "```rust\nfn main() {}\n```\n"
+    inline: []
