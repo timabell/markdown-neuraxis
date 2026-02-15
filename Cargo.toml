@@ -38,7 +38,7 @@ crossterm = "0.29"
 
 # Dev dependencies
 rstest = "0.26"
-insta = { version = "1.45", features = ["yaml"] }
+insta = { version = "1.45", features = ["yaml", "ron"] }
 pretty_assertions = "1.4"
 tempfile = "3.24"
 dioxus-ssr = "0.7"

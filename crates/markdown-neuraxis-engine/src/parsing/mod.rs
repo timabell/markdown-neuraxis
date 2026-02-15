@@ -57,9 +57,7 @@
  *   - **[`inline::kinds`]**: Inline types with owned delimiters
  *     - [`inline::kinds::code_span`](inline/kinds/code_span.rs) - Backtick code spans
  *     - [`inline::kinds::wikilink`](inline/kinds/wikilink.rs) - `[[target|alias]]` links
- * - **[`snapshot`]**: Testing support
- *   - [`snapshot::normalize`](snapshot/normalize.rs) - Serializable snapshot format
- *   - [`snapshot::invariants`](snapshot/invariants.rs) - Runtime correctness checks
+ * - **`tests/`**: Snapshot tests with fixtures (internal, not exported)
  *
  * ## Usage Pattern
  *
@@ -107,7 +105,9 @@
 pub mod blocks;
 pub mod inline;
 pub mod rope;
-pub mod snapshot;
+
+#[cfg(test)]
+mod tests;
 
 use xi_rope::Rope;
 
