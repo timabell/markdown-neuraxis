@@ -1,0 +1,50 @@
+---
+source: crates/markdown-neuraxis-engine/src/parsing/tests/mod.rs
+expression: snap
+---
+Snap(
+  blocks: [
+    BlockSnap(
+      kind: "Paragraph",
+      span: (0, 62),
+      containers: [],
+      text: "Unicode text: cafe cafe\nLink to [[日本語]] and `コード`\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (0, 32),
+          text: "Unicode text: cafe cafe\nLink to ",
+          parts: {},
+        ),
+        InlineSnap(
+          kind: "WikiLink",
+          span: (32, 45),
+          text: "[[日本語]]",
+          parts: {
+            "target": (34, 43),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (45, 50),
+          text: " and ",
+          parts: {},
+        ),
+        InlineSnap(
+          kind: "CodeSpan",
+          span: (50, 61),
+          text: "`コード`",
+          parts: {
+            "inner": (51, 60),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (61, 62),
+          text: "\n",
+          parts: {},
+        ),
+      ],
+    ),
+  ],
+)
