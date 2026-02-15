@@ -1,21 +1,36 @@
+/// Detected fence signature (what delimiter was seen on this line).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FenceSig {
+    /// Line starts with ``` (backticks).
     Backticks,
+    /// Line starts with ~~~ (tildes).
     Tildes,
 }
 
+/// The kind of fence that opened a code block (used for matching closer).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FenceKind {
+    /// Opened with backticks, must close with backticks.
     Backticks,
+    /// Opened with tildes, must close with tildes.
     Tildes,
 }
 
+/// Fenced code block type with owned delimiter constants.
+///
+/// Per ADR-0012's knowledge ownership principle, all fence-related
+/// syntax knowledge lives here, not scattered in classifier/builder code.
 pub struct CodeFence;
 
 impl CodeFence {
+    /// Triple backtick fence delimiter.
     pub const BACKTICKS: &'static str = "```";
+    /// Triple tilde fence delimiter.
     pub const TILDES: &'static str = "~~~";
 
+    /// Detects if a line remainder looks like a fence opener/closer.
+    ///
+    /// Returns the signature if the line starts with ``` or ~~~.
     pub fn sig(remainder: &str) -> Option<FenceSig> {
         let t = remainder.trim_end_matches(['\r', '\n']);
         if t.starts_with(Self::BACKTICKS) {
@@ -27,6 +42,7 @@ impl CodeFence {
         }
     }
 
+    /// Converts a fence signature to a fence kind.
     pub fn kind(sig: FenceSig) -> FenceKind {
         match sig {
             FenceSig::Backticks => FenceKind::Backticks,
@@ -34,6 +50,9 @@ impl CodeFence {
         }
     }
 
+    /// Checks if a fence signature closes a fence of the given kind.
+    ///
+    /// Backtick fences close with backticks, tilde fences with tildes.
     pub fn closes(kind: FenceKind, sig: Option<FenceSig>) -> bool {
         matches!(
             (kind, sig),

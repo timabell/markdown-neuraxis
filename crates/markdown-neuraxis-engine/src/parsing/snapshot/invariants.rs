@@ -2,6 +2,15 @@ use xi_rope::Rope;
 
 use crate::parsing::blocks::BlockNode;
 
+/// Validates parser output invariants.
+///
+/// Asserts that:
+/// - All block spans are within rope bounds
+/// - All content spans are within rope bounds
+/// - Content spans are contained within their block spans
+///
+/// # Panics
+/// Panics with a descriptive message if any invariant is violated.
 pub fn check(rope: &Rope, blocks: &[BlockNode]) {
     let n = rope.len();
     for b in blocks {

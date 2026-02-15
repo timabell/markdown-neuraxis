@@ -1,10 +1,20 @@
+/// Blockquote block type with owned delimiter constant.
+///
+/// Per ADR-0012's knowledge ownership principle, all blockquote-related
+/// syntax knowledge lives here, not scattered in classifier code.
 pub struct BlockQuote;
 
 impl BlockQuote {
+    /// The blockquote prefix character.
     pub const PREFIX: char = '>';
 
-    /// Returns (depth, byte index into `s` after stripping prefixes).
-    /// Intentionally small and self-contained.
+    /// Strips blockquote prefixes from a line, returning (depth, byte_offset).
+    ///
+    /// Handles various forms: `> text`, `>> nested`, `> > spaced nested`.
+    ///
+    /// # Returns
+    /// - `depth`: Number of `>` prefixes found (0 if not a blockquote)
+    /// - `byte_offset`: Index into `s` where content begins after prefixes
     pub fn strip_prefixes(s: &str) -> (u8, usize) {
         let b = s.as_bytes();
         let mut i = 0usize;
