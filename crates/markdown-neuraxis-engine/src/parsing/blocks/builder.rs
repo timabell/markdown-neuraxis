@@ -8,14 +8,18 @@ use super::{
     types::{BlockKind, BlockNode},
 };
 
+/// Internal state for the current leaf block being built.
 #[derive(Debug, Clone, Copy)]
 enum LeafState {
+    /// No leaf block is currently open.
     None,
+    /// Building a paragraph.
     Paragraph {
         start: Span,
         content_start: Span,
         last_line_end: usize,
     },
+    /// Inside a fenced code block (raw zone).
     Fence {
         kind: FenceKind,
         start: Span,
@@ -23,6 +27,21 @@ enum LeafState {
     },
 }
 
+/// State machine for building blocks from classified lines.
+///
+/// Phase 2 of block parsing: receives [`LineClass`] values and emits
+/// [`BlockNode`]s as blocks open and close.
+///
+/// # Usage
+///
+/// ```ignore
+/// let mut builder = BlockBuilder::new();
+/// for line in lines {
+///     let class = classifier.classify(&line);
+///     builder.push(&class);
+/// }
+/// let blocks = builder.finish();
+/// ```
 pub struct BlockBuilder {
     containers: ContainerPath,
     leaf: LeafState,
@@ -30,6 +49,7 @@ pub struct BlockBuilder {
 }
 
 impl BlockBuilder {
+    /// Creates a new block builder with empty state.
     pub fn new() -> Self {
         Self {
             containers: ContainerPath::default(),
@@ -38,6 +58,7 @@ impl BlockBuilder {
         }
     }
 
+    /// Processes a classified line, updating internal state and emitting blocks as needed.
     pub fn push(&mut self, c: &LineClass) {
         self.containers.set_blockquote_depth(c.quote_depth);
 
@@ -60,6 +81,9 @@ impl BlockBuilder {
         self.extend_paragraph(c.line, c.remainder_span);
     }
 
+    /// Finishes parsing and returns all emitted blocks.
+    ///
+    /// Flushes any in-progress paragraph or unterminated fence.
     pub fn finish(mut self) -> Vec<BlockNode> {
         // EOF flush
         self.flush_paragraph();
@@ -67,10 +91,12 @@ impl BlockBuilder {
         self.out
     }
 
+    /// Returns true if currently inside a fenced code block.
     fn in_fence(&self) -> bool {
         matches!(self.leaf, LeafState::Fence { .. })
     }
 
+    /// Opens a new leaf block based on the detected opener.
     fn open_leaf(&mut self, open: BlockOpen, line: Span) {
         match open {
             BlockOpen::FencedCode { kind } => {
@@ -83,6 +109,9 @@ impl BlockBuilder {
         }
     }
 
+    /// Processes a line while inside a fenced code block.
+    ///
+    /// Updates the fence span and closes it if a matching fence is found.
     fn consume_fence_line(&mut self, c: &LineClass) {
         let (kind, start, _last_end) = match self.leaf {
             LeafState::Fence {
@@ -118,6 +147,7 @@ impl BlockBuilder {
         }
     }
 
+    /// Extends the current paragraph or starts a new one.
     fn extend_paragraph(&mut self, line: Span, content_span: Span) {
         match self.leaf {
             LeafState::Paragraph {
@@ -141,6 +171,9 @@ impl BlockBuilder {
         }
     }
 
+    /// Emits the current paragraph block if one is in progress.
+    ///
+    /// Restores non-paragraph leaf state (e.g., fence) if not a paragraph.
     fn flush_paragraph(&mut self) {
         let prev = std::mem::replace(&mut self.leaf, LeafState::None);
         if let LeafState::Paragraph {
@@ -166,6 +199,7 @@ impl BlockBuilder {
         }
     }
 
+    /// Emits an unterminated fence block at EOF.
     fn flush_fence(&mut self) {
         let prev = std::mem::replace(&mut self.leaf, LeafState::None);
         if let LeafState::Fence {

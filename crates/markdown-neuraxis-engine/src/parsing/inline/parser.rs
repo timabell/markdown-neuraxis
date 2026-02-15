@@ -6,11 +6,25 @@ use super::{
     types::InlineNode,
 };
 
+/// Parses inline content into a sequence of [`InlineNode`]s.
+///
+/// # Arguments
+/// - `base`: Byte offset in the rope where `s` begins (for absolute span positions)
+/// - `s`: The string content to parse (typically a paragraph's content span)
+///
+/// # Raw Zone Precedence
+/// Code spans are checked first and suppress all other parsing inside them.
+/// `[[link]]` inside backticks is parsed as a code span, not a wikilink.
+///
+/// # Returns
+/// A vector of inline nodes covering the entire input. Text between special
+/// constructs is emitted as `InlineNode::Text`.
 pub fn parse_inline(base: usize, s: &str) -> Vec<InlineNode> {
     let mut cur = Cursor::new(s, base);
     let mut out = vec![];
     let mut text_start = cur.pos();
 
+    // Helper to flush accumulated text as a Text node
     fn flush_text(out: &mut Vec<InlineNode>, start: usize, end: usize) {
         if end > start {
             out.push(InlineNode::Text(Span { start, end }));
@@ -18,6 +32,7 @@ pub fn parse_inline(base: usize, s: &str) -> Vec<InlineNode> {
     }
 
     while !cur.eof() {
+        // Try constructs in precedence order (code spans first = raw zone)
         if let Some(node) = try_parse_code_span(&mut cur) {
             flush_text(&mut out, text_start, span_of(&node).start);
             text_start = span_of(&node).end;
@@ -37,6 +52,7 @@ pub fn parse_inline(base: usize, s: &str) -> Vec<InlineNode> {
     out
 }
 
+/// Extracts the full span from any inline node variant.
 fn span_of(n: &InlineNode) -> Span {
     match n {
         InlineNode::Text(sp) => *sp,
@@ -45,6 +61,10 @@ fn span_of(n: &InlineNode) -> Span {
     }
 }
 
+/// Attempts to parse a code span starting at the current position.
+///
+/// Returns `None` if not at a backtick or if the code span isn't closed.
+/// On failure, cursor position is restored.
 fn try_parse_code_span(cur: &mut Cursor<'_>) -> Option<InlineNode> {
     if cur.peek() != Some(CodeSpan::TICK) {
         return None;
@@ -80,6 +100,11 @@ fn try_parse_code_span(cur: &mut Cursor<'_>) -> Option<InlineNode> {
     })
 }
 
+/// Attempts to parse a wikilink starting at the current position.
+///
+/// Handles both `[[target]]` and `[[target|alias]]` forms.
+/// Returns `None` if not at `[[` or if the wikilink isn't closed.
+/// On failure, cursor position is restored.
 fn try_parse_wikilink(cur: &mut Cursor<'_>) -> Option<InlineNode> {
     if !cur.starts_with(WikiLink::OPEN) {
         return None;

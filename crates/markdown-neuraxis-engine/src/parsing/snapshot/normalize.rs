@@ -9,28 +9,46 @@ use crate::parsing::{
     rope::{slice::preview, span::Span},
 };
 
+/// Snapshot of a parsed document for testing with `insta`.
+///
+/// Contains a serializable representation of all blocks and their inline content.
 #[derive(Serialize)]
 pub struct Snap {
+    /// All blocks in the document.
     pub blocks: Vec<BlockSnap>,
 }
 
+/// Snapshot of a single block for testing.
 #[derive(Serialize)]
 pub struct BlockSnap {
+    /// Block kind as a string (e.g., "Paragraph", "FencedCode(Backticks)").
     pub kind: String,
+    /// Byte span as (start, end) tuple.
     pub span: (usize, usize),
+    /// Container stack as string labels (e.g., ["Quote(1)"]).
     pub containers: Vec<String>,
+    /// Preview of block text (truncated for readability).
     pub text: String,
+    /// Inline nodes within this block.
     pub inline: Vec<InlineSnap>,
 }
 
+/// Snapshot of a single inline node for testing.
 #[derive(Serialize)]
 pub struct InlineSnap {
+    /// Node kind as a string (e.g., "Text", "WikiLink", "CodeSpan").
     pub kind: String,
+    /// Byte span as (start, end) tuple.
     pub span: (usize, usize),
+    /// Preview of node text (truncated for readability).
     pub text: String,
+    /// Sub-spans by name (e.g., "target", "alias", "inner").
     pub parts: BTreeMap<String, (usize, usize)>,
 }
 
+/// Converts parsed blocks into a serializable snapshot for testing.
+///
+/// Includes block kinds, spans, containers, and inline content with sub-spans.
 pub fn normalize(rope: &Rope, blocks: &[BlockNode]) -> Snap {
     let blocks = blocks
         .iter()
