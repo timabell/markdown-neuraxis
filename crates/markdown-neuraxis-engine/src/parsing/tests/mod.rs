@@ -37,6 +37,46 @@ fn fixture_lossless_spans() {
     assert_fixture("lossless_spans");
 }
 
+#[test]
+fn fixture_tilde_fence() {
+    assert_fixture("tilde_fence");
+}
+
+#[test]
+fn fixture_unterminated_fence() {
+    assert_fixture("unterminated_fence");
+}
+
+#[test]
+fn fixture_deeply_nested_quotes() {
+    assert_fixture("deeply_nested_quotes");
+}
+
+#[test]
+fn fixture_empty_code_block() {
+    assert_fixture("empty_code_block");
+}
+
+#[test]
+fn fixture_adjacent_code_spans() {
+    assert_fixture("adjacent_code_spans");
+}
+
+#[test]
+fn fixture_unicode_content() {
+    assert_fixture("unicode_content");
+}
+
+#[test]
+fn fixture_empty_wikilink_parts() {
+    assert_fixture("empty_wikilink_parts");
+}
+
+#[test]
+fn fixture_multiple_wikilinks() {
+    assert_fixture("multiple_wikilinks");
+}
+
 fn assert_fixture(name: &str) {
     let fixtures_dir = format!("{}/src/parsing/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
     let md = std::fs::read_to_string(format!("{fixtures_dir}/{name}.md")).unwrap();

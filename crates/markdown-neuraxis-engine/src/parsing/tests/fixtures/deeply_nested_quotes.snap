@@ -1,0 +1,24 @@
+---
+source: crates/markdown-neuraxis-engine/src/parsing/tests/mod.rs
+expression: snap
+---
+Snap(
+  blocks: [
+    BlockSnap(
+      kind: "Paragraph",
+      span: (0, 52),
+      containers: [
+        "Quote(4)",
+      ],
+      text: "> Level 1\n> > Level 2\n> > > Level 3\n> > > > Level 4\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (2, 52),
+          text: "Level 1\n> > Level 2\n> > > Level 3\n> > > > Level 4\n",
+          parts: {},
+        ),
+      ],
+    ),
+  ],
+)

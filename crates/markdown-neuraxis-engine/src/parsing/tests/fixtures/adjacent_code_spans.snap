@@ -1,0 +1,46 @@
+---
+source: crates/markdown-neuraxis-engine/src/parsing/tests/mod.rs
+expression: snap
+---
+Snap(
+  blocks: [
+    BlockSnap(
+      kind: "Paragraph",
+      span: (0, 22),
+      containers: [],
+      text: "`one``two``three` end\n",
+      inline: [
+        InlineSnap(
+          kind: "CodeSpan",
+          span: (0, 5),
+          text: "`one`",
+          parts: {
+            "inner": (1, 4),
+          },
+        ),
+        InlineSnap(
+          kind: "CodeSpan",
+          span: (5, 10),
+          text: "`two`",
+          parts: {
+            "inner": (6, 9),
+          },
+        ),
+        InlineSnap(
+          kind: "CodeSpan",
+          span: (10, 17),
+          text: "`three`",
+          parts: {
+            "inner": (11, 16),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (17, 22),
+          text: " end\n",
+          parts: {},
+        ),
+      ],
+    ),
+  ],
+)

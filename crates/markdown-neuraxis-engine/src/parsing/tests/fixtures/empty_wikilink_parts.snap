@@ -1,0 +1,66 @@
+---
+source: crates/markdown-neuraxis-engine/src/parsing/tests/mod.rs
+expression: snap
+---
+Snap(
+  blocks: [
+    BlockSnap(
+      kind: "Paragraph",
+      span: (0, 51),
+      containers: [],
+      text: "Empty: [[]] pipe: [[|alias]] trailing: [[target|]]\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (0, 7),
+          text: "Empty: ",
+          parts: {},
+        ),
+        InlineSnap(
+          kind: "WikiLink",
+          span: (7, 11),
+          text: "[[]]",
+          parts: {
+            "target": (9, 9),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (11, 18),
+          text: " pipe: ",
+          parts: {},
+        ),
+        InlineSnap(
+          kind: "WikiLink",
+          span: (18, 28),
+          text: "[[|alias]]",
+          parts: {
+            "alias": (21, 26),
+            "target": (20, 20),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (28, 39),
+          text: " trailing: ",
+          parts: {},
+        ),
+        InlineSnap(
+          kind: "WikiLink",
+          span: (39, 50),
+          text: "[[target|]]",
+          parts: {
+            "alias": (48, 48),
+            "target": (41, 47),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (50, 51),
+          text: "\n",
+          parts: {},
+        ),
+      ],
+    ),
+  ],
+)

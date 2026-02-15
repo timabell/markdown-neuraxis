@@ -71,4 +71,81 @@ mod tests {
         assert!(cur.starts_with(b"[["));
         assert!(!cur.starts_with(b"]]"));
     }
+
+    #[test]
+    fn empty_string_input() {
+        let cur = Cursor::new("", 0);
+        assert!(cur.eof());
+        assert_eq!(cur.peek(), None);
+        assert_eq!(cur.pos(), 0);
+    }
+
+    #[test]
+    fn single_character_input() {
+        let mut cur = Cursor::new("x", 100);
+        assert!(!cur.eof());
+        assert_eq!(cur.peek(), Some(b'x'));
+        assert_eq!(cur.pos(), 100);
+
+        assert_eq!(cur.bump(), Some(b'x'));
+        assert!(cur.eof());
+        assert_eq!(cur.peek(), None);
+        assert_eq!(cur.pos(), 101);
+    }
+
+    #[test]
+    fn starts_with_pattern_longer_than_remaining() {
+        let mut cur = Cursor::new("ab", 0);
+        // Pattern longer than entire string
+        assert!(!cur.starts_with(b"abcdef"));
+
+        // Move to position where only 1 char remains
+        cur.bump();
+        assert!(!cur.starts_with(b"bc"));
+        assert!(cur.starts_with(b"b"));
+    }
+
+    #[test]
+    fn starts_with_at_eof() {
+        let mut cur = Cursor::new("ab", 0);
+        cur.bump_n(2);
+        assert!(cur.eof());
+        // Empty pattern should still match at EOF
+        assert!(cur.starts_with(b""));
+        // Non-empty pattern should not match at EOF
+        assert!(!cur.starts_with(b"a"));
+    }
+
+    #[test]
+    fn bump_n_advances_correctly() {
+        let mut cur = Cursor::new("hello", 10);
+        cur.bump_n(3);
+        assert_eq!(cur.pos(), 13);
+        assert_eq!(cur.peek(), Some(b'l'));
+    }
+
+    #[test]
+    fn bump_n_to_exact_end() {
+        let mut cur = Cursor::new("hello", 0);
+        cur.bump_n(5);
+        assert!(cur.eof());
+        assert_eq!(cur.peek(), None);
+    }
+
+    #[test]
+    fn bump_n_past_end() {
+        // bump_n does not bounds check; caller must ensure validity
+        let mut cur = Cursor::new("hi", 0);
+        cur.bump_n(10);
+        assert!(cur.eof()); // i >= s.len() so eof is true
+        assert_eq!(cur.peek(), None);
+    }
+
+    #[test]
+    fn bump_at_eof_returns_none() {
+        let mut cur = Cursor::new("x", 0);
+        assert_eq!(cur.bump(), Some(b'x'));
+        assert_eq!(cur.bump(), None);
+        assert_eq!(cur.bump(), None); // idempotent
+    }
 }
