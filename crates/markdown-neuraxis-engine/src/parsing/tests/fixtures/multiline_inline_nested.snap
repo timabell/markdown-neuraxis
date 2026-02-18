@@ -1,0 +1,71 @@
+---
+source: crates/markdown-neuraxis-engine/src/parsing/tests/mod.rs
+expression: snap
+---
+Snap(
+  blocks: [
+    BlockSnap(
+      kind: "Paragraph",
+      span: (0, 56),
+      containers: [
+        "Quote(1)",
+      ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (0, 25),
+            prefix: (0, 2),
+            content: (2, 24),
+            prefix_text: "> ",
+            content_text: "Text with [[wikilink]]",
+          ),
+          ContentLineSnap(
+            raw_line: (25, 56),
+            prefix: (25, 27),
+            content: (27, 55),
+            prefix_text: "> ",
+            content_text: "and `code span` on next line",
+          ),
+        ]),
+      ),
+      text: "> Text with [[wikilink]]\n> and `code span` on next line\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (0, 10),
+          text: "Text with ",
+          parts: {},
+        ),
+        InlineSnap(
+          kind: "WikiLink",
+          span: (10, 22),
+          text: "[[wikilink]]",
+          parts: {
+            "target": (12, 20),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (22, 27),
+          text: "\nand ",
+          parts: {},
+        ),
+        InlineSnap(
+          kind: "CodeSpan",
+          span: (27, 38),
+          text: "`code span`",
+          parts: {
+            "inner": (28, 37),
+          },
+        ),
+        InlineSnap(
+          kind: "Text",
+          span: (38, 51),
+          text: " on next line",
+          parts: {},
+        ),
+      ],
+    ),
+  ],
+)

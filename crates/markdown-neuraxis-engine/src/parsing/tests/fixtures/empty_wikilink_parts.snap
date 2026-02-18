@@ -8,6 +8,10 @@ Snap(
       kind: "Paragraph",
       span: (0, 51),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 50)),
+      ),
       text: "Empty: [[]] pipe: [[|alias]] trailing: [[target|]]\n",
       inline: [
         InlineSnap(
@@ -53,12 +57,6 @@ Snap(
             "alias": (48, 48),
             "target": (41, 47),
           },
-        ),
-        InlineSnap(
-          kind: "Text",
-          span: (50, 51),
-          text: "\n",
-          parts: {},
         ),
       ],
     ),

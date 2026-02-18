@@ -3,27 +3,41 @@ use crate::parsing::rope::span::Span;
 use super::{
     classify::LineClass,
     containers::ContainerPath,
+    content::{ContentLine, ContentView},
     kinds::{CodeFence, FenceKind},
     open::{BlockOpen, try_open_leaf},
     types::{BlockKind, BlockNode},
 };
 
+use super::types::ContainerFrame;
+
 /// Internal state for the current leaf block being built.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum LeafState {
     /// No leaf block is currently open.
     None,
     /// Building a paragraph.
     Paragraph {
         start: Span,
-        content_start: Span,
         last_line_end: usize,
+        /// Per-line content lines for ContentView.
+        lines: Vec<ContentLine>,
+        /// Whether the paragraph is inside a container (needs Lines view).
+        in_container: bool,
+        /// Container state captured when paragraph started.
+        containers: Vec<ContainerFrame>,
     },
     /// Inside a fenced code block (raw zone).
     Fence {
         kind: FenceKind,
         start: Span,
         last_line_end: usize,
+        /// Per-line content lines for ContentView.
+        lines: Vec<ContentLine>,
+        /// Whether the fence is inside a container (needs Lines view).
+        in_container: bool,
+        /// Container state captured when fence started.
+        containers: Vec<ContainerFrame>,
     },
 }
 
@@ -74,11 +88,11 @@ impl BlockBuilder {
 
         if let Some(open) = try_open_leaf(&c.remainder_text) {
             self.flush_paragraph();
-            self.open_leaf(open, c.line);
+            self.open_leaf(open, c);
             return;
         }
 
-        self.extend_paragraph(c.line, c.remainder_span);
+        self.extend_paragraph(c);
     }
 
     /// Finishes parsing and returns all emitted blocks.
@@ -96,14 +110,51 @@ impl BlockBuilder {
         matches!(self.leaf, LeafState::Fence { .. })
     }
 
+    /// Returns true if currently inside a container (blockquote, etc.).
+    fn is_in_container(&self) -> bool {
+        !self.containers.0.is_empty()
+    }
+
+    /// Creates a ContentLine from a LineClass.
+    fn make_content_line(c: &LineClass) -> ContentLine {
+        ContentLine {
+            raw_line: c.line,
+            prefix: c.prefix_span,
+            content: c.remainder_span,
+        }
+    }
+
+    /// Builds a ContentView from accumulated lines.
+    fn build_content_view(lines: Vec<ContentLine>, in_container: bool) -> ContentView {
+        if in_container {
+            ContentView::Lines(lines)
+        } else if let Some(first) = lines.first() {
+            // For non-container blocks, compute contiguous span from first content start
+            // to last content end
+            let last = lines.last().unwrap();
+            ContentView::Contiguous(Span {
+                start: first.content.start,
+                end: last.content.end,
+            })
+        } else {
+            // Empty block (shouldn't happen in practice)
+            ContentView::Contiguous(Span { start: 0, end: 0 })
+        }
+    }
+
     /// Opens a new leaf block based on the detected opener.
-    fn open_leaf(&mut self, open: BlockOpen, line: Span) {
+    fn open_leaf(&mut self, open: BlockOpen, c: &LineClass) {
+        let in_container = self.is_in_container();
+        let containers = self.containers.0.clone();
         match open {
             BlockOpen::FencedCode { kind } => {
                 self.leaf = LeafState::Fence {
                     kind,
-                    start: line,
-                    last_line_end: line.end,
+                    start: c.line,
+                    last_line_end: c.line.end,
+                    lines: vec![Self::make_content_line(c)],
+                    in_container,
+                    containers,
                 }
             }
         }
@@ -113,59 +164,74 @@ impl BlockBuilder {
     ///
     /// Updates the fence span and closes it if a matching fence is found.
     fn consume_fence_line(&mut self, c: &LineClass) {
-        let (kind, start, _last_end) = match self.leaf {
+        let (kind, start, _last_end, mut lines, in_container, containers) = match &mut self.leaf {
             LeafState::Fence {
                 kind,
                 start,
                 last_line_end,
-            } => (kind, start, last_line_end),
+                lines,
+                in_container,
+                containers,
+            } => (
+                *kind,
+                *start,
+                *last_line_end,
+                std::mem::take(lines),
+                *in_container,
+                std::mem::take(containers),
+            ),
             _ => return,
         };
 
-        // Update last line end
-        self.leaf = LeafState::Fence {
-            kind,
-            start,
-            last_line_end: c.line.end,
-        };
+        // Add this line to accumulated lines
+        lines.push(Self::make_content_line(c));
 
         // Close if this line "looks like fence" with same sig.
         if CodeFence::closes(kind, c.fence_sig) {
+            let content = Self::build_content_view(lines, in_container);
             self.out.push(BlockNode {
-                containers: self.containers.0.clone(),
+                containers,
                 kind: BlockKind::FencedCode { kind },
                 span: Span {
                     start: start.start,
                     end: c.line.end,
                 },
-                content_span: Span {
-                    start: start.start,
-                    end: c.line.end,
-                },
+                content,
             });
             self.leaf = LeafState::None;
+        } else {
+            // Update state with accumulated lines
+            self.leaf = LeafState::Fence {
+                kind,
+                start,
+                last_line_end: c.line.end,
+                lines,
+                in_container,
+                containers,
+            };
         }
     }
 
     /// Extends the current paragraph or starts a new one.
-    fn extend_paragraph(&mut self, line: Span, content_span: Span) {
-        match self.leaf {
+    fn extend_paragraph(&mut self, c: &LineClass) {
+        match &mut self.leaf {
             LeafState::Paragraph {
-                start,
-                content_start,
+                last_line_end,
+                lines,
                 ..
             } => {
-                self.leaf = LeafState::Paragraph {
-                    start,
-                    content_start,
-                    last_line_end: line.end,
-                };
+                *last_line_end = c.line.end;
+                lines.push(Self::make_content_line(c));
             }
             _ => {
+                let in_container = self.is_in_container();
+                let containers = self.containers.0.clone();
                 self.leaf = LeafState::Paragraph {
-                    start: line,
-                    content_start: content_span,
-                    last_line_end: line.end,
+                    start: c.line,
+                    last_line_end: c.line.end,
+                    lines: vec![Self::make_content_line(c)],
+                    in_container,
+                    containers,
                 };
             }
         }
@@ -178,21 +244,21 @@ impl BlockBuilder {
         let prev = std::mem::replace(&mut self.leaf, LeafState::None);
         if let LeafState::Paragraph {
             start,
-            content_start,
             last_line_end,
+            lines,
+            in_container,
+            containers,
         } = prev
         {
+            let content = Self::build_content_view(lines, in_container);
             self.out.push(BlockNode {
-                containers: self.containers.0.clone(),
+                containers,
                 kind: BlockKind::Paragraph,
                 span: Span {
                     start: start.start,
                     end: last_line_end,
                 },
-                content_span: Span {
-                    start: content_start.start,
-                    end: last_line_end,
-                },
+                content,
             });
         } else {
             self.leaf = prev; // put back non-paragraph leaf (e.g. fence)
@@ -206,20 +272,21 @@ impl BlockBuilder {
             kind,
             start,
             last_line_end,
+            lines,
+            in_container,
+            containers,
         } = prev
         {
             // Unterminated fence: emit as fence block anyway
+            let content = Self::build_content_view(lines, in_container);
             self.out.push(BlockNode {
-                containers: self.containers.0.clone(),
+                containers,
                 kind: BlockKind::FencedCode { kind },
                 span: Span {
                     start: start.start,
                     end: last_line_end,
                 },
-                content_span: Span {
-                    start: start.start,
-                    end: last_line_end,
-                },
+                content,
             });
         }
     }
@@ -248,6 +315,7 @@ mod tests {
             line: Span { start, end },
             is_blank,
             quote_depth: 0,
+            prefix_span: Span { start, end: start }, // Empty prefix for non-quoted lines
             remainder_span: Span { start, end },
             remainder_text: remainder.to_string(),
             fence_sig,

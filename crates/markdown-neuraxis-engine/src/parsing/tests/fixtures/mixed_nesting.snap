@@ -1,0 +1,117 @@
+---
+source: crates/markdown-neuraxis-engine/src/parsing/tests/mod.rs
+expression: snap
+---
+Snap(
+  blocks: [
+    BlockSnap(
+      kind: "Paragraph",
+      span: (0, 20),
+      containers: [
+        "Quote(1)",
+      ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (0, 20),
+            prefix: (0, 2),
+            content: (2, 19),
+            prefix_text: "> ",
+            content_text: "First level quote",
+          ),
+        ]),
+      ),
+      text: "> First level quote\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (0, 17),
+          text: "First level quote",
+          parts: {},
+        ),
+      ],
+    ),
+    BlockSnap(
+      kind: "Paragraph",
+      span: (22, 63),
+      containers: [
+        "Quote(2)",
+      ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (22, 39),
+            prefix: (22, 26),
+            content: (26, 38),
+            prefix_text: "> > ",
+            content_text: "Nested quote",
+          ),
+          ContentLineSnap(
+            raw_line: (39, 63),
+            prefix: (39, 43),
+            content: (43, 62),
+            prefix_text: "> > ",
+            content_text: "with multiple lines",
+          ),
+        ]),
+      ),
+      text: "> > Nested quote\n> > with multiple lines\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (0, 32),
+          text: "Nested quote\nwith multiple lines",
+          parts: {},
+        ),
+      ],
+    ),
+    BlockSnap(
+      kind: "Paragraph",
+      span: (65, 87),
+      containers: [
+        "Quote(1)",
+      ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (65, 87),
+            prefix: (65, 67),
+            content: (67, 86),
+            prefix_text: "> ",
+            content_text: "Back to first level",
+          ),
+        ]),
+      ),
+      text: "> Back to first level\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (0, 19),
+          text: "Back to first level",
+          parts: {},
+        ),
+      ],
+    ),
+    BlockSnap(
+      kind: "Paragraph",
+      span: (88, 120),
+      containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((88, 119)),
+      ),
+      text: "Regular paragraph after quotes.\n",
+      inline: [
+        InlineSnap(
+          kind: "Text",
+          span: (88, 119),
+          text: "Regular paragraph after quotes.",
+          parts: {},
+        ),
+      ],
+    ),
+  ],
+)

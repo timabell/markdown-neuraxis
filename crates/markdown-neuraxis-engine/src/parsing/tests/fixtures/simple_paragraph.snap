@@ -8,12 +8,16 @@ Snap(
       kind: "Paragraph",
       span: (0, 28),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 27)),
+      ),
       text: "This is a simple paragraph.\n",
       inline: [
         InlineSnap(
           kind: "Text",
-          span: (0, 28),
-          text: "This is a simple paragraph.\n",
+          span: (0, 27),
+          text: "This is a simple paragraph.",
           parts: {},
         ),
       ],

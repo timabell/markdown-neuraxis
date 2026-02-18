@@ -8,6 +8,10 @@ Snap(
       kind: "Paragraph",
       span: (0, 17),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 16)),
+      ),
       text: "Hello [[world]]!\n",
       inline: [
         InlineSnap(
@@ -26,8 +30,8 @@ Snap(
         ),
         InlineSnap(
           kind: "Text",
-          span: (15, 17),
-          text: "!\n",
+          span: (15, 16),
+          text: "!",
           parts: {},
         ),
       ],

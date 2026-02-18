@@ -8,14 +8,47 @@ Snap(
       kind: "Paragraph",
       span: (0, 52),
       containers: [
-        "Quote(4)",
+        "Quote(1)",
       ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (0, 10),
+            prefix: (0, 2),
+            content: (2, 9),
+            prefix_text: "> ",
+            content_text: "Level 1",
+          ),
+          ContentLineSnap(
+            raw_line: (10, 22),
+            prefix: (10, 14),
+            content: (14, 21),
+            prefix_text: "> > ",
+            content_text: "Level 2",
+          ),
+          ContentLineSnap(
+            raw_line: (22, 36),
+            prefix: (22, 28),
+            content: (28, 35),
+            prefix_text: "> > > ",
+            content_text: "Level 3",
+          ),
+          ContentLineSnap(
+            raw_line: (36, 52),
+            prefix: (36, 44),
+            content: (44, 51),
+            prefix_text: "> > > > ",
+            content_text: "Level 4",
+          ),
+        ]),
+      ),
       text: "> Level 1\n> > Level 2\n> > > Level 3\n> > > > Level 4\n",
       inline: [
         InlineSnap(
           kind: "Text",
-          span: (2, 52),
-          text: "Level 1\n> > Level 2\n> > > Level 3\n> > > > Level 4\n",
+          span: (0, 31),
+          text: "Level 1\nLevel 2\nLevel 3\nLevel 4",
           parts: {},
         ),
       ],

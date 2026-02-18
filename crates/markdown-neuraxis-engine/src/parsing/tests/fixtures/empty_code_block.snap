@@ -8,6 +8,10 @@ Snap(
       kind: "FencedCode(Backticks)",
       span: (0, 8),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 7)),
+      ),
       text: "```\n```\n",
       inline: [],
     ),

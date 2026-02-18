@@ -1,15 +1,20 @@
 use xi_rope::Rope;
 
-use crate::parsing::blocks::BlockNode;
+use crate::parsing::blocks::{BlockNode, ContentView};
 
 /// Validates parser output invariants.
 ///
 /// Asserts that:
 /// - All block spans are within rope bounds
-/// - All content spans are within rope bounds
-/// - Content spans are contained within their block spans
+/// - All content views are within rope bounds
+/// - Content is contained within block spans
 /// - Blocks are ordered (each block starts at or after previous ends)
 /// - No overlapping spans between sibling blocks
+/// - ContentLine invariants (for Lines view):
+///   - prefix and content are within raw_line
+///   - prefix.end <= content.start
+///   - raw_line.start <= prefix.start
+///   - content.end <= raw_line.end
 ///
 /// # Panics
 /// Panics with a descriptive message if any invariant is violated.
@@ -24,18 +29,99 @@ pub fn check(rope: &Rope, blocks: &[BlockNode]) {
             b.span,
             n
         );
-        assert!(
-            b.content_span.start <= b.content_span.end && b.content_span.end <= n,
-            "content span out of bounds: {:?} (rope len: {})",
-            b.content_span,
-            n
-        );
-        assert!(
-            b.content_span.start >= b.span.start && b.content_span.end <= b.span.end,
-            "content span not contained in block span: content {:?}, block {:?}",
-            b.content_span,
-            b.span
-        );
+
+        // Check content view based on its type
+        match &b.content {
+            ContentView::Contiguous(content_span) => {
+                assert!(
+                    content_span.start <= content_span.end && content_span.end <= n,
+                    "content span out of bounds: {:?} (rope len: {})",
+                    content_span,
+                    n
+                );
+                assert!(
+                    content_span.start >= b.span.start && content_span.end <= b.span.end,
+                    "content span not contained in block span: content {:?}, block {:?}",
+                    content_span,
+                    b.span
+                );
+            }
+            ContentView::Lines(lines) => {
+                for (j, line) in lines.iter().enumerate() {
+                    // raw_line bounds
+                    assert!(
+                        line.raw_line.start <= line.raw_line.end && line.raw_line.end <= n,
+                        "block {} line {} raw_line out of bounds: {:?} (rope len: {})",
+                        i,
+                        j,
+                        line.raw_line,
+                        n
+                    );
+
+                    // raw_line contained in block span
+                    assert!(
+                        line.raw_line.start >= b.span.start && line.raw_line.end <= b.span.end,
+                        "block {} line {} raw_line not contained in block span: raw_line {:?}, block {:?}",
+                        i,
+                        j,
+                        line.raw_line,
+                        b.span
+                    );
+
+                    // prefix within raw_line
+                    assert!(
+                        line.prefix.start >= line.raw_line.start
+                            && line.prefix.end <= line.raw_line.end,
+                        "block {} line {} prefix not within raw_line: prefix {:?}, raw_line {:?}",
+                        i,
+                        j,
+                        line.prefix,
+                        line.raw_line
+                    );
+
+                    // content within raw_line
+                    assert!(
+                        line.content.start >= line.raw_line.start
+                            && line.content.end <= line.raw_line.end,
+                        "block {} line {} content not within raw_line: content {:?}, raw_line {:?}",
+                        i,
+                        j,
+                        line.content,
+                        line.raw_line
+                    );
+
+                    // prefix.end <= content.start
+                    assert!(
+                        line.prefix.end <= line.content.start,
+                        "block {} line {} prefix.end ({}) > content.start ({})",
+                        i,
+                        j,
+                        line.prefix.end,
+                        line.content.start
+                    );
+
+                    // raw_line.start <= prefix.start
+                    assert!(
+                        line.raw_line.start <= line.prefix.start,
+                        "block {} line {} raw_line.start ({}) > prefix.start ({})",
+                        i,
+                        j,
+                        line.raw_line.start,
+                        line.prefix.start
+                    );
+
+                    // content.end <= raw_line.end
+                    assert!(
+                        line.content.end <= line.raw_line.end,
+                        "block {} line {} content.end ({}) > raw_line.end ({})",
+                        i,
+                        j,
+                        line.content.end,
+                        line.raw_line.end
+                    );
+                }
+            }
+        }
 
         // Check blocks are ordered: each starts at or after the previous ends
         if let Some(pe) = prev_end {

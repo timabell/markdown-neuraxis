@@ -8,6 +8,10 @@ Snap(
       kind: "Paragraph",
       span: (0, 44),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 43)),
+      ),
       text: "Text [[target|alias]] and `[[not a link]]`.\n",
       inline: [
         InlineSnap(
@@ -41,8 +45,8 @@ Snap(
         ),
         InlineSnap(
           kind: "Text",
-          span: (42, 44),
-          text: ".\n",
+          span: (42, 43),
+          text: ".",
           parts: {},
         ),
       ],

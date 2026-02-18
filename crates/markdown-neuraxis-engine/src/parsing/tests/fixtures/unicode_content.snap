@@ -8,6 +8,10 @@ Snap(
       kind: "Paragraph",
       span: (0, 62),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 61)),
+      ),
       text: "Unicode text: cafe cafe\nLink to [[日本語]] and `コード`\n",
       inline: [
         InlineSnap(
@@ -37,12 +41,6 @@ Snap(
           parts: {
             "inner": (51, 60),
           },
-        ),
-        InlineSnap(
-          kind: "Text",
-          span: (61, 62),
-          text: "\n",
-          parts: {},
         ),
       ],
     ),

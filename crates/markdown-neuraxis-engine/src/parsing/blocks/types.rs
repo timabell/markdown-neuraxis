@@ -1,5 +1,6 @@
 use crate::parsing::rope::span::Span;
 
+use super::content::ContentView;
 use super::kinds::FenceKind;
 
 /// A frame in the container stack representing a nesting level.
@@ -28,6 +29,10 @@ pub enum BlockKind {
 }
 
 /// A parsed block node with its containers, kind, and spans.
+///
+/// The `content` field provides a view of the block's meaningful content
+/// that separates container prefixes from actual content. This enables
+/// GUI editing modes that can show or hide prefixes.
 #[derive(Debug, Clone)]
 pub struct BlockNode {
     /// The container stack this block is nested within.
@@ -36,6 +41,10 @@ pub struct BlockNode {
     pub kind: BlockKind,
     /// Full byte span of the block including delimiters.
     pub span: Span,
-    /// Content span for inline parsing (excludes prefixes like `>`).
-    pub content_span: Span,
+    /// Content projection for inline parsing and editing.
+    ///
+    /// For blocks inside containers (blockquotes, lists), this is
+    /// `ContentView::Lines` with per-line prefix/content separation.
+    /// For blocks not in containers, this is `ContentView::Contiguous`.
+    pub content: ContentView,
 }

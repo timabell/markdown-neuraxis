@@ -151,9 +151,52 @@ pub fn parse_document(rope: &Rope) -> ParsedDoc {
 /// # Returns
 /// A vector of [`inline::InlineNode`]s covering the block's content span.
 pub fn parse_inline_for_block(rope: &Rope, b: &BlockNode) -> Vec<inline::InlineNode> {
+    use blocks::ContentView;
+
     if !matches!(b.kind, BlockKind::Paragraph) {
         return vec![];
     }
-    let s = slice_to_string(rope, b.content_span);
-    inline::parse_inline(b.content_span.start, &s)
+
+    match &b.content {
+        ContentView::Contiguous(span) => {
+            let s = slice_to_string(rope, *span);
+            inline::parse_inline(span.start, &s)
+        }
+        ContentView::Lines(lines) => {
+            // For lines-based content, join content spans with newlines and parse
+            // the joined string, then the spans are already correct since we use
+            // a position map approach.
+            parse_inline_for_lines(rope, lines)
+        }
+    }
+}
+
+/// Parses inline content from a Lines-based ContentView.
+///
+/// Joins content spans with newlines and parses inline nodes.
+///
+/// # Important: Virtual Spans
+///
+/// For Lines-based content, inline spans are **virtual positions** (0-based,
+/// relative to the joined content string). This is because the actual content
+/// in the rope is non-contiguous (separated by prefix characters).
+///
+/// Use [`ContentView::join_content`] to get the string these spans refer to.
+fn parse_inline_for_lines(rope: &Rope, lines: &[blocks::ContentLine]) -> Vec<inline::InlineNode> {
+    if lines.is_empty() {
+        return vec![];
+    }
+
+    // Build virtual string by joining content spans with newlines
+    let mut virtual_text = String::new();
+    for (i, line) in lines.iter().enumerate() {
+        let content_text = slice_to_string(rope, line.content);
+        virtual_text.push_str(&content_text);
+        if i < lines.len() - 1 {
+            virtual_text.push('\n');
+        }
+    }
+
+    // Parse with base=0, returning virtual positions
+    inline::parse_inline(0, &virtual_text)
 }

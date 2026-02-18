@@ -1,0 +1,43 @@
+---
+source: crates/markdown-neuraxis-engine/src/parsing/tests/mod.rs
+expression: snap
+---
+Snap(
+  blocks: [
+    BlockSnap(
+      kind: "FencedCode(Backticks)",
+      span: (0, 29),
+      containers: [
+        "Quote(1)",
+      ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (0, 10),
+            prefix: (0, 2),
+            content: (2, 9),
+            prefix_text: "> ",
+            content_text: "```rust",
+          ),
+          ContentLineSnap(
+            raw_line: (10, 23),
+            prefix: (10, 12),
+            content: (12, 22),
+            prefix_text: "> ",
+            content_text: "let x = 1;",
+          ),
+          ContentLineSnap(
+            raw_line: (23, 29),
+            prefix: (23, 25),
+            content: (25, 28),
+            prefix_text: "> ",
+            content_text: "```",
+          ),
+        ]),
+      ),
+      text: "> ```rust\n> let x = 1;\n> ```\n",
+      inline: [],
+    ),
+  ],
+)

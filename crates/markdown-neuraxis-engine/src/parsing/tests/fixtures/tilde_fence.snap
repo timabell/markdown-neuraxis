@@ -8,6 +8,10 @@ Snap(
       kind: "FencedCode(Tildes)",
       span: (0, 29),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 28)),
+      ),
       text: "~~~python\nprint(\"hello\")\n~~~\n",
       inline: [],
     ),

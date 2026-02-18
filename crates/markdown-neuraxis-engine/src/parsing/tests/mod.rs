@@ -77,6 +77,21 @@ fn fixture_multiple_wikilinks() {
     assert_fixture("multiple_wikilinks");
 }
 
+#[test]
+fn fixture_nested_fence_in_quote() {
+    assert_fixture("nested_fence_in_quote");
+}
+
+#[test]
+fn fixture_mixed_nesting() {
+    assert_fixture("mixed_nesting");
+}
+
+#[test]
+fn fixture_multiline_inline_nested() {
+    assert_fixture("multiline_inline_nested");
+}
+
 fn assert_fixture(name: &str) {
     let fixtures_dir = format!("{}/src/parsing/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
     let md = std::fs::read_to_string(format!("{fixtures_dir}/{name}.md")).unwrap();

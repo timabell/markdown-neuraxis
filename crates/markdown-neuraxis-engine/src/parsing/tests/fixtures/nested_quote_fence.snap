@@ -10,12 +10,24 @@ Snap(
       containers: [
         "Quote(1)",
       ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (0, 6),
+            prefix: (0, 2),
+            content: (2, 5),
+            prefix_text: "> ",
+            content_text: "foo",
+          ),
+        ]),
+      ),
       text: "> foo\n",
       inline: [
         InlineSnap(
           kind: "Text",
-          span: (2, 6),
-          text: "foo\n",
+          span: (0, 3),
+          text: "foo",
           parts: {},
         ),
       ],
@@ -26,6 +38,32 @@ Snap(
       containers: [
         "Quote(1)",
       ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (6, 16),
+            prefix: (6, 8),
+            content: (8, 15),
+            prefix_text: "> ",
+            content_text: "```rust",
+          ),
+          ContentLineSnap(
+            raw_line: (16, 31),
+            prefix: (16, 18),
+            content: (18, 30),
+            prefix_text: "> ",
+            content_text: "const x = 1;",
+          ),
+          ContentLineSnap(
+            raw_line: (31, 37),
+            prefix: (31, 33),
+            content: (33, 36),
+            prefix_text: "> ",
+            content_text: "```",
+          ),
+        ]),
+      ),
       text: "> ```rust\n> const x = 1;\n> ```\n",
       inline: [],
     ),
@@ -35,12 +73,24 @@ Snap(
       containers: [
         "Quote(1)",
       ],
+      content: ContentSnap(
+        view_type: "Lines",
+        lines: Some([
+          ContentLineSnap(
+            raw_line: (37, 43),
+            prefix: (37, 39),
+            content: (39, 42),
+            prefix_text: "> ",
+            content_text: "bar",
+          ),
+        ]),
+      ),
       text: "> bar\n",
       inline: [
         InlineSnap(
           kind: "Text",
-          span: (39, 43),
-          text: "bar\n",
+          span: (0, 3),
+          text: "bar",
           parts: {},
         ),
       ],

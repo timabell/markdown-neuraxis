@@ -8,6 +8,10 @@ Snap(
       kind: "Paragraph",
       span: (0, 51),
       containers: [],
+      content: ContentSnap(
+        view_type: "Contiguous",
+        content_span: Some((0, 50)),
+      ),
       text: "Start [[one]][[two]] mid [[three|three alias]] end\n",
       inline: [
         InlineSnap(
@@ -49,8 +53,8 @@ Snap(
         ),
         InlineSnap(
           kind: "Text",
-          span: (46, 51),
-          text: " end\n",
+          span: (46, 50),
+          text: " end",
           parts: {},
         ),
       ],
