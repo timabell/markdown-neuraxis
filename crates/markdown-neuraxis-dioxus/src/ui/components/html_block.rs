@@ -1,12 +1,13 @@
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::RenderBlock;
 
-/// Fallback component for single blockquotes (nested ones use BlockquoteGroup)
+/// Component for rendering raw HTML blocks in markdown.
+/// HTML is valid markdown content, displayed as neutral monospace text.
 #[component]
-pub fn BlockQuote(block: RenderBlock, on_focus: Callback<()>) -> Element {
+pub fn HtmlBlock(block: RenderBlock, on_focus: Callback<()>) -> Element {
     rsx! {
-        blockquote {
-            class: "block-quote",
+        div {
+            class: "html-block",
             tabindex: "0",
             onfocus: move |_| on_focus.call(()),
             onkeydown: move |evt| {

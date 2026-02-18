@@ -1,7 +1,40 @@
 //! UI Component TDD Tests - Narrowing down textarea bug location
 
-use markdown_neuraxis_engine::editing::{AnchorId, Document};
+use markdown_neuraxis_engine::editing::{AnchorId, BlockKind, Document};
 use std::collections::HashSet;
+
+#[cfg(test)]
+mod code_fence_editor_tests {
+    use super::*;
+
+    #[test]
+    fn test_code_fence_byte_range_includes_full_block() {
+        let markdown = "```rust\nfn main() {}\n```";
+        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        let code_fence = snapshot
+            .blocks
+            .iter()
+            .find(|b| matches!(b.kind, BlockKind::CodeFence { .. }))
+            .expect("Should have a code fence block");
+
+        // byte_range should cover the full block for lossless editing
+        let raw_content = doc.slice(code_fence.byte_range.clone());
+        assert_eq!(raw_content, markdown, "byte_range should cover full block");
+    }
+
+    #[test]
+    fn test_code_fence_roundtrip_preserves_content() {
+        let markdown = "```rust\nfn main() {}\n```\n\n```\nplain code\n```";
+        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+
+        // Round-trip: get text back should be identical
+        assert_eq!(doc.text(), markdown, "Round-trip should preserve content");
+    }
+}
 
 /// Test helper to create a nested list document
 fn create_nested_list_doc() -> Document {

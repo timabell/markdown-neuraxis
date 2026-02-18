@@ -273,15 +273,6 @@ hr {
     overflow-x: auto;
 }
 
-.code-language {
-    background-color: var(--base1);
-    color: var(--base02);
-    padding: 4px 12px;
-    font-size: 0.85em;
-    font-weight: 500;
-    border-bottom: 1px solid var(--base0);
-}
-
 .code-block pre {
     margin: 0;
     padding: 12px;
@@ -544,6 +535,17 @@ hr {
 
 .editor-textarea:focus {
     outline: none;
+}
+
+/* HTML block styles - valid markdown, displayed as plain text */
+.html-block {
+    margin: 12px 0;
+    color: var(--base01);
+    white-space: pre-wrap;
+}
+
+.html-block:focus {
+    outline: 2px solid var(--cyan);
 }
 
 /* Unhandled markdown styles */
