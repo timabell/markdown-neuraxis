@@ -1366,3 +1366,161 @@ fn assert_fixture(name: &str) {
 * Classifier/builder/parser call those helpers; they do not hardcode `"```"` etc.
 * Builder is readable because it’s a small state machine with small methods.
 * Snapshots assert a stable, human reviewable structure.
+
+## Addendum: ContentLine-based projection for nested prefix containers and GUI edit modes
+
+This addendum refines the new pure-Rust parser design to ensure it supports deeply nested “line-prefix containers” (blockquotes, lists, etc.) and enables multiple GUI editing modes without losing losslessness or rope position correctness.
+
+### Problem addressed
+
+Markdown encodes many structural containers as **per-line prefixes** (e.g. `>` for blockquotes, indentation + list markers for lists). In deeply nested content (Logseq-style), these prefixes inevitably “bleed” into multi-line leaf blocks (paragraphs, fenced code, etc.). If MDNX treats a block’s “meaningful content” as a single contiguous span, this breaks down:
+
+* nested blocks are not contiguous once prefixes are stripped per line
+* editing “inner content” requires reconstructing the prefixes correctly, including when adding new lines
+* UI modes that hide or show prefixes become hard or fragile
+
+### Decision
+
+Represent a block’s “meaningful content” as a **projection of per-line spans** rather than a single span whenever line-prefix containers apply. Specifically:
+
+* Each parsed leaf block stores:
+
+	* `span`: the **raw** byte span in the rope (lossless)
+	* `content`: a `ContentView` describing how to view/edit the block’s content with container prefixes separated per line
+
+#### Required data types
+
+```rust
+pub struct ContentLine {
+  pub raw_line: Span,   // full physical line (optional but recommended)
+  pub prefix: Span,     // container prefix region on this line
+  pub content: Span,    // remainder after stripping container prefixes
+}
+
+pub enum ContentView {
+  Contiguous(Span),          // no per-line prefix semantics
+  Lines(Vec<ContentLine>),   // content is non-contiguous; prefixes differ per line
+}
+```
+
+Rules:
+
+* For leaf blocks not inside any line-prefix container, use `ContentView::Contiguous`.
+* For leaf blocks inside line-prefix containers (blockquotes, lists, etc.), use `ContentView::Lines`.
+
+### Why this design
+
+* **Lossless by construction:** raw text is never regenerated for display; rendering is rope slicing.
+* **Unlimited nesting:** prefix containers are line-local, so representing content as per-line projections scales with depth and avoids “special cases for combinations”.
+* **GUI flexibility:** the same parsed structure supports edit modes:
+
+	* single-line or multi-line
+	* with raw prefix or without raw prefix
+* **Correct reconstruction:** editing “without prefix” becomes a deterministic transformation back to raw rope text by reusing stored per-line prefix spans.
+* **Keeps parsing clean:** block parsing stays line/container based; inline parsing consumes the content projection.
+
+No new syntax (e.g. custom fences) is introduced.
+
+### Editing modes and write-back rules (normative)
+
+Given a selected leaf block:
+
+* **With-prefix view (single or multi-line):**
+
+	* editable text is the join of `prefix + content` per line
+	* on commit, replace `BlockNode.span` directly with edited text
+
+* **Without-prefix view (single or multi-line):**
+
+	* editable text is the join of `content` per line
+	* on commit, reconstruct raw text by prepending prefixes line-by-line:
+
+Write-back rule for “without-prefix” edits:
+
+1. Split edited content into lines.
+2. For output line `i`, choose prefix:
+
+	* reuse `ContentLine[i].prefix` if present
+	* otherwise reuse the last available prefix in the block (fallback)
+3. Emit `prefix + edited_line + newline` for each line.
+4. Replace `BlockNode.span` in the rope with the reconstructed raw text.
+
+This supports inserting new lines inside deeply nested blocks while preserving the correct nesting prefixes.
+
+### Inline parsing interaction
+
+Inline parsing operates on the **content projection**:
+
+* For `Contiguous`, parse the rope slice directly.
+* For `Lines`, parse a virtual string made by joining each `content` slice with `\n`.
+
+Inline constructs must respect raw zones (e.g. code spans). Fenced code blocks remain raw leaf blocks and are not inline-parsed.
+
+### Required test coverage
+
+The following coverage is required to demonstrate this works as intended.
+
+#### Snapshot fixtures (structure and spans)
+
+Create snapshot fixtures that assert:
+
+* block kinds, container paths, raw spans
+* `ContentView` form (`Contiguous` vs `Lines`)
+* for `Lines`: each `ContentLine` has correct `prefix` and `content` spans
+* inline nodes (where applicable) are produced from `content`, not raw spans
+
+Minimum required fixture categories:
+
+1. **Nested fenced code in blockquote**
+   Verifies “prefix bleed” handled via `ContentLine.prefix`.
+2. **Deep list nesting with multi-line leaf blocks**
+   Verifies large indentation/list prefixes handled line-by-line.
+3. **Mixed nesting (list + quote + fence + paragraph)**
+   Ensures container depth does not affect correctness.
+4. **Multiline inline constructs within nested blocks**
+   Ensures inline parsing over `Lines` joined content behaves as expected.
+5. **Raw zones**
+   Fenced code blocks never produce inline nodes.
+
+#### Invariant tests (must always hold)
+
+For every parsed document in tests:
+
+* all spans are within rope bounds
+* for every `ContentLine`:
+
+	* `prefix` and `content` are within `raw_line`
+	* `prefix.end <= content.start`
+	* `raw_line.start <= prefix.start <= prefix.end <= raw_line.end`
+	* `raw_line.start <= content.start <= content.end <= raw_line.end`
+* `ContentView::Lines` joined by slicing spans exactly matches the “without-prefix” editor view
+* `prefix + content` joined per line exactly matches the “with-prefix” editor view
+* fenced code blocks are not inline-parsed
+
+#### Round-trip edit tests (proof the GUI modes work)
+
+Add round-trip tests that simulate edit modes:
+
+1. **Without-prefix multi-line edit adds lines**
+
+	* parse nested block
+	* take “without-prefix” view text
+	* insert a newline and extra content
+	* write back using prefix reconstruction
+	* assert prefixes were applied to new lines correctly
+	* assert resulting raw text parses back into the expected structure
+
+2. **With-prefix multi-line edit modifies prefixes**
+
+	* parse nested block
+	* take “with-prefix” view text
+	* modify a prefix character (e.g. remove one `>` or indentation)
+	* write back directly
+	* assert parse result reflects changed container depth
+
+3. **Single-line without-prefix edit**
+
+	* edit only one logical line’s content; ensure other lines unchanged and prefixes preserved
+
+These tests are required to validate that the parser + projection layer supports future GUI/UX editing modes and deep nesting without losing correctness.
+
