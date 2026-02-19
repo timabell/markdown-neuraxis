@@ -78,17 +78,50 @@ In this project, your **Markdown files** form that core. They represent everythi
 
 ### Running the Application
 
-The project provides two frontends that share the same core engine:
+The project provides multiple frontends that share the same core engine.
+
+Pre-built binaries for all platforms are available for [download in the latest release](https://github.com/timabell/markdown-neuraxis/releases/latest).
+
+Or you can run the app from source with `cargo`.
 
 #### Desktop UI (Dioxus)
+
+Pre-built:
+
 ```bash
-cargo run --bin markdown-neuraxis-dioxus -- <path-to-notes-folder>
+./markdown-neuraxis-dioxus [optional-path-to-notes-folder]
+```
+From source
+
+```bash
+cargo run --bin markdown-neuraxis-dioxus -- [optional-path-to-notes-folder]
 ```
 
+If a notes path is not provided it will prompt for a notes path and remember it in config at `~/.config/markdown-neuraxis`.
+
 #### Terminal UI (ratatui)
+
+Pre-built:
+
+```bash
+./markdown-neuraxis-cli <path-to-notes-folder>
+```
+
+From source
+
 ```bash
 cargo run --bin markdown-neuraxis-cli -- <path-to-notes-folder>
 ```
+
+#### Android App (Kotlin + Rust engine)
+
+1. Download the latest APK from [GitHub Releases](https://github.com/timabell/markdown-neuraxis/releases/latest)
+1. Enable "Install from Unknown Sources" in your Android settings
+1. Install the downloaded APK (sideload)
+
+If there is sufficient demand then I'll look at publishing to the app store(s).
+
+### Notes Folder structure
 
 The application works with any folder containing markdown files. However it is encouraged to follow the following layout:
 ```
