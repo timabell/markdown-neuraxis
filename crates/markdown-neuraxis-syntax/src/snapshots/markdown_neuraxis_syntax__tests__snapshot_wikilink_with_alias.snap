@@ -1,0 +1,23 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "format_tree(&tree, 0)"
+---
+ROOT@0..38
+  PARAGRAPH@0..38
+    TEXT@0..3 "See"
+    WHITESPACE@3..4 " "
+    WIKILINK@4..27
+      LBRACKET@4..5 "["
+      LBRACKET@5..6 "["
+      TEXT@6..12 "target"
+      PIPE@12..13 "|"
+      TEXT@13..20 "display"
+      WHITESPACE@20..21 " "
+      TEXT@21..25 "text"
+      RBRACKET@25..26 "]"
+      RBRACKET@26..27 "]"
+    WHITESPACE@27..28 " "
+    TEXT@28..31 "for"
+    WHITESPACE@31..32 " "
+    TEXT@32..37 "more."
+    NEWLINE@37..38 "\\n"

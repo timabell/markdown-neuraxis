@@ -1,0 +1,35 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "format_tree(&tree, 0)"
+---
+ROOT@0..52
+  HEADING@0..10
+    HASH@0..1 "#"
+    WHITESPACE@1..2 " "
+    TEXT@2..9 "Heading"
+    NEWLINE@9..10 "\\n"
+  NEWLINE@10..11 "\\n"
+  BLOCK_QUOTE@11..39
+    GT@11..12 ">"
+    WHITESPACE@12..13 " "
+    TEXT@13..14 "A"
+    WHITESPACE@14..15 " "
+    TEXT@15..20 "quote"
+    WHITESPACE@20..21 " "
+    TEXT@21..25 "with"
+    WHITESPACE@25..26 " "
+    WIKILINK@26..38
+      LBRACKET@26..27 "["
+      LBRACKET@27..28 "["
+      TEXT@28..36 "wikilink"
+      RBRACKET@36..37 "]"
+      RBRACKET@37..38 "]"
+    NEWLINE@38..39 "\\n"
+  NEWLINE@39..40 "\\n"
+  LIST_ITEM@40..52
+    DASH@40..41 "-"
+    WHITESPACE@41..42 " "
+    TEXT@42..46 "List"
+    WHITESPACE@46..47 " "
+    TEXT@47..51 "item"
+    NEWLINE@51..52 "\\n"

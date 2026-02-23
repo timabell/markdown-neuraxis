@@ -1,0 +1,17 @@
+[package]
+name = "markdown-neuraxis-syntax"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Lossless Markdown syntax tree using Rowan + Logos"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+logos = "0.15"
+rowan = "0.15"
+
+[dev-dependencies]
+rstest.workspace = true
+insta.workspace = true
+pretty_assertions.workspace = true

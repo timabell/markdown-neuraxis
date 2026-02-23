@@ -1,0 +1,20 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "format_tree(&tree, 0)"
+---
+ROOT@0..44
+  PARAGRAPH@0..44
+    TEXT@0..5 "Click"
+    WHITESPACE@5..6 " "
+    LINK@6..33
+      LBRACKET@6..7 "["
+      TEXT@7..11 "here"
+      RBRACKET@11..12 "]"
+      LPAREN@12..13 "("
+      TEXT@13..32 "https://example.com"
+      RPAREN@32..33 ")"
+    WHITESPACE@33..34 " "
+    TEXT@34..36 "to"
+    WHITESPACE@36..37 " "
+    TEXT@37..43 "visit."
+    NEWLINE@43..44 "\\n"

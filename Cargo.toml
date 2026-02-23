@@ -6,6 +6,7 @@ members = [
     "crates/markdown-neuraxis-cli",
     "crates/markdown-neuraxis-config",
     "crates/markdown-neuraxis-ffi",
+    "crates/markdown-neuraxis-syntax",
 ]
 
 [workspace.package]
