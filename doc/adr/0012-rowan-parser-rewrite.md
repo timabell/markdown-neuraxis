@@ -51,8 +51,6 @@ We will:
 
 This establishes a proper language frontend architecture.
 
----
-
 ## Crate Structure
 
 New crate:
@@ -79,8 +77,6 @@ crates/markdown-neuraxis-syntax/
 ```
 
 Engine depends on this crate and derives editor projections from the CST.
-
----
 
 ## SyntaxKind Definition
 
@@ -132,8 +128,6 @@ pub enum SyntaxKind {
 
 Every byte in the source must appear as a token in the tree. No implicit reconstruction.
 
----
-
 ## Lexer (Logos)
 
 The lexer must:
@@ -171,8 +165,6 @@ pub enum TokenKind {
 
 The actual implementation will be more detailed and must cover all required token categories.
 
----
-
 ## Parser Architecture
 
 Parser will follow the rust-analyzer event model:
@@ -207,8 +199,6 @@ Inline parsing responsibilities:
 
 Fenced code and HTML blocks suppress inline parsing.
 
----
-
 ## Supported Markdown Surface (Initial Scope)
 
 ### Containers
@@ -238,8 +228,6 @@ Fenced code and HTML blocks suppress inline parsing.
 * Nested inline constructs
 * Multiline link labels
 
----
-
 ## HTML Block Handling
 
 Initially:
@@ -253,8 +241,6 @@ Later:
 * Optional HTML subtree parsing
 * Possible integration with HTML parser
 
----
-
 ## Projection Layer (Engine-Facing)
 
 The engine must not manipulate Rowan internals directly.
@@ -267,8 +253,6 @@ Instead:
 * Provide raw spans for replacement edits
 
 Prefix stripping becomes a projection over token sequences, not primary parser output.
-
----
 
 ## Editing Model
 
@@ -285,7 +269,7 @@ Write-back of prefix-aware edits must:
 * Reapply appropriate prefix tokens per line
 * Replace only the intended subtree
 
----
+Note: Multi-line list items use hanging-indent style, where continuation lines are indented to align with the content after the marker. Simply duplicating prefixes is insufficient; the projection layer must understand hanging indent semantics to correctly reconstruct multi-line bullet content.
 
 ## Required Test Coverage
 
@@ -300,7 +284,9 @@ Write-back of prefix-aware edits must:
 * Unclosed fences
 * Mixed nesting
 
-### Invariant Tests
+### Invariant Tests (Deferred)
+
+Property-based invariant tests to be added once parser is stable:
 
 * Every byte in input appears in tree
 * Tree reserialization equals original input
@@ -313,12 +299,12 @@ Write-back of prefix-aware edits must:
 * Prefix-aware edit reconstruction correctness
 * Subtree replacement preserves surrounding structure
 
-### Fuzz Testing
+### Fuzz Testing (Deferred)
+
+Fuzz testing to be added once parser is feature-complete:
 
 * Random markdown input does not panic
 * Tree remains structurally valid
-
----
 
 ## Why This Design
 
