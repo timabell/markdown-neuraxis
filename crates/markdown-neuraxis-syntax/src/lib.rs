@@ -114,7 +114,17 @@ pub use syntax_kind::{MarkdownLang, SyntaxElement, SyntaxKind, SyntaxNode, Synta
 #[cfg(test)]
 mod tests {
     use super::*;
-    use insta::assert_snapshot;
+
+    /// Assert snapshot with short names (no module prefix).
+    macro_rules! snap {
+        ($expr:expr) => {
+            let mut settings = insta::Settings::clone_current();
+            settings.set_prepend_module_to_snapshot(false);
+            settings.bind(|| {
+                insta::assert_snapshot!($expr);
+            });
+        };
+    }
 
     /// Helper to format a syntax tree for snapshot testing.
     fn format_tree(node: &SyntaxNode, indent: usize) -> String {
@@ -149,79 +159,63 @@ mod tests {
         result
     }
 
-    #[test]
-    fn snapshot_simple_paragraph() {
-        let tree = parse("Hello, world!\n");
-        assert_snapshot!(format_tree(&tree, 0));
-    }
+    // All test inputs live in .md files next to the snapshots for readability.
+    // Use `cargo insta review` to inspect snapshot changes.
 
     #[test]
-    fn snapshot_heading() {
-        let tree = parse("# Hello\n");
-        assert_snapshot!(format_tree(&tree, 0));
-    }
-
-    #[test]
-    fn snapshot_nested_content() {
-        let input = "# Heading\n\n> A quote with [[wikilink]]\n\n- List item\n";
+    fn simple_paragraph() {
+        let input = include_str!("snapshots/simple_paragraph.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
+        snap!(format_tree(&tree, 0));
     }
 
     #[test]
-    fn snapshot_fenced_code() {
-        let input = "```rust\nfn main() {}\n```\n";
+    fn heading() {
+        let input = include_str!("snapshots/heading.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
+        snap!(format_tree(&tree, 0));
     }
 
     #[test]
-    fn snapshot_inline_elements() {
-        let input = "Text with `code` and *emphasis* and **strong**.\n";
+    fn nested_content() {
+        let input = include_str!("snapshots/nested_content.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
+        snap!(format_tree(&tree, 0));
     }
 
     #[test]
-    fn snapshot_wikilink_with_alias() {
-        let input = "See [[target|display text]] for more.\n";
+    fn fenced_code() {
+        let input = include_str!("snapshots/fenced_code.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
+        snap!(format_tree(&tree, 0));
     }
 
     #[test]
-    fn snapshot_standard_link() {
-        let input = "Click [here](https://example.com) to visit.\n";
+    fn inline_elements() {
+        let input = include_str!("snapshots/inline_elements.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
+        snap!(format_tree(&tree, 0));
     }
 
     #[test]
-    fn snapshot_complex_document() {
-        let input = r#"# Main Title
-
-This is a paragraph with [[wikilinks]] and [regular links](url).
-
-## Code Example
-
-```rust
-fn main() {
-    println!("Hello");
-}
-```
-
-> A blockquote with *emphasis*.
-
-- First item
-- Second item
-- Third with `code`
-
----
-
-Final paragraph.
-"#;
+    fn wikilink_with_alias() {
+        let input = include_str!("snapshots/wikilink_with_alias.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
+        snap!(format_tree(&tree, 0));
+    }
+
+    #[test]
+    fn standard_link() {
+        let input = include_str!("snapshots/standard_link.md");
+        let tree = parse(input);
+        snap!(format_tree(&tree, 0));
+    }
+
+    #[test]
+    fn complex_document() {
+        let input = include_str!("snapshots/complex_document.md");
+        let tree = parse(input);
+        snap!(format_tree(&tree, 0));
     }
 
     // === Error tolerance / messy input tests ===
@@ -229,62 +223,18 @@ Final paragraph.
     // even for garbage input, preserving all bytes.
 
     #[test]
-    fn snapshot_messy_unclosed_constructs() {
-        // Simulates half-finished edits: unclosed links, wikilinks, emphasis
-        let input = r#"# Draft notes
-
-Check out [[this page for more info
-
-Also see [broken link without url
-
-Some *half done emphasis
-
-And `unclosed code span
-
-More text here.
-"#;
+    fn messy_unclosed_constructs() {
+        let input = include_str!("snapshots/messy_unclosed_constructs.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
-        // Critical: all bytes preserved even for garbage
+        snap!(format_tree(&tree, 0));
         assert_eq!(tree.text().to_string(), input);
     }
 
     #[test]
-    fn snapshot_messy_real_world_notes() {
-        // Simulates a messy daily journal imported from various tools:
-        // - Inconsistent heading styles
-        // - Mixed list markers
-        // - Broken wikilinks from copy/paste
-        // - Random HTML fragments from web clipper
-        // - Unclosed fenced code block
-        // - Trailing whitespace (common in editors)
-        let input = r#"#Meeting Notes 2024-01-15
-(no space after #, technically not a heading per CommonMark)
-
-##Action Items
-- [ ] Call [[John] about project
-- [x] Review PR #123
-* mixed bullet style
-+ another style
-  - nested but inconsistent indent
-
-> half finished blockquote
-that continues without >
-
-Some <b>html that's not closed
-
-```python
-def broken():
-    # oops forgot to close the fence
-
-Random [[wikilink|with pipe]] and [[broken one
-
----
-
-TODO: fix [[
-"#;
+    fn messy_real_world_notes() {
+        let input = include_str!("snapshots/messy_real_world_notes.md");
         let tree = parse(input);
-        assert_snapshot!(format_tree(&tree, 0));
+        snap!(format_tree(&tree, 0));
         assert_eq!(tree.text().to_string(), input);
     }
 
