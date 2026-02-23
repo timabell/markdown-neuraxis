@@ -1,11 +1,43 @@
-//! Block-level grammar rules.
+//! # Block-Level Grammar
+//!
+//! Block elements are the structural building blocks of a Markdown document.
+//! They're identified by patterns at the **start of a line**:
+//!
+//! | Pattern | Block Type |
+//! |---------|-----------|
+//! | `# ` | Heading |
+//! | `> ` | Blockquote |
+//! | `- `, `* `, `+ ` | List item |
+//! | `---`, `***` | Thematic break |
+//! | ``` ` ` ` ``` | Fenced code block |
+//! | (anything else) | Paragraph |
+//!
+//! ## Dispatch Logic
+//!
+//! The main [`block`] function looks at the first token of a line and
+//! dispatches to the appropriate handler. Some patterns are ambiguous:
+//!
+//! - `*` could start a list item OR a thematic break OR emphasis in a paragraph
+//! - We use lookahead (`is_thematic_break`, `is_code_fence`) to disambiguate
+//!
+//! ## Current Limitations
+//!
+//! This is a TDD exploration, so some features aren't implemented yet:
+//!
+//! - **Nested containers**: Lists inside blockquotes, blockquotes inside lists
+//! - **LIST grouping**: Consecutive list items aren't wrapped in a LIST node
+//! - **Indented code blocks**: Currently treated as paragraphs
+//! - **Setext headings**: Only ATX (`#`) headings are supported
 
 use crate::parser::Parser;
 use crate::syntax_kind::SyntaxKind;
 
 use super::inline;
 
-/// Parse a block element.
+/// Parse a single block element.
+///
+/// This is the main dispatch function for block parsing. It skips blank lines,
+/// then examines the first token to determine the block type.
 pub fn block(p: &mut Parser<'_, '_>) {
     // Skip leading blank lines
     while p.at(SyntaxKind::NEWLINE) {

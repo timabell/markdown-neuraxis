@@ -1,4 +1,44 @@
-//! Sink for converting parser events into a Rowan green tree.
+//! # Sink - Building the Rowan Tree from Events
+//!
+//! The Sink is the final stage of parsing. It consumes the flat event stream
+//! and builds the actual Rowan syntax tree using `GreenNodeBuilder`.
+//!
+//! ## How It Works
+//!
+//! The Sink processes events in order:
+//!
+//! 1. **Start** → Call `builder.start_node(kind)`
+//! 2. **Token** → Call `builder.token(kind, text)` (text comes from the token stream)
+//! 3. **Finish** → Call `builder.finish_node()`
+//! 4. **Placeholder** → Skip (these are abandoned markers)
+//!
+//! ## Forward Parent Resolution
+//!
+//! The tricky part is handling `forward_parent` links. When a `Start` event
+//! has a `forward_parent`, it means "that other node should be my parent."
+//!
+//! We resolve this by:
+//! 1. Following the chain of forward_parent links
+//! 2. Collecting all the node kinds in order
+//! 3. Starting them in **reverse** order (outermost first)
+//!
+//! For example, if we have:
+//! ```text
+//! Start(A, forward_parent: 2)  // index 0
+//! Token(x)                      // index 1
+//! Start(B, forward_parent: None) // index 2
+//! Finish                        // for B
+//! Finish                        // for A
+//! ```
+//!
+//! The chain is: A → B (index 2). We collect [A, B], reverse to [B, A],
+//! and start nodes in that order. Result: B contains A contains token x.
+//!
+//! ## Token Grouping
+//!
+//! The `n_raw_tokens` field in Token events allows grouping multiple lexer
+//! tokens into one tree token. The Sink concatenates the text from
+//! `n_raw_tokens` consecutive tokens.
 
 use rowan::GreenNodeBuilder;
 
@@ -7,6 +47,15 @@ use crate::parser::event::Event;
 use crate::syntax_kind::{SyntaxKind, SyntaxNode};
 
 /// Converts parser events and tokens into a Rowan syntax tree.
+///
+/// ## Usage
+///
+/// ```ignore
+/// let sink = Sink::new(&tokens, events);
+/// let tree = sink.finish();
+/// ```
+///
+/// The `finish()` method consumes the sink and returns the root `SyntaxNode`.
 pub struct Sink<'t, 'input> {
     builder: GreenNodeBuilder<'static>,
     tokens: &'t [Token<'input>],

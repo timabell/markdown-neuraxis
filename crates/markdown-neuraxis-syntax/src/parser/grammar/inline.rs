@@ -1,9 +1,51 @@
-//! Inline-level grammar rules.
+//! # Inline-Level Grammar
+//!
+//! Inline elements are the formatting within blocks: links, emphasis, code spans.
+//! Unlike blocks, inline parsing is driven by **special characters** rather than
+//! line-start patterns.
+//!
+//! ## Dispatch Logic
+//!
+//! The [`inline_element`] function checks the current token:
+//!
+//! | Token | Possible Element |
+//! |-------|-----------------|
+//! | `[` | Link or wikilink |
+//! | `` ` `` | Code span |
+//! | `*` | Emphasis or strong |
+//! | (other) | Plain text |
+//!
+//! ## Wikilinks vs Standard Links
+//!
+//! We support both:
+//! - **Wikilinks**: `[[page]]` or `[[page|display text]]` (MDNX extension)
+//! - **Standard links**: `[text](url)` (CommonMark)
+//!
+//! Disambiguation: if we see `[[` (two brackets), it's a wikilink. Otherwise,
+//! we try to parse a standard link and fall back to plain text.
+//!
+//! ## Error Tolerance
+//!
+//! Inline parsing is lenient:
+//! - Unclosed `[[` still produces a WIKILINK node (containing the unclosed content)
+//! - `[text]` without `(url)` becomes an INLINE node (bracket as plain text)
+//! - Unmatched `*` is consumed as plain text
+//!
+//! This ensures we always produce a valid tree that preserves all bytes.
+//!
+//! ## Current Limitations
+//!
+//! - Only `*emphasis*` is supported, not `_emphasis_`
+//! - Nested emphasis (`***bold italic***`) may not parse correctly
+//! - Images (`![alt](url)`) are not distinguished from links
 
 use crate::parser::Parser;
 use crate::syntax_kind::SyntaxKind;
 
 /// Parse inline content until newline or EOF.
+///
+/// This is the main entry point called by block parsers. It consumes tokens
+/// until it hits a newline, dispatching to specific inline element handlers.
 pub fn inline_until_newline(p: &mut Parser<'_, '_>) {
     while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
         inline_element(p);

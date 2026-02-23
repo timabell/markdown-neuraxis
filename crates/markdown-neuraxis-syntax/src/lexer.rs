@@ -1,10 +1,60 @@
-//! Logos-based lexer for Markdown.
+//! # Lexer - Tokenizing Markdown Source
 //!
-//! The lexer must:
-//! - Preserve all whitespace
-//! - Preserve all newlines
-//! - Emit container prefix tokens (`>`, list markers, indentation)
-//! - Never discard any bytes
+//! This module provides the first stage of parsing: breaking source text into
+//! tokens using the [Logos] lexer generator.
+//!
+//! [Logos]: https://docs.rs/logos
+//!
+//! ## The Lossless Guarantee
+//!
+//! The most important property of this lexer is that **every byte in the input
+//! appears in exactly one token**. We never skip or discard characters. This
+//! is what makes round-tripping possible:
+//!
+//! ```
+//! use markdown_neuraxis_syntax::lexer::lex;
+//!
+//! let input = "# Hello, world!\n";
+//! let tokens = lex(input);
+//!
+//! // Concatenating all token texts gives back the original
+//! let reconstructed: String = tokens.iter().map(|t| t.text).collect();
+//! assert_eq!(input, reconstructed);
+//! ```
+//!
+//! ## Why Two Token Enums?
+//!
+//! You'll notice we have both [`TokenKind`] (in this module) and [`SyntaxKind`]
+//! (in the syntax_kind module). This is because:
+//!
+//! 1. **Logos requires its own enum** for the `#[derive(Logos)]` macro
+//! 2. **Rowan uses our SyntaxKind** for the final tree
+//!
+//! The [`TokenKind::to_syntax_kind`] method converts between them.
+//!
+//! ## Token Design Philosophy
+//!
+//! Tokens are kept **minimal and context-free**. The lexer doesn't know if `*`
+//! starts a list, emphasis, or a thematic break - that's the parser's job.
+//! This separation keeps the lexer simple and fast.
+//!
+//! Special characters that have syntactic meaning get their own token types:
+//! - `#` → `HASH` (headings)
+//! - `>` → `GT` (blockquotes)
+//! - `-`, `*`, `+` → `DASH`, `STAR`, `PLUS` (lists, emphasis, thematic breaks)
+//! - `[`, `]`, `(`, `)` → bracket tokens (links)
+//! - `` ` ``, `~` → `BACKTICK`, `TILDE` (code, fenced blocks)
+//!
+//! Everything else becomes `TEXT` tokens, grouped into runs of consecutive
+//! characters for efficiency (e.g., "Hello" is one TEXT token, not five).
+//!
+//! ## Public API
+//!
+//! - [`lex`] - Tokenize input, returning `Vec<Token>`
+//! - [`lex_with_spans`] - Tokenize with byte offset spans
+//! - [`Token`] - A token with its kind and text slice
+//!
+//! [`SyntaxKind`]: crate::syntax_kind::SyntaxKind
 
 use logos::Logos;
 
@@ -12,7 +62,13 @@ use crate::syntax_kind::SyntaxKind;
 
 /// Token kinds produced by the Logos lexer.
 ///
-/// These map to SyntaxKind tokens but are separate for Logos derive.
+/// This enum exists separately from [`SyntaxKind`] because Logos needs to
+/// derive on it. Each variant maps to a corresponding `SyntaxKind` token.
+///
+/// The `#[logos(skip r"")]` attribute means "skip nothing" - we explicitly
+/// handle all input rather than letting Logos skip anything.
+///
+/// [`SyntaxKind`]: crate::syntax_kind::SyntaxKind
 #[derive(Logos, Debug, Clone, Copy, PartialEq, Eq)]
 #[logos(skip r"")]
 pub enum TokenKind {

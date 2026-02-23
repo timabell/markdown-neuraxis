@@ -1,4 +1,76 @@
-//! Event-based parser for Markdown following the rust-analyzer model.
+//! # Parser - Event-Based Tree Construction
+//!
+//! This module implements the core parsing logic, transforming a token stream
+//! into a syntax tree using the **event-based** architecture from rust-analyzer.
+//!
+//! ## Why Event-Based Parsing?
+//!
+//! Traditional recursive descent parsers build the tree directly during parsing.
+//! This has problems:
+//!
+//! 1. **Deep nesting can overflow the stack** (Markdown can nest arbitrarily)
+//! 2. **Backtracking is expensive** when you've already built tree nodes
+//! 3. **Error recovery is tricky** when partially-built nodes exist
+//!
+//! Instead, we emit a flat list of **events** ([`Event`]) that describe the
+//! tree structure. The [`Sink`] then builds the actual Rowan tree from events.
+//!
+//! ## The Event Model
+//!
+//! Parsing produces events like:
+//! ```text
+//! Start(HEADING)
+//! Token(HASH)
+//! Token(WHITESPACE)
+//! Token(TEXT)
+//! Token(NEWLINE)
+//! Finish
+//! ```
+//!
+//! The Sink processes these in order, calling `start_node()` for Start,
+//! `token()` for Token, and `finish_node()` for Finish.
+//!
+//! ## The Marker System
+//!
+//! The key innovation is the [`Marker`] type, which makes tree construction
+//! **type-safe at compile time**. When you call `parser.start()`, you get a
+//! `Marker`. This marker **must** be either:
+//!
+//! - Completed with `marker.complete(parser, KIND)` → emits Start+Finish
+//! - Abandoned with `marker.abandon(parser)` → removes the placeholder
+//!
+//! If you drop a marker without doing either, **the program panics**. This
+//! prevents accidentally leaving the tree in an inconsistent state.
+//!
+//! ```ignore
+//! let m = parser.start();           // Get a marker
+//! parser.bump();                    // Consume some tokens
+//! m.complete(parser, SyntaxKind::PARAGRAPH);  // MUST complete or abandon
+//! ```
+//!
+//! ## Forward Parent Links
+//!
+//! Sometimes we need to wrap an already-parsed node in a new parent (for
+//! left-recursion or binary expressions). The `CompletedMarker::precede()`
+//! method handles this by creating a **forward parent link** that the Sink
+//! resolves when building the tree.
+//!
+//! ## Module Structure
+//!
+//! - [`event`] - The Event enum
+//! - [`sink`] - Converts events to Rowan tree
+//! - [`grammar`] - Grammar rules (root, block, inline)
+//!
+//! ## Public API
+//!
+//! The main entry point is [`parse`]:
+//!
+//! ```
+//! use markdown_neuraxis_syntax::parse;
+//!
+//! let tree = parse("# Hello\n");
+//! println!("{:#?}", tree);
+//! ```
 
 pub mod event;
 pub mod sink;
@@ -10,7 +82,14 @@ use crate::syntax_kind::{SyntaxKind, SyntaxNode};
 use event::Event;
 use sink::Sink;
 
-/// Parser for Markdown with event-based tree construction.
+/// The parser state machine.
+///
+/// Holds the token stream, current position, and accumulated events.
+/// Grammar functions receive `&mut Parser` and use its methods to:
+///
+/// - Inspect tokens: `current()`, `nth()`, `at()`, `at_end()`
+/// - Consume tokens: `bump()`, `eat()`
+/// - Build structure: `start()` → `Marker` → `complete()`/`abandon()`
 pub struct Parser<'t, 'input> {
     tokens: &'t [Token<'input>],
     pos: usize,
@@ -122,15 +201,52 @@ impl<'t, 'input> Parser<'t, 'input> {
 
 /// A marker for a node being constructed.
 ///
-/// Must be either completed or abandoned before being dropped.
-#[must_use]
+/// This is the heart of the type-safe tree building system. When you call
+/// `parser.start()`, a `Placeholder` event is pushed and you get a `Marker`
+/// pointing to it.
+///
+/// ## The Must-Use Contract
+///
+/// The `#[must_use]` attribute and the `Drop` impl together enforce that
+/// every marker is either:
+///
+/// - **Completed** via `marker.complete(parser, KIND)` - converts the
+///   placeholder to a `Start` event and pushes a `Finish` event
+/// - **Abandoned** via `marker.abandon(parser)` - removes the placeholder
+///   (only works if nothing was pushed after it)
+///
+/// If you drop a marker without doing either, **the program panics**. This
+/// catches bugs at runtime rather than producing corrupt trees.
+///
+/// ## Example
+///
+/// ```ignore
+/// fn paragraph(p: &mut Parser) {
+///     let m = p.start();  // Reserve a spot for the node
+///
+///     // Parse content...
+///     while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+///         p.bump();
+///     }
+///
+///     m.complete(p, SyntaxKind::PARAGRAPH);  // Finalize the node
+/// }
+/// ```
+#[must_use = "Markers must be completed or abandoned, dropping them is a bug"]
 pub struct Marker {
+    /// Position in the events vector where our Placeholder lives
     pos: usize,
+    /// Tracks whether complete() or abandon() was called
     completed: bool,
 }
 
 impl Marker {
-    /// Complete the node with the given kind.
+    /// Complete this marker, creating a node of the given kind.
+    ///
+    /// This:
+    /// 1. Replaces the `Placeholder` at our position with `Start { kind, ... }`
+    /// 2. Pushes a `Finish` event
+    /// 3. Returns a `CompletedMarker` for potential `precede()` calls
     pub fn complete(mut self, p: &mut Parser<'_, '_>, kind: SyntaxKind) -> CompletedMarker {
         self.completed = true;
         let event_at_pos = &mut p.events[self.pos];
@@ -143,7 +259,14 @@ impl Marker {
         CompletedMarker { pos: self.pos }
     }
 
-    /// Abandon the marker without creating a node.
+    /// Abandon this marker without creating a node.
+    ///
+    /// Use this when you speculatively started a node but decided not to
+    /// create it (e.g., the input didn't match what you expected).
+    ///
+    /// **Note**: This only removes the placeholder if it's the last event.
+    /// If other events were pushed after `start()`, the placeholder becomes
+    /// inert and is ignored by the Sink.
     pub fn abandon(mut self, p: &mut Parser<'_, '_>) {
         self.completed = true;
         if self.pos == p.events.len() - 1 {
@@ -163,14 +286,42 @@ impl Drop for Marker {
     }
 }
 
-/// A marker for a completed node.
+/// A marker for a node that has been completed.
+///
+/// The only thing you can do with a `CompletedMarker` is call `precede()`
+/// to wrap the completed node in a new parent. This is useful for handling
+/// left-recursion or wrapping expressions after the fact.
+///
+/// ## The Precede Pattern
+///
+/// Sometimes you parse something and only later realize it needs a wrapper:
+///
+/// ```ignore
+/// // We parsed "a" as an expression
+/// let expr = parse_atom(p);  // Returns CompletedMarker
+///
+/// // Oh, there's a "+" - this is actually a binary expression!
+/// if p.at(SyntaxKind::PLUS) {
+///     let bin_expr = expr.precede(p);  // Start a new node BEFORE "a"
+///     p.bump();  // consume "+"
+///     parse_atom(p);  // parse "b"
+///     bin_expr.complete(p, SyntaxKind::BIN_EXPR);
+/// }
+/// // Result: BIN_EXPR containing [atom "a", "+", atom "b"]
+/// ```
+///
+/// This works by setting a `forward_parent` link that the Sink resolves.
 #[derive(Debug, Clone, Copy)]
 pub struct CompletedMarker {
+    /// Position of the Start event for this completed node
     pos: usize,
 }
 
 impl CompletedMarker {
-    /// Wrap this node in a new parent node (precede pattern).
+    /// Create a new parent node that will contain this node.
+    ///
+    /// Returns a new `Marker` that, when completed, will become the parent
+    /// of the node at `self.pos`.
     pub fn precede(self, p: &mut Parser<'_, '_>) -> Marker {
         let new_pos = p.events.len();
         p.events.push(Event::Placeholder);
