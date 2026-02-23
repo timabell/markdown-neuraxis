@@ -224,6 +224,70 @@ Final paragraph.
         assert_snapshot!(format_tree(&tree, 0));
     }
 
+    // === Error tolerance / messy input tests ===
+    // Real-world notes are messy. These test that we produce a valid tree
+    // even for garbage input, preserving all bytes.
+
+    #[test]
+    fn snapshot_messy_unclosed_constructs() {
+        // Simulates half-finished edits: unclosed links, wikilinks, emphasis
+        let input = r#"# Draft notes
+
+Check out [[this page for more info
+
+Also see [broken link without url
+
+Some *half done emphasis
+
+And `unclosed code span
+
+More text here.
+"#;
+        let tree = parse(input);
+        assert_snapshot!(format_tree(&tree, 0));
+        // Critical: all bytes preserved even for garbage
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn snapshot_messy_real_world_notes() {
+        // Simulates a messy daily journal imported from various tools:
+        // - Inconsistent heading styles
+        // - Mixed list markers
+        // - Broken wikilinks from copy/paste
+        // - Random HTML fragments from web clipper
+        // - Unclosed fenced code block
+        // - Trailing whitespace (common in editors)
+        let input = r#"#Meeting Notes 2024-01-15
+(no space after #, technically not a heading per CommonMark)
+
+##Action Items
+- [ ] Call [[John] about project
+- [x] Review PR #123
+* mixed bullet style
++ another style
+  - nested but inconsistent indent
+
+> half finished blockquote
+that continues without >
+
+Some <b>html that's not closed
+
+```python
+def broken():
+    # oops forgot to close the fence
+
+Random [[wikilink|with pipe]] and [[broken one
+
+---
+
+TODO: fix [[
+"#;
+        let tree = parse(input);
+        assert_snapshot!(format_tree(&tree, 0));
+        assert_eq!(tree.text().to_string(), input);
+    }
+
     #[test]
     fn roundtrip_preserves_text() {
         let inputs = [
