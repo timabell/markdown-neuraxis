@@ -14,25 +14,48 @@
 //!
 //! ## Forward Parent Resolution
 //!
-//! The tricky part is handling `forward_parent` links. When a `Start` event
-//! has a `forward_parent`, it means "that other node should be my parent."
+//! Forward parents solve: "I already started a node, but now I realize
+//! it needs a parent I haven't created yet."
 //!
-//! We resolve this by:
-//! 1. Following the chain of forward_parent links
-//! 2. Collecting all the node kinds in order
-//! 3. Starting them in **reverse** order (outermost first)
+//! ### Markdown Example: Standard Links
 //!
-//! For example, if we have:
+//! Parsing `[click here](https://example.com)`:
+//!
 //! ```text
-//! Start(A, forward_parent: 2)  // index 0
-//! Token(x)                      // index 1
-//! Start(B, forward_parent: None) // index 2
-//! Finish                        // for B
-//! Finish                        // for A
+//! Step 1: See "[" → might be a link, might be literal "[foo"
+//!         Start LINK_TEXT tentatively, emit tokens...
+//!
+//! Step 2: See "click here" → emit as TEXT inside LINK_TEXT
+//!
+//! Step 3: See "](" → NOW we know it's a link!
+//!         But LINK_TEXT is already started. We need:
+//!         LINK { LINK_TEXT { ... }, LINK_DEST { ... } }
+//!
+//! Solution: use precede() to wrap LINK_TEXT in a LINK node
 //! ```
 //!
-//! The chain is: A → B (index 2). We collect [A, B], reverse to [B, A],
-//! and start nodes in that order. Result: B contains A contains token x.
+//! The problem: we couldn't create LINK at step 1 because `[foo` without
+//! `](` is just literal text. We only know it's a link when we see `](`.
+//!
+//! ### How It Works
+//!
+//! When the parser calls `precede()`, it's saying: "that node I already
+//! started? It actually belongs inside this new parent node."
+//!
+//! The Sink sees these instructions and builds the tree correctly:
+//!
+//! ```text
+//! Without precede (wrong):     With precede (correct):
+//!
+//! LINK_TEXT                    LINK
+//!   "[" "click here" "]"         LINK_TEXT
+//! LINK_DEST                        "[" "click here" "]"
+//!   "(" "url" ")"                LINK_DEST
+//!                                  "(" "url" ")"
+//! ```
+//!
+//! The forward_parent pointer tells the Sink "start LINK before LINK_TEXT"
+//! even though LINK_TEXT appeared first in the event stream.
 //!
 //! ## Token Grouping
 //!
