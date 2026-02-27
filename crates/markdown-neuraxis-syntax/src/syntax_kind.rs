@@ -95,6 +95,10 @@ pub enum SyntaxKind {
     RPAREN,
     /// `#` for headings
     HASH,
+    /// `<` for HTML blocks
+    LT,
+    /// `.` for numbered lists
+    DOT,
     /// Raw HTML content
     HTML_TEXT,
     /// End of file marker

@@ -128,8 +128,16 @@ pub enum TokenKind {
     #[token("#")]
     Hash,
 
+    /// `<` for HTML blocks
+    #[token("<")]
+    Lt,
+
+    /// `.` for numbered lists
+    #[token(".")]
+    Dot,
+
     /// Plain text - anything not matched by other rules
-    #[regex(r"[^\s\[\]()>`*+#|~-]+")]
+    #[regex(r"[^\s\[\]()>`*+#|~.<-]+")]
     Text,
 }
 
@@ -151,6 +159,8 @@ impl TokenKind {
             TokenKind::LParen => SyntaxKind::LPAREN,
             TokenKind::RParen => SyntaxKind::RPAREN,
             TokenKind::Hash => SyntaxKind::HASH,
+            TokenKind::Lt => SyntaxKind::LT,
+            TokenKind::Dot => SyntaxKind::DOT,
             TokenKind::Text => SyntaxKind::TEXT,
         }
     }
@@ -407,5 +417,54 @@ mod tests {
         for (token, span) in &tokens {
             assert_eq!(token.text, &input[span.clone()]);
         }
+    }
+
+    #[test]
+    fn lex_html_angle_bracket() {
+        let tokens = lex("<div>");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::LT, "<"),
+                token(SyntaxKind::TEXT, "div"),
+                token(SyntaxKind::GT, ">"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_numbered_list_dot() {
+        let tokens = lex("1. item");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "1"),
+                token(SyntaxKind::DOT, "."),
+                token(SyntaxKind::WHITESPACE, " "),
+                token(SyntaxKind::TEXT, "item"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_numbered_list_multi_digit() {
+        let tokens = lex("123. item");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "123"),
+                token(SyntaxKind::DOT, "."),
+                token(SyntaxKind::WHITESPACE, " "),
+                token(SyntaxKind::TEXT, "item"),
+            ]
+        );
+    }
+
+    #[test]
+    fn all_bytes_preserved_with_html_and_dots() {
+        let input = "<div>Hello.</div>\n1. Item one\n2. Item two";
+        let tokens = lex(input);
+        let reconstructed: String = tokens.iter().map(|t| t.text).collect();
+        assert_eq!(input, reconstructed);
     }
 }

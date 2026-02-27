@@ -75,5 +75,6 @@ ROOT@0..154
     WHITESPACE@142..143 " "
     TEXT@143..147 "text"
     WHITESPACE@147..148 " "
-    TEXT@148..153 "here."
+    TEXT@148..152 "here"
+    DOT@152..153 "."
     NEWLINE@153..154 "\\n"

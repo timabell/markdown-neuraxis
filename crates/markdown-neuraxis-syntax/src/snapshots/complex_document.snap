@@ -40,7 +40,7 @@ ROOT@0..250
       LPAREN@72..73 "("
       TEXT@73..76 "url"
       RPAREN@76..77 ")"
-    TEXT@77..78 "."
+    DOT@77..78 "."
     NEWLINE@78..79 "\\n"
   NEWLINE@79..80 "\\n"
   HEADING@80..96
@@ -93,7 +93,7 @@ ROOT@0..250
       STAR@167..168 "*"
       TEXT@168..176 "emphasis"
       STAR@176..177 "*"
-    TEXT@177..178 "."
+    DOT@177..178 "."
     NEWLINE@178..179 "\\n"
   NEWLINE@179..180 "\\n"
   LIST_ITEM@180..193
@@ -132,5 +132,6 @@ ROOT@0..250
   PARAGRAPH@233..250
     TEXT@233..238 "Final"
     WHITESPACE@238..239 " "
-    TEXT@239..249 "paragraph."
+    TEXT@239..248 "paragraph"
+    DOT@248..249 "."
     NEWLINE@249..250 "\\n"

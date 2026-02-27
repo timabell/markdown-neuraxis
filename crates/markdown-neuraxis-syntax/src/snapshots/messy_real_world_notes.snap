@@ -133,7 +133,8 @@ ROOT@0..443
   PARAGRAPH@283..314
     TEXT@283..287 "Some"
     WHITESPACE@287..288 " "
-    TEXT@288..290 "<b"
+    LT@288..289 "<"
+    TEXT@289..290 "b"
     GT@290..291 ">"
     TEXT@291..295 "html"
     WHITESPACE@295..296 " "

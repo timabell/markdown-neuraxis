@@ -19,5 +19,6 @@ ROOT@0..38
     WHITESPACE@27..28 " "
     TEXT@28..31 "for"
     WHITESPACE@31..32 " "
-    TEXT@32..37 "more."
+    TEXT@32..36 "more"
+    DOT@36..37 "."
     NEWLINE@37..38 "\\n"

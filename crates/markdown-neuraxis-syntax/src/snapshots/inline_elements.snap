@@ -28,5 +28,5 @@ ROOT@0..48
       TEXT@38..44 "strong"
       STAR@44..45 "*"
       STAR@45..46 "*"
-    TEXT@46..47 "."
+    DOT@46..47 "."
     NEWLINE@47..48 "\\n"
