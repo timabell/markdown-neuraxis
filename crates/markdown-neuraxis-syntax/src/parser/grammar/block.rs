@@ -76,9 +76,12 @@ pub fn block(p: &mut Parser<'_, '_>) {
             }
         }
         SyntaxKind::WHITESPACE => {
-            // Indented content - could be continuation or indented code
-            // For now, treat as paragraph
-            paragraph(p);
+            // Indented content - could be nested list item or continuation
+            if is_indented_list_item(p) {
+                list_item_indented(p);
+            } else {
+                paragraph(p);
+            }
         }
         _ => paragraph(p),
     }
@@ -246,6 +249,72 @@ fn list_item_numbered(p: &mut Parser<'_, '_>) {
     if !p.eat(SyntaxKind::WHITESPACE) {
         m.abandon(p);
         return paragraph(p);
+    }
+
+    // Parse inline content
+    inline::inline_until_newline(p);
+
+    // Consume newline
+    p.eat(SyntaxKind::NEWLINE);
+
+    m.complete(p, SyntaxKind::LIST_ITEM);
+}
+
+/// Check if current whitespace precedes an indented list item
+fn is_indented_list_item(p: &Parser<'_, '_>) -> bool {
+    if p.current() != SyntaxKind::WHITESPACE {
+        return false;
+    }
+
+    // Look for list marker after whitespace
+    let after_ws = p.nth(1);
+    match after_ws {
+        SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+            // Bullet list: whitespace + marker + whitespace
+            p.nth(2) == SyntaxKind::WHITESPACE
+        }
+        SyntaxKind::TEXT => {
+            // Numbered list: whitespace + digits + dot + whitespace
+            p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE
+        }
+        _ => false,
+    }
+}
+
+/// Parse an indented list item (nested list)
+fn list_item_indented(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume leading whitespace (indentation)
+    while p.at(SyntaxKind::WHITESPACE) {
+        p.bump();
+    }
+
+    // Parse based on marker type
+    match p.current() {
+        SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+            // Consume the marker
+            p.bump();
+
+            // Consume required space
+            if !p.eat(SyntaxKind::WHITESPACE) {
+                m.abandon(p);
+                return paragraph(p);
+            }
+        }
+        SyntaxKind::TEXT => {
+            // Numbered list - consume number, dot, space
+            p.bump(); // number
+            p.bump(); // dot
+            if !p.eat(SyntaxKind::WHITESPACE) {
+                m.abandon(p);
+                return paragraph(p);
+            }
+        }
+        _ => {
+            m.abandon(p);
+            return paragraph(p);
+        }
     }
 
     // Parse inline content
@@ -461,5 +530,66 @@ mod tests {
         for item in items {
             assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
         }
+    }
+
+    // === Nested list tests ===
+
+    #[test]
+    fn parse_nested_bullet_list() {
+        let input = "- Parent\n  - Child\n";
+        let tree = parse(input);
+
+        let items: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(items.len(), 2, "Should have parent and child list items");
+    }
+
+    #[test]
+    fn parse_nested_list_multiple_levels() {
+        let input = "- Level 1\n  - Level 2\n    - Level 3\n";
+        let tree = parse(input);
+
+        let items: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(items.len(), 3, "Should have 3 nested list items");
+    }
+
+    #[test]
+    fn parse_nested_list_with_tabs() {
+        let input = "- Parent\n\t- Child\n";
+        let tree = parse(input);
+
+        let items: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(items.len(), 2, "Should recognize tab-indented child");
+    }
+
+    #[test]
+    fn parse_nested_numbered_list() {
+        let input = "1. Parent\n   1. Child\n";
+        let tree = parse(input);
+
+        let items: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(
+            items.len(),
+            2,
+            "Should have parent and child numbered items"
+        );
+    }
+
+    #[test]
+    fn parse_nested_list_preserves_text() {
+        let input = "- Parent\n  - Child\n    - Grandchild\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
     }
 }
