@@ -150,33 +150,29 @@ fn heading(p: &mut Parser<'_, '_>) {
     m.complete(p, SyntaxKind::HEADING);
 }
 
-/// Parse a blockquote.
+/// Parse a blockquote line.
+///
+/// Each line starting with `>` creates a BLOCK_QUOTE node.
+/// Multiple `>` markers (e.g., `>>`) create nested BLOCK_QUOTE nodes.
+/// The snapshot layer consolidates consecutive same-depth blockquotes.
 fn blockquote(p: &mut Parser<'_, '_>) {
     let m = p.start();
 
-    while p.at(SyntaxKind::GT) {
-        // Consume `>` and optional space
-        p.bump();
-        p.eat(SyntaxKind::WHITESPACE);
+    // Consume first `>`
+    p.bump();
+    p.eat(SyntaxKind::WHITESPACE);
 
+    // Check for additional `>` markers (nested blockquote)
+    if p.at(SyntaxKind::GT) {
+        // Recurse for nested blockquote
+        blockquote(p);
+    } else {
         // Parse content until end of line
         inline::inline_until_newline(p);
-
-        // Consume newline
-        if p.eat(SyntaxKind::NEWLINE) {
-            // Check for continuation line
-            // Skip leading whitespace
-            while p.at(SyntaxKind::WHITESPACE) {
-                p.bump();
-            }
-
-            if !p.at(SyntaxKind::GT) {
-                break;
-            }
-        } else {
-            break;
-        }
     }
+
+    // Consume newline
+    p.eat(SyntaxKind::NEWLINE);
 
     m.complete(p, SyntaxKind::BLOCK_QUOTE);
 }
@@ -589,6 +585,60 @@ mod tests {
     #[test]
     fn parse_nested_list_preserves_text() {
         let input = "- Parent\n  - Child\n    - Grandchild\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === Blockquote nesting tests ===
+
+    #[test]
+    fn parse_single_blockquote_line() {
+        let tree = parse("> Quote\n");
+        let bq = tree.children().next().unwrap();
+        assert_eq!(bq.kind(), SyntaxKind::BLOCK_QUOTE);
+    }
+
+    #[test]
+    fn parse_nested_blockquote() {
+        let input = ">> Nested\n";
+        let tree = parse(input);
+
+        // Should have nested BLOCK_QUOTE structure
+        let bqs: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_QUOTE)
+            .collect();
+        assert_eq!(bqs.len(), 2, "Should have 2 blockquotes (outer and nested)");
+    }
+
+    #[test]
+    fn parse_deeply_nested_blockquote() {
+        let input = ">>> Deep\n";
+        let tree = parse(input);
+
+        let bqs: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_QUOTE)
+            .collect();
+        assert_eq!(bqs.len(), 3, "Should have 3 blockquote levels");
+    }
+
+    #[test]
+    fn parse_multiple_blockquote_lines() {
+        let input = "> Line 1\n> Line 2\n";
+        let tree = parse(input);
+
+        // Each line should be a separate BLOCK_QUOTE at root level
+        let bqs: Vec<_> = tree
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_QUOTE)
+            .collect();
+        assert_eq!(bqs.len(), 2, "Should have 2 separate blockquote nodes");
+    }
+
+    #[test]
+    fn parse_blockquote_preserves_text() {
+        let input = "> Line 1\n>> Nested\n>>> Deep\n";
         let tree = parse(input);
         assert_eq!(tree.text().to_string(), input);
     }
