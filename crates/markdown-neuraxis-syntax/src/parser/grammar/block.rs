@@ -67,6 +67,14 @@ pub fn block(p: &mut Parser<'_, '_>) {
                 paragraph(p);
             }
         }
+        SyntaxKind::TEXT => {
+            // Could be a numbered list item (e.g., "1. item")
+            if is_numbered_list_item(p) {
+                list_item_numbered(p);
+            } else {
+                paragraph(p);
+            }
+        }
         SyntaxKind::WHITESPACE => {
             // Indented content - could be continuation or indented code
             // For now, treat as paragraph
@@ -206,6 +214,47 @@ fn thematic_break(p: &mut Parser<'_, '_>) {
     p.eat(SyntaxKind::NEWLINE);
 
     m.complete(p, SyntaxKind::THEMATIC_BREAK);
+}
+
+/// Check if current position is a numbered list item (e.g., "1. ")
+fn is_numbered_list_item(p: &Parser<'_, '_>) -> bool {
+    // Must start with TEXT containing only digits
+    if p.current() != SyntaxKind::TEXT {
+        return false;
+    }
+
+    let text = p.current_text();
+    if text.is_empty() || !text.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+
+    // Next must be DOT, then WHITESPACE
+    p.nth(1) == SyntaxKind::DOT && p.nth(2) == SyntaxKind::WHITESPACE
+}
+
+/// Parse a numbered list item (e.g., "1. item")
+fn list_item_numbered(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume the number
+    p.bump();
+
+    // Consume the dot
+    p.bump();
+
+    // Consume the required space
+    if !p.eat(SyntaxKind::WHITESPACE) {
+        m.abandon(p);
+        return paragraph(p);
+    }
+
+    // Parse inline content
+    inline::inline_until_newline(p);
+
+    // Consume newline
+    p.eat(SyntaxKind::NEWLINE);
+
+    m.complete(p, SyntaxKind::LIST_ITEM);
 }
 
 /// Parse a fenced code block.
@@ -382,5 +431,35 @@ mod tests {
         let input = "# Heading\n\n> Quote\n\n- Item\n";
         let tree = parse(input);
         assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === Numbered list tests ===
+
+    #[test]
+    fn parse_numbered_list_item() {
+        let tree = parse("1. First item\n");
+        let item = tree.children().next().unwrap();
+        assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
+        assert!(item.text().to_string().contains("First item"));
+    }
+
+    #[test]
+    fn parse_numbered_list_multi_digit() {
+        let tree = parse("10. Tenth item\n");
+        let item = tree.children().next().unwrap();
+        assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
+    }
+
+    #[test]
+    fn parse_numbered_list_preserves_text() {
+        let input = "1. First\n2. Second\n3. Third\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+
+        let items: Vec<_> = tree.children().collect();
+        assert_eq!(items.len(), 3);
+        for item in items {
+            assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
+        }
     }
 }
