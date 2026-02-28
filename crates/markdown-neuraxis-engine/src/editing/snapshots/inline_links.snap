@@ -6,10 +6,10 @@ Paragraph [0..54]
   lines:
     full:0..54 prefix:0..0"" content:0..53"A paragraph with [a link](https://example.com) in it."
   inlines:
-    Link [17..46]
+    Link [17..46] text:18..24 "a link" url:26..45 "https://example.com"
 Paragraph [55..102]
   lines:
     full:55..102 prefix:55..55"" content:55..101"Also [[wikilink]] and [[wikilink|with alias]]."
   inlines:
-    WikiLink [60..72]
-    WikiLink [77..100]
+    WikiLink [60..72] target:62..70 "wikilink"
+    WikiLink [77..100] target:79..87 "wikilink" alias:88..98 "with alias"

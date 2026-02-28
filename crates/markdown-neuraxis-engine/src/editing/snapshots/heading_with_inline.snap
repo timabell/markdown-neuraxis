@@ -6,14 +6,14 @@ Heading { level: 1 } [0..26]
   lines:
     full:0..26 prefix:0..2"# " content:2..25"Heading with *emphasis*"
   inlines:
-    Emphasis [15..25]
+    Emphasis [15..25] content:16..24 "emphasis"
 Heading { level: 2 } [27..55]
   lines:
     full:27..55 prefix:27..30"## " content:30..54"Heading with [link](url)"
   inlines:
-    Link [43..54]
+    Link [43..54] text:44..48 "link" url:50..53 "url"
 Heading { level: 3 } [56..80]
   lines:
     full:56..80 prefix:56..60"### " content:60..79"Heading with `code`"
   inlines:
-    Code [73..79]
+    Code [73..79] content:74..78 "code"

@@ -6,11 +6,11 @@ Paragraph [0..41]
   lines:
     full:0..41 prefix:0..0"" content:0..40"This has *emphasis* and **strong** text."
   inlines:
-    Emphasis [9..19]
-    Strong [24..34]
+    Emphasis [9..19] content:10..18 "emphasis"
+    Strong [24..34] content:26..32 "strong"
 Paragraph [42..96]
   lines:
     full:42..96 prefix:42..42"" content:42..95"Also _underscore emphasis_ and __double underscore__."
   inlines:
-    Emphasis [47..68]
-    Strong [73..94]
+    Emphasis [47..68] content:48..67 "underscore emphasis"
+    Strong [73..94] content:75..92 "double underscore"

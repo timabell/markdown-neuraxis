@@ -14,7 +14,7 @@ List [0..91]
           lines:
             full:2..23 prefix:2..2"" content:2..22"Item with *emphasis*"
           inlines:
-            Emphasis [12..22]
+            Emphasis [12..22] content:13..21 "emphasis"
     ListItem { marker: "- " } [23..47]
       root_range: 0..91
       lines:
@@ -25,7 +25,7 @@ List [0..91]
           lines:
             full:25..47 prefix:25..25"" content:25..46"Item with [link](url)"
           inlines:
-            Link [35..46]
+            Link [35..46] text:36..40 "link" url:42..45 "url"
     ListItem { marker: "- " } [47..66]
       root_range: 0..91
       lines:
@@ -36,7 +36,7 @@ List [0..91]
           lines:
             full:49..66 prefix:49..49"" content:49..65"Item with `code`"
           inlines:
-            Code [59..65]
+            Code [59..65] content:60..64 "code"
     ListItem { marker: "- " } [66..91]
       root_range: 0..91
       lines:
@@ -47,4 +47,4 @@ List [0..91]
           lines:
             full:68..91 prefix:68..68"" content:68..90"Item with [[wikilink]]"
           inlines:
-            WikiLink [78..90]
+            WikiLink [78..90] target:80..88 "wikilink"

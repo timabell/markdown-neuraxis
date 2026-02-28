@@ -6,14 +6,14 @@ Paragraph [0..30]
   lines:
     full:0..30 prefix:0..0"" content:0..29"[*emphasized link text*](url)"
   inlines:
-    Link [0..29]
+    Link [0..29] text:1..23 "*emphasized link text*" url:25..28 "url"
 Paragraph [31..59]
   lines:
     full:31..59 prefix:31..31"" content:31..58"[**strong link text**](url)"
   inlines:
-    Link [31..58]
+    Link [31..58] text:32..52 "**strong link text**" url:54..57 "url"
 Paragraph [60..91]
   lines:
     full:60..91 prefix:60..60"" content:60..90"[link with `code` inside](url)"
   inlines:
-    Link [60..90]
+    Link [60..90] text:61..84 "link with `code` inside" url:86..89 "url"

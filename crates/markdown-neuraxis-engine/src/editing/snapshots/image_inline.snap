@@ -6,7 +6,7 @@ Paragraph [0..33]
   lines:
     full:0..33 prefix:0..0"" content:0..32"An image: ![alt text](image.png)"
   inlines:
-    Image [10..32]
+    Image [10..32] alt:12..20 "alt text" url:22..31 "image.png"
 Paragraph [34..49]
   lines:
     full:34..49 prefix:34..34"" content:34..48"Image in list:"
@@ -21,4 +21,4 @@ List [49..78]
           lines:
             full:51..78 prefix:51..51"" content:51..77"![icon](icon.png) Item one"
           inlines:
-            Image [51..68]
+            Image [51..68] alt:53..57 "icon" url:59..67 "icon.png"

@@ -44,25 +44,34 @@ pub struct InlineElement {
     pub range: Range<usize>,
 }
 
-/// The kind of inline element
+/// The kind of inline element with ranges for display-relevant parts
 #[derive(Debug, Clone, PartialEq)]
 pub enum InlineKind {
     /// Hard line break (two+ trailing spaces before newline)
     HardBreak,
-    /// Emphasis (*text* or _text_)
-    Emphasis,
-    /// Strong emphasis (**text** or __text__)
-    Strong,
-    /// Inline code (`code`)
-    Code,
-    /// Link [text](url)
-    Link,
+    /// Emphasis (*text* or _text_) - content is the text without markers
+    Emphasis { content: Range<usize> },
+    /// Strong emphasis (**text** or __text__) - content is the text without markers
+    Strong { content: Range<usize> },
+    /// Inline code (`code`) - content is the code without backticks
+    Code { content: Range<usize> },
+    /// Link [text](url) - separate ranges for display text and URL
+    Link {
+        text: Range<usize>,
+        url: Range<usize>,
+    },
     /// Wiki link [[target]] or [[target|alias]]
-    WikiLink,
-    /// Image ![alt](url)
-    Image,
-    /// Strikethrough ~~text~~
-    Strikethrough,
+    WikiLink {
+        target: Range<usize>,
+        alias: Option<Range<usize>>,
+    },
+    /// Image ![alt](url) - separate ranges for alt text and URL
+    Image {
+        alt: Range<usize>,
+        url: Range<usize>,
+    },
+    /// Strikethrough ~~text~~ - content is the text without markers
+    Strikethrough { content: Range<usize> },
 }
 
 /// The kind of block
@@ -163,12 +172,7 @@ fn format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
     if !block.inlines.is_empty() {
         writeln!(out, "{}  inlines:", prefix).unwrap();
         for inline in &block.inlines {
-            writeln!(
-                out,
-                "{}    {:?} [{}..{}]",
-                prefix, inline.kind, inline.range.start, inline.range.end
-            )
-            .unwrap();
+            format_inline(out, inline, source, &prefix);
         }
     }
 
@@ -182,6 +186,102 @@ fn format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
             for child in children {
                 format_block(out, child, source, indent + 2);
             }
+        }
+    }
+}
+
+fn format_inline(out: &mut String, inline: &InlineElement, source: &str, prefix: &str) {
+    use std::fmt::Write;
+
+    match &inline.kind {
+        InlineKind::HardBreak => {
+            writeln!(
+                out,
+                "{}    HardBreak [{}..{}]",
+                prefix, inline.range.start, inline.range.end
+            )
+            .unwrap();
+        }
+        InlineKind::Emphasis { content } => {
+            let text = &source[content.clone()];
+            writeln!(
+                out,
+                "{}    Emphasis [{}..{}] content:{:?} {:?}",
+                prefix, inline.range.start, inline.range.end, content, text
+            )
+            .unwrap();
+        }
+        InlineKind::Strong { content } => {
+            let text = &source[content.clone()];
+            writeln!(
+                out,
+                "{}    Strong [{}..{}] content:{:?} {:?}",
+                prefix, inline.range.start, inline.range.end, content, text
+            )
+            .unwrap();
+        }
+        InlineKind::Code { content } => {
+            let text = &source[content.clone()];
+            writeln!(
+                out,
+                "{}    Code [{}..{}] content:{:?} {:?}",
+                prefix, inline.range.start, inline.range.end, content, text
+            )
+            .unwrap();
+        }
+        InlineKind::Link { text, url } => {
+            let text_str = &source[text.clone()];
+            let url_str = &source[url.clone()];
+            writeln!(
+                out,
+                "{}    Link [{}..{}] text:{:?} {:?} url:{:?} {:?}",
+                prefix, inline.range.start, inline.range.end, text, text_str, url, url_str
+            )
+            .unwrap();
+        }
+        InlineKind::WikiLink { target, alias } => {
+            let target_str = &source[target.clone()];
+            if let Some(alias_range) = alias {
+                let alias_str = &source[alias_range.clone()];
+                writeln!(
+                    out,
+                    "{}    WikiLink [{}..{}] target:{:?} {:?} alias:{:?} {:?}",
+                    prefix,
+                    inline.range.start,
+                    inline.range.end,
+                    target,
+                    target_str,
+                    alias_range,
+                    alias_str
+                )
+                .unwrap();
+            } else {
+                writeln!(
+                    out,
+                    "{}    WikiLink [{}..{}] target:{:?} {:?}",
+                    prefix, inline.range.start, inline.range.end, target, target_str
+                )
+                .unwrap();
+            }
+        }
+        InlineKind::Image { alt, url } => {
+            let alt_str = &source[alt.clone()];
+            let url_str = &source[url.clone()];
+            writeln!(
+                out,
+                "{}    Image [{}..{}] alt:{:?} {:?} url:{:?} {:?}",
+                prefix, inline.range.start, inline.range.end, alt, alt_str, url, url_str
+            )
+            .unwrap();
+        }
+        InlineKind::Strikethrough { content } => {
+            let text = &source[content.clone()];
+            writeln!(
+                out,
+                "{}    Strikethrough [{}..{}] content:{:?} {:?}",
+                prefix, inline.range.start, inline.range.end, content, text
+            )
+            .unwrap();
         }
     }
 }
@@ -330,7 +430,7 @@ fn process_paragraph(source: &str, node: SyntaxNode, root_range: Range<usize>) -
     }
 
     // Extract inline elements
-    let inlines = extract_inlines(&node);
+    let inlines = extract_inlines(&node, source);
 
     Some(Block {
         id: AnchorId(0),
@@ -406,7 +506,7 @@ fn process_block_quote(source: &str, node: SyntaxNode, root_range: Range<usize>)
         node_range,
         root_range,
         lines,
-        inlines: extract_inlines(&node),
+        inlines: extract_inlines(&node, source),
         content,
     })
 }
@@ -438,7 +538,7 @@ fn process_heading(source: &str, node: SyntaxNode, root_range: Range<usize>) -> 
         node_range,
         root_range,
         lines: vec![line_info],
-        inlines: extract_inlines(&node),
+        inlines: extract_inlines(&node, source),
         content: BlockContent::Leaf,
     })
 }
@@ -574,7 +674,7 @@ fn find_line_start(source: &str, pos: usize) -> usize {
 
 /// Extract inline elements from a node's children.
 /// Returns interesting inlines: HARD_BREAK, EMPHASIS, STRONG, CODE_SPAN, LINK, etc.
-fn extract_inlines(node: &SyntaxNode) -> Vec<InlineElement> {
+fn extract_inlines(node: &SyntaxNode, source: &str) -> Vec<InlineElement> {
     let mut inlines = Vec::new();
 
     for child in node.children_with_tokens() {
@@ -582,6 +682,7 @@ fn extract_inlines(node: &SyntaxNode) -> Vec<InlineElement> {
             let r = child.text_range();
             (r.start().into())..(r.end().into())
         };
+        let text = &source[range.clone()];
 
         let kind = match &child {
             SyntaxElement::Token(token) => match token.kind() {
@@ -589,13 +690,38 @@ fn extract_inlines(node: &SyntaxNode) -> Vec<InlineElement> {
                 _ => None,
             },
             SyntaxElement::Node(node) => match node.kind() {
-                SyntaxKind::EMPHASIS => Some(InlineKind::Emphasis),
-                SyntaxKind::STRONG => Some(InlineKind::Strong),
-                SyntaxKind::CODE_SPAN => Some(InlineKind::Code),
-                SyntaxKind::LINK => Some(InlineKind::Link),
-                SyntaxKind::WIKILINK => Some(InlineKind::WikiLink),
-                SyntaxKind::IMAGE => Some(InlineKind::Image),
-                SyntaxKind::STRIKETHROUGH => Some(InlineKind::Strikethrough),
+                SyntaxKind::EMPHASIS => {
+                    // *text* or _text_ - skip marker on each side
+                    let content = (range.start + 1)..(range.end - 1);
+                    Some(InlineKind::Emphasis { content })
+                }
+                SyntaxKind::STRONG => {
+                    // **text** or __text__ - skip 2 markers on each side
+                    let content = (range.start + 2)..(range.end - 2);
+                    Some(InlineKind::Strong { content })
+                }
+                SyntaxKind::CODE_SPAN => {
+                    // `code` - skip backtick on each side
+                    let content = (range.start + 1)..(range.end - 1);
+                    Some(InlineKind::Code { content })
+                }
+                SyntaxKind::LINK => {
+                    // [text](url) - find the ] and ( positions
+                    parse_link_ranges(text, range.start)
+                }
+                SyntaxKind::WIKILINK => {
+                    // [[target]] or [[target|alias]]
+                    parse_wikilink_ranges(text, range.start)
+                }
+                SyntaxKind::IMAGE => {
+                    // ![alt](url) - similar to link but starts with !
+                    parse_image_ranges(text, range.start)
+                }
+                SyntaxKind::STRIKETHROUGH => {
+                    // ~~text~~ - skip 2 markers on each side
+                    let content = (range.start + 2)..(range.end - 2);
+                    Some(InlineKind::Strikethrough { content })
+                }
                 _ => None,
             },
         };
@@ -606,6 +732,65 @@ fn extract_inlines(node: &SyntaxNode) -> Vec<InlineElement> {
     }
 
     inlines
+}
+
+/// Parse [text](url) into separate ranges
+fn parse_link_ranges(text: &str, offset: usize) -> Option<InlineKind> {
+    // Format: [text](url)
+    let close_bracket = text.find(']')?;
+    let open_paren = text[close_bracket..].find('(')? + close_bracket;
+    let close_paren = text.rfind(')')?;
+
+    let text_range = (offset + 1)..(offset + close_bracket);
+    let url_range = (offset + open_paren + 1)..(offset + close_paren);
+
+    Some(InlineKind::Link {
+        text: text_range,
+        url: url_range,
+    })
+}
+
+/// Parse [[target]] or [[target|alias]] into separate ranges
+fn parse_wikilink_ranges(text: &str, offset: usize) -> Option<InlineKind> {
+    // Format: [[target]] or [[target|alias]]
+    // Skip opening [[ and closing ]]
+    let inner_start = 2;
+    let inner_end = text.len() - 2;
+    let inner = &text[inner_start..inner_end];
+
+    if let Some(pipe_pos) = inner.find('|') {
+        // [[target|alias]]
+        let target = (offset + inner_start)..(offset + inner_start + pipe_pos);
+        let alias = (offset + inner_start + pipe_pos + 1)..(offset + inner_end);
+        Some(InlineKind::WikiLink {
+            target,
+            alias: Some(alias),
+        })
+    } else {
+        // [[target]]
+        let target = (offset + inner_start)..(offset + inner_end);
+        Some(InlineKind::WikiLink {
+            target,
+            alias: None,
+        })
+    }
+}
+
+/// Parse ![alt](url) into separate ranges
+fn parse_image_ranges(text: &str, offset: usize) -> Option<InlineKind> {
+    // Format: ![alt](url)
+    let close_bracket = text.find(']')?;
+    let open_paren = text[close_bracket..].find('(')? + close_bracket;
+    let close_paren = text.rfind(')')?;
+
+    // Skip the leading ! for alt text start
+    let alt_range = (offset + 2)..(offset + close_bracket);
+    let url_range = (offset + open_paren + 1)..(offset + close_paren);
+
+    Some(InlineKind::Image {
+        alt: alt_range,
+        url: url_range,
+    })
 }
 
 #[cfg(test)]

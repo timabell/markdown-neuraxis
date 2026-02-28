@@ -14,7 +14,7 @@ List [0..78]
           lines:
             full:2..27 prefix:2..2"" content:2..26"*emphasis* in first item"
           inlines:
-            Emphasis [2..12]
+            Emphasis [2..12] content:3..11 "emphasis"
     ListItem { marker: "- " } [27..55]
       root_range: 0..78
       lines:
@@ -25,7 +25,7 @@ List [0..78]
           lines:
             full:29..55 prefix:29..29"" content:29..54"**strong** in second item"
           inlines:
-            Strong [29..39]
+            Strong [29..39] content:31..37 "strong"
     ListItem { marker: "- " } [55..78]
       root_range: 0..78
       lines:
@@ -36,4 +36,4 @@ List [0..78]
           lines:
             full:57..78 prefix:57..57"" content:57..77"`code` in third item"
           inlines:
-            Code [57..63]
+            Code [57..63] content:58..62 "code"

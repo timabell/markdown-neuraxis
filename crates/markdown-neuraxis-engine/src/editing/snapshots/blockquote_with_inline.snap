@@ -6,10 +6,10 @@ BlockQuote [0..41]
   lines:
     full:0..41 prefix:0..2"> " content:2..40"Quote with *emphasis* and [link](url)."
   inlines:
-    Emphasis [13..23]
-    Link [28..39]
+    Emphasis [13..23] content:14..22 "emphasis"
+    Link [28..39] text:29..33 "link" url:35..38 "url"
 BlockQuote [41..68]
   lines:
     full:41..68 prefix:41..43"> " content:43..67"Second line with `code`."
   inlines:
-    Code [60..66]
+    Code [60..66] content:61..65 "code"
