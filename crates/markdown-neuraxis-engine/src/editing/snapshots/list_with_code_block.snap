@@ -1,0 +1,30 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..68]
+  children:
+    ListItem { marker: "- " } [0..53]
+      root_range: 0..68
+      lines:
+        full:0..18 prefix:0..2"- " content:2..17"Item with code:"
+      children:
+        Paragraph [2..18]
+          root_range: 0..68
+          lines:
+            full:2..18 prefix:2..2"" content:2..17"Item with code:"
+        FencedCode { language: Some("python") } [20..53]
+          root_range: 0..68
+          lines:
+            full:20..30 prefix:20..20"" content:20..29"```python"
+            full:30..47 prefix:30..30"" content:30..46"  print(\"hello\")"
+            full:47..53 prefix:47..47"" content:47..52"  ```"
+    ListItem { marker: "- " } [53..68]
+      root_range: 0..68
+      lines:
+        full:53..68 prefix:53..55"- " content:55..67"Another item"
+      children:
+        Paragraph [55..68]
+          root_range: 0..68
+          lines:
+            full:55..68 prefix:55..55"" content:55..67"Another item"

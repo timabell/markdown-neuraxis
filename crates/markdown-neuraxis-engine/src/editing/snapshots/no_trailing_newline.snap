@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..39]
+  lines:
+    full:0..39 prefix:0..0"" content:0..39"This paragraph has no trailing newline."

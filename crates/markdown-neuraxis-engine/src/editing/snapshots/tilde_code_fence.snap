@@ -1,0 +1,9 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+FencedCode { language: None } [0..25]
+  lines:
+    full:0..4 prefix:0..0"" content:0..3"~~~"
+    full:4..21 prefix:4..4"" content:4..20"code with tildes"
+    full:21..25 prefix:21..21"" content:21..24"~~~"

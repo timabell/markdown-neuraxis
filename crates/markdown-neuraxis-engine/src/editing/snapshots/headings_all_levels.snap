@@ -1,0 +1,22 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Heading { level: 1 } [0..12]
+  lines:
+    full:0..12 prefix:0..2"# " content:2..11"Heading 1"
+Heading { level: 2 } [13..26]
+  lines:
+    full:13..26 prefix:13..16"## " content:16..25"Heading 2"
+Heading { level: 3 } [27..41]
+  lines:
+    full:27..41 prefix:27..31"### " content:31..40"Heading 3"
+Heading { level: 4 } [42..57]
+  lines:
+    full:42..57 prefix:42..47"#### " content:47..56"Heading 4"
+Heading { level: 5 } [58..74]
+  lines:
+    full:58..74 prefix:58..64"##### " content:64..73"Heading 5"
+Heading { level: 6 } [75..92]
+  lines:
+    full:75..92 prefix:75..82"###### " content:82..91"Heading 6"

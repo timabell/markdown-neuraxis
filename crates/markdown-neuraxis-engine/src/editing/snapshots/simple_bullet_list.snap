@@ -1,0 +1,33 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..40]
+  children:
+    ListItem { marker: "- " } [0..13]
+      root_range: 0..40
+      lines:
+        full:0..13 prefix:0..2"- " content:2..12"First item"
+      children:
+        Paragraph [2..13]
+          root_range: 0..40
+          lines:
+            full:2..13 prefix:2..2"" content:2..12"First item"
+    ListItem { marker: "- " } [13..27]
+      root_range: 0..40
+      lines:
+        full:13..27 prefix:13..15"- " content:15..26"Second item"
+      children:
+        Paragraph [15..27]
+          root_range: 0..40
+          lines:
+            full:15..27 prefix:15..15"" content:15..26"Second item"
+    ListItem { marker: "- " } [27..40]
+      root_range: 0..40
+      lines:
+        full:27..40 prefix:27..29"- " content:29..39"Third item"
+      children:
+        Paragraph [29..40]
+          root_range: 0..40
+          lines:
+            full:29..40 prefix:29..29"" content:29..39"Third item"

@@ -1,0 +1,39 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+BlockQuote [0..14]
+  lines:
+    full:0..14 prefix:0..2"> " content:2..13"Outer quote"
+BlockQuote [14..30]
+  lines:
+    full:14..30 prefix:14..17">> " content:17..29"Nested quote"
+  children:
+    BlockQuote [15..30]
+      root_range: 14..30
+      lines:
+        full:14..30 prefix:14..17">> " content:17..29"Nested quote"
+BlockQuote [30..48]
+  lines:
+    full:30..48 prefix:30..34">>> " content:34..47"Deeply nested"
+  children:
+    BlockQuote [31..48]
+      root_range: 30..48
+      lines:
+        full:30..48 prefix:30..34">>> " content:34..47"Deeply nested"
+      children:
+        BlockQuote [32..48]
+          root_range: 30..48
+          lines:
+            full:30..48 prefix:30..34">>> " content:34..47"Deeply nested"
+BlockQuote [48..72]
+  lines:
+    full:48..72 prefix:48..51">> " content:51..71"Back to second level"
+  children:
+    BlockQuote [49..72]
+      root_range: 48..72
+      lines:
+        full:48..72 prefix:48..51">> " content:51..71"Back to second level"
+BlockQuote [72..94]
+  lines:
+    full:72..94 prefix:72..74"> " content:74..93"Back to first level"

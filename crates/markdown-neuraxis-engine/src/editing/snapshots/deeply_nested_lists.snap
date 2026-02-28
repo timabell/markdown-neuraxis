@@ -1,0 +1,58 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..70]
+  children:
+    ListItem { marker: "- " } [0..70]
+      lines:
+        full:0..10 prefix:0..2"- " content:2..9"Level 1"
+      children:
+        Paragraph [2..10]
+          root_range: 0..70
+          lines:
+            full:2..10 prefix:2..2"" content:2..9"Level 1"
+        List [12..70]
+          children:
+            ListItem { marker: "- " } [12..70]
+              root_range: 0..70
+              lines:
+                full:12..22 prefix:12..14"- " content:14..21"Level 2"
+              children:
+                Paragraph [14..22]
+                  root_range: 0..70
+                  lines:
+                    full:14..22 prefix:14..14"" content:14..21"Level 2"
+                List [26..70]
+                  children:
+                    ListItem { marker: "- " } [26..70]
+                      root_range: 0..70
+                      lines:
+                        full:26..36 prefix:26..28"- " content:28..35"Level 3"
+                      children:
+                        Paragraph [28..36]
+                          root_range: 0..70
+                          lines:
+                            full:28..36 prefix:28..28"" content:28..35"Level 3"
+                        List [42..70]
+                          children:
+                            ListItem { marker: "- " } [42..70]
+                              root_range: 0..70
+                              lines:
+                                full:42..52 prefix:42..44"- " content:44..51"Level 4"
+                              children:
+                                Paragraph [44..52]
+                                  root_range: 0..70
+                                  lines:
+                                    full:44..52 prefix:44..44"" content:44..51"Level 4"
+                                List [60..70]
+                                  children:
+                                    ListItem { marker: "- " } [60..70]
+                                      root_range: 0..70
+                                      lines:
+                                        full:60..70 prefix:60..62"- " content:62..69"Level 5"
+                                      children:
+                                        Paragraph [62..70]
+                                          root_range: 0..70
+                                          lines:
+                                            full:62..70 prefix:62..62"" content:62..69"Level 5"

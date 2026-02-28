@@ -1,0 +1,46 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..201]
+  children:
+    ListItem { marker: "- " } [0..21]
+      root_range: 0..201
+      lines:
+        full:0..21 prefix:0..2"- " content:2..20"Normal bullet item"
+      children:
+        Paragraph [2..21]
+          root_range: 0..201
+          lines:
+            full:2..21 prefix:2..2"" content:2..20"Normal bullet item"
+    ListItem { marker: "- " } [21..95]
+      root_range: 0..201
+      lines:
+        full:21..47 prefix:21..23"- " content:23..46"This line has hard wrap"
+      children:
+        Paragraph [23..95]
+          root_range: 0..201
+          lines:
+            full:23..47 prefix:23..23"" content:23..46"This line has hard wrap"
+            full:47..76 prefix:47..49"  " content:49..75"this continues after break"
+            full:76..95 prefix:76..78"  " content:78..94"and a third line"
+    ListItem { marker: "- " } [95..170]
+      root_range: 0..201
+      lines:
+        full:95..129 prefix:95..97"- " content:97..128"This line has forced newlines  "
+      children:
+        Paragraph [97..170]
+          root_range: 0..201
+          lines:
+            full:97..129 prefix:97..97"" content:97..128"This line has forced newlines  "
+            full:129..147 prefix:129..131"  " content:131..146"by adding two  "
+            full:147..170 prefix:147..149"  " content:149..169"trailing whitespaces"
+    ListItem { marker: "- " } [170..201]
+      root_range: 0..201
+      lines:
+        full:170..201 prefix:170..172"- " content:172..200"Bullet with trailing space  "
+      children:
+        Paragraph [172..201]
+          root_range: 0..201
+          lines:
+            full:172..201 prefix:172..172"" content:172..200"Bullet with trailing space  "

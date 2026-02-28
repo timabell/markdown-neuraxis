@@ -1,0 +1,11 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+FencedCode { language: Some("rust") } [0..57]
+  lines:
+    full:0..8 prefix:0..0"" content:0..7"```rust"
+    full:8..20 prefix:8..8"" content:8..19"fn main() {"
+    full:20..51 prefix:20..20"" content:20..50"    println!(\"Hello, world!\");"
+    full:51..53 prefix:51..51"" content:51..52"}"
+    full:53..57 prefix:53..53"" content:53..56"```"

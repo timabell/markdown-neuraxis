@@ -1,0 +1,10 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+BlockQuote [0..25]
+  lines:
+    full:0..25 prefix:0..2"> " content:2..24"This is a quoted line."
+BlockQuote [25..56]
+  lines:
+    full:25..56 prefix:25..27"> " content:27..55"This is another quoted line."

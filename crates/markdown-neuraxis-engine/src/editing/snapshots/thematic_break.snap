@@ -1,0 +1,11 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..18]
+  lines:
+    full:0..18 prefix:0..0"" content:0..17"Before the break."
+ThematicBreak [19..23]
+Paragraph [24..41]
+  lines:
+    full:24..41 prefix:24..24"" content:24..40"After the break."

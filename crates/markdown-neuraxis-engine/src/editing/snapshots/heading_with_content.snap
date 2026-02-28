@@ -1,0 +1,22 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Heading { level: 1 } [0..13]
+  lines:
+    full:0..13 prefix:0..2"# " content:2..12"Main Title"
+Paragraph [14..50]
+  lines:
+    full:14..50 prefix:14..14"" content:14..49"This is the introduction paragraph."
+Heading { level: 2 } [51..66]
+  lines:
+    full:51..66 prefix:51..54"## " content:54..65"Section One"
+Paragraph [67..92]
+  lines:
+    full:67..92 prefix:67..67"" content:67..91"Content for section one."
+Heading { level: 2 } [93..108]
+  lines:
+    full:93..108 prefix:93..96"## " content:96..107"Section Two"
+Paragraph [109..134]
+  lines:
+    full:109..134 prefix:109..109"" content:109..133"Content for section two."

@@ -1,0 +1,33 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..36]
+  children:
+    ListItem { marker: "- " } [0..12]
+      root_range: 0..36
+      lines:
+        full:0..12 prefix:0..2"- " content:2..11"Dash item"
+      children:
+        Paragraph [2..12]
+          root_range: 0..36
+          lines:
+            full:2..12 prefix:2..2"" content:2..11"Dash item"
+    ListItem { marker: "* " } [12..24]
+      root_range: 0..36
+      lines:
+        full:12..24 prefix:12..14"* " content:14..23"Star item"
+      children:
+        Paragraph [14..24]
+          root_range: 0..36
+          lines:
+            full:14..24 prefix:14..14"" content:14..23"Star item"
+    ListItem { marker: "+ " } [24..36]
+      root_range: 0..36
+      lines:
+        full:24..36 prefix:24..26"+ " content:26..35"Plus item"
+      children:
+        Paragraph [26..36]
+          root_range: 0..36
+          lines:
+            full:26..36 prefix:26..26"" content:26..35"Plus item"

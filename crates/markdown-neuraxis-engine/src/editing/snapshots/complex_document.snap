@@ -1,0 +1,77 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Heading { level: 1 } [0..19]
+  lines:
+    full:0..19 prefix:0..2"# " content:2..18"Project Overview"
+Paragraph [20..46]
+  lines:
+    full:20..46 prefix:20..20"" content:20..45"This is the introduction."
+Heading { level: 2 } [47..59]
+  lines:
+    full:47..59 prefix:47..50"## " content:50..58"Features"
+List [60..125]
+  children:
+    ListItem { marker: "- " } [60..110]
+      root_range: 60..125
+      lines:
+        full:60..74 prefix:60..62"- " content:62..73"Feature one"
+      children:
+        Paragraph [62..74]
+          root_range: 60..125
+          lines:
+            full:62..74 prefix:62..62"" content:62..73"Feature one"
+        List [76..110]
+          children:
+            ListItem { marker: "- " } [76..110]
+              root_range: 60..125
+              lines:
+                full:76..92 prefix:76..78"- " content:78..91"Sub-feature A"
+              children:
+                Paragraph [78..92]
+                  root_range: 60..125
+                  lines:
+                    full:78..92 prefix:78..78"" content:78..91"Sub-feature A"
+                List [94..110]
+                  children:
+                    ListItem { marker: "- " } [94..110]
+                      root_range: 60..125
+                      lines:
+                        full:94..110 prefix:94..96"- " content:96..109"Sub-feature B"
+                      children:
+                        Paragraph [96..110]
+                          root_range: 60..125
+                          lines:
+                            full:96..110 prefix:96..96"" content:96..109"Sub-feature B"
+    ListItem { marker: "- " } [110..124]
+      root_range: 60..125
+      lines:
+        full:110..124 prefix:110..112"- " content:112..123"Feature two"
+      children:
+        Paragraph [112..124]
+          root_range: 60..125
+          lines:
+            full:112..124 prefix:112..112"" content:112..123"Feature two"
+Heading { level: 2 } [125..141]
+  lines:
+    full:125..141 prefix:125..128"## " content:128..140"Code Example"
+FencedCode { language: Some("javascript") } [142..190]
+  lines:
+    full:142..156 prefix:142..142"" content:142..155"```javascript"
+    full:156..170 prefix:156..156"" content:156..169"const x = 42;"
+    full:170..186 prefix:170..170"" content:170..185"console.log(x);"
+    full:186..190 prefix:186..186"" content:186..189"```"
+Heading { level: 2 } [191..201]
+  lines:
+    full:191..201 prefix:191..194"## " content:194..200"Quotes"
+BlockQuote [202..225]
+  lines:
+    full:202..225 prefix:202..204"> " content:204..224"Important note here."
+BlockQuote [225..246]
+  lines:
+    full:225..246 prefix:225..227"> " content:227..245"Don't forget this."
+ThematicBreak [247..251]
+Paragraph [252..261]
+  lines:
+    full:252..261 prefix:252..252"" content:252..260"The end."

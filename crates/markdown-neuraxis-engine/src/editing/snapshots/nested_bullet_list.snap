@@ -1,0 +1,68 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..112]
+  children:
+    ListItem { marker: "- " } [0..95]
+      root_range: 0..112
+      lines:
+        full:0..14 prefix:0..2"- " content:2..13"Parent item"
+      children:
+        Paragraph [2..14]
+          root_range: 0..112
+          lines:
+            full:2..14 prefix:2..2"" content:2..13"Parent item"
+        List [16..95]
+          children:
+            ListItem { marker: "- " } [16..95]
+              root_range: 0..112
+              lines:
+                full:16..33 prefix:16..18"- " content:18..32"Child item one"
+              children:
+                Paragraph [18..33]
+                  root_range: 0..112
+                  lines:
+                    full:18..33 prefix:18..18"" content:18..32"Child item one"
+                List [35..95]
+                  children:
+                    ListItem { marker: "- " } [35..95]
+                      root_range: 0..112
+                      lines:
+                        full:35..52 prefix:35..37"- " content:37..51"Child item two"
+                      children:
+                        Paragraph [37..52]
+                          root_range: 0..112
+                          lines:
+                            full:37..52 prefix:37..37"" content:37..51"Child item two"
+                        List [56..95]
+                          children:
+                            ListItem { marker: "- " } [56..95]
+                              root_range: 0..112
+                              lines:
+                                full:56..74 prefix:56..58"- " content:58..73"Grandchild item"
+                              children:
+                                Paragraph [58..74]
+                                  root_range: 0..112
+                                  lines:
+                                    full:58..74 prefix:58..58"" content:58..73"Grandchild item"
+                                List [76..95]
+                                  children:
+                                    ListItem { marker: "- " } [76..95]
+                                      root_range: 0..112
+                                      lines:
+                                        full:76..95 prefix:76..78"- " content:78..94"Child item three"
+                                      children:
+                                        Paragraph [78..95]
+                                          root_range: 0..112
+                                          lines:
+                                            full:78..95 prefix:78..78"" content:78..94"Child item three"
+    ListItem { marker: "- " } [95..112]
+      root_range: 0..112
+      lines:
+        full:95..112 prefix:95..97"- " content:97..111"Another parent"
+      children:
+        Paragraph [97..112]
+          root_range: 0..112
+          lines:
+            full:97..112 prefix:97..97"" content:97..111"Another parent"

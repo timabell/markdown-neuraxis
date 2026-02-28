@@ -1,0 +1,10 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..17]
+  lines:
+    full:0..17 prefix:0..0"" content:0..16"First paragraph."
+Paragraph [20..60]
+  lines:
+    full:20..60 prefix:20..20"" content:20..59"Second paragraph after multiple blanks."
