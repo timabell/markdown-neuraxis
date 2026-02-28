@@ -3009,6 +3009,7 @@ dependencies = [
  "anyhow",
  "criterion",
  "insta",
+ "markdown-neuraxis-syntax",
  "pretty_assertions",
  "pulldown-cmark",
  "regex",

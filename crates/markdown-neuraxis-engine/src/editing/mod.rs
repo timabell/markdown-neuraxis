@@ -80,6 +80,7 @@ pub mod commands;
 pub mod document;
 pub mod patch;
 pub mod snapshot;
+pub mod snapshot_v2;
 
 // Public API re-exports
 pub use anchors::{Anchor, AnchorId};

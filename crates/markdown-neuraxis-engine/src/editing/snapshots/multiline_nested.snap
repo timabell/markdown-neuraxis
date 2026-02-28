@@ -1,0 +1,42 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..94]
+  children:
+    ListItem { marker: "- " } [0..80]
+      root_range: 0..94
+      lines:
+        full:0..13 prefix:0..2"- " content:2..12"First item"
+      children:
+        Paragraph [2..30]
+          root_range: 0..94
+          lines:
+            full:2..13 prefix:2..2"" content:2..12"First item"
+            full:13..30 prefix:13..15"  " content:15..29"continued here"
+        BlockQuote [32..46]
+          root_range: 0..94
+          lines:
+            full:30..46 prefix:30..34"  > " content:34..45"quoted part"
+        BlockQuote [48..61]
+          root_range: 0..94
+          lines:
+            full:46..61 prefix:46..50"  > " content:50..60"more quote"
+        BlockQuote [63..80]
+          root_range: 0..94
+          lines:
+            full:61..80 prefix:61..66"  >> " content:66..79"deeply nested"
+          children:
+            BlockQuote [64..80]
+              root_range: 0..94
+              lines:
+                full:61..80 prefix:61..66"  >> " content:66..79"deeply nested"
+    ListItem { marker: "- " } [80..94]
+      root_range: 0..94
+      lines:
+        full:80..94 prefix:80..82"- " content:82..93"Second item"
+      children:
+        Paragraph [82..94]
+          root_range: 0..94
+          lines:
+            full:82..94 prefix:82..82"" content:82..93"Second item"
