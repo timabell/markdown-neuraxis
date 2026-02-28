@@ -136,8 +136,24 @@ pub enum TokenKind {
     #[token(".")]
     Dot,
 
+    /// `_` for underscore emphasis
+    #[token("_")]
+    Underscore,
+
+    /// `!` for images
+    #[token("!")]
+    Exclaim,
+
+    /// `:` for properties
+    #[token(":")]
+    Colon,
+
+    /// `=` for setext headings
+    #[token("=")]
+    Equals,
+
     /// Plain text - anything not matched by other rules
-    #[regex(r"[^\s\[\]()>`*+#|~.<-]+")]
+    #[regex(r"[^\s\[\]()>`*+#|~.<_!:=-]+")]
     Text,
 }
 
@@ -161,6 +177,10 @@ impl TokenKind {
             TokenKind::Hash => SyntaxKind::HASH,
             TokenKind::Lt => SyntaxKind::LT,
             TokenKind::Dot => SyntaxKind::DOT,
+            TokenKind::Underscore => SyntaxKind::UNDERSCORE,
+            TokenKind::Exclaim => SyntaxKind::EXCLAIM,
+            TokenKind::Colon => SyntaxKind::COLON,
+            TokenKind::Equals => SyntaxKind::EQUALS,
             TokenKind::Text => SyntaxKind::TEXT,
         }
     }

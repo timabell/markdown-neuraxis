@@ -99,6 +99,14 @@ pub enum SyntaxKind {
     LT,
     /// `.` for numbered lists
     DOT,
+    /// `_` for underscore emphasis
+    UNDERSCORE,
+    /// `!` for images
+    EXCLAIM,
+    /// `:` for properties
+    COLON,
+    /// `=` for setext headings
+    EQUALS,
     /// Raw HTML content
     HTML_TEXT,
     /// End of file marker
@@ -131,10 +139,26 @@ pub enum SyntaxKind {
     CODE_SPAN,
     /// Standard link `[text](url)`
     LINK,
-    /// Emphasis `*text*`
+    /// Emphasis `*text*` or `_text_`
     EMPHASIS,
-    /// Strong emphasis `**text**`
+    /// Strong emphasis `**text**` or `__text__`
     STRONG,
+    /// Strikethrough `~~text~~`
+    STRIKETHROUGH,
+    /// Image `![alt](url)`
+    IMAGE,
+    /// Autolink `<url>`
+    AUTOLINK,
+    /// Property `property:: value`
+    PROPERTY,
+    /// Block reference `((uuid))`
+    BLOCK_REF,
+    /// Task checkbox `[ ]` or `[x]`
+    CHECKBOX,
+    /// Setext heading (underlined)
+    SETEXT_HEADING,
+    /// Indented code block
+    INDENTED_CODE,
 
     /// Error recovery node
     ERROR,

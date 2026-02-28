@@ -33,11 +33,14 @@
 //!
 //! This ensures we always produce a valid tree that preserves all bytes.
 //!
-//! ## Current Limitations
+//! ## Supported Syntax
 //!
-//! - Only `*emphasis*` is supported, not `_emphasis_`
-//! - Nested emphasis (`***bold italic***`) may not parse correctly
-//! - Images (`![alt](url)`) are not distinguished from links
+//! - Emphasis: `*em*`, `_em_`, `**strong**`, `__strong__`
+//! - Strikethrough: `~~text~~`
+//! - Images: `![alt](url)`
+//! - Autolinks: `<https://url>`
+//! - Goal references: `((uuid))` (MDNX extension)
+//! - Properties: `name:: value` (MDNX extension)
 
 use crate::parser::Parser;
 use crate::syntax_kind::SyntaxKind;
@@ -64,7 +67,34 @@ fn inline_element(p: &mut Parser<'_, '_>) {
             }
         }
         SyntaxKind::BACKTICK => code_span(p),
-        SyntaxKind::STAR => emphasis_or_strong(p),
+        SyntaxKind::STAR => emphasis_or_strong(p, SyntaxKind::STAR),
+        SyntaxKind::UNDERSCORE => emphasis_or_strong(p, SyntaxKind::UNDERSCORE),
+        SyntaxKind::TILDE => strikethrough(p),
+        SyntaxKind::EXCLAIM => {
+            // Could be image ![alt](url)
+            if p.nth(1) == SyntaxKind::LBRACKET {
+                image(p);
+            } else {
+                p.bump();
+            }
+        }
+        SyntaxKind::LPAREN => {
+            // Could be goal reference ((uuid))
+            if p.nth(1) == SyntaxKind::LPAREN {
+                block_ref(p);
+            } else {
+                p.bump();
+            }
+        }
+        SyntaxKind::LT => autolink(p),
+        SyntaxKind::TEXT => {
+            // Check for property pattern: TEXT COLON COLON
+            if p.nth(1) == SyntaxKind::COLON && p.nth(2) == SyntaxKind::COLON {
+                property(p);
+            } else {
+                p.bump();
+            }
+        }
         _ => {
             // Plain text - just consume the token
             p.bump();
@@ -114,7 +144,8 @@ fn link_or_text(p: &mut Parser<'_, '_>) {
         // Handle nested inline elements in link text
         match p.current() {
             SyntaxKind::BACKTICK => code_span(p),
-            SyntaxKind::STAR => emphasis_or_strong(p),
+            SyntaxKind::STAR => emphasis_or_strong(p, SyntaxKind::STAR),
+            SyntaxKind::UNDERSCORE => emphasis_or_strong(p, SyntaxKind::UNDERSCORE),
             _ => p.bump(),
         }
     }
@@ -185,13 +216,13 @@ fn code_span(p: &mut Parser<'_, '_>) {
     m.complete(p, SyntaxKind::CODE_SPAN);
 }
 
-/// Parse emphasis *text* or strong **text**.
-fn emphasis_or_strong(p: &mut Parser<'_, '_>) {
+/// Parse emphasis *text* or strong **text** (or underscore variants).
+fn emphasis_or_strong(p: &mut Parser<'_, '_>, delimiter: SyntaxKind) {
     let m = p.start();
 
-    // Count opening stars
+    // Count opening delimiters
     let mut open_count = 0;
-    while p.at(SyntaxKind::STAR) && open_count < 2 {
+    while p.at(delimiter) && open_count < 2 {
         p.bump();
         open_count += 1;
     }
@@ -201,12 +232,12 @@ fn emphasis_or_strong(p: &mut Parser<'_, '_>) {
         return;
     }
 
-    // Parse content until matching stars
+    // Parse content until matching delimiters
     while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
-        if p.at(SyntaxKind::STAR) {
-            // Count consecutive stars
+        if p.at(delimiter) {
+            // Count consecutive delimiters
             let mut close_count = 0;
-            while p.nth(close_count) == SyntaxKind::STAR && close_count < open_count {
+            while p.nth(close_count) == delimiter && close_count < open_count {
                 close_count += 1;
             }
 
@@ -217,7 +248,7 @@ fn emphasis_or_strong(p: &mut Parser<'_, '_>) {
                 }
                 break;
             } else {
-                // Not enough stars - consume and continue
+                // Not enough delimiters - consume and continue
                 p.bump();
             }
         } else {
@@ -232,6 +263,156 @@ fn emphasis_or_strong(p: &mut Parser<'_, '_>) {
     };
 
     m.complete(p, kind);
+}
+
+/// Parse image ![alt](url).
+fn image(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume !
+    debug_assert!(p.at(SyntaxKind::EXCLAIM));
+    p.bump();
+
+    // Consume [
+    debug_assert!(p.at(SyntaxKind::LBRACKET));
+    p.bump();
+
+    // Consume alt text until ]
+    while !p.at_end() && !p.at(SyntaxKind::NEWLINE) && !p.at(SyntaxKind::RBRACKET) {
+        p.bump();
+    }
+
+    // Check for ]
+    if !p.eat(SyntaxKind::RBRACKET) {
+        m.complete(p, SyntaxKind::INLINE);
+        return;
+    }
+
+    // Check for (url)
+    if p.at(SyntaxKind::LPAREN) {
+        p.bump(); // (
+
+        // Consume URL until )
+        while !p.at_end() && !p.at(SyntaxKind::NEWLINE) && !p.at(SyntaxKind::RPAREN) {
+            p.bump();
+        }
+
+        if p.eat(SyntaxKind::RPAREN) {
+            m.complete(p, SyntaxKind::IMAGE);
+        } else {
+            m.complete(p, SyntaxKind::INLINE);
+        }
+    } else {
+        // Just ![text] without (url) - treat as inline
+        m.complete(p, SyntaxKind::INLINE);
+    }
+}
+
+/// Parse property `name:: value`.
+fn property(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume property name (TEXT)
+    debug_assert!(p.at(SyntaxKind::TEXT));
+    p.bump();
+
+    // Consume ::
+    debug_assert!(p.at(SyntaxKind::COLON));
+    p.bump();
+    debug_assert!(p.at(SyntaxKind::COLON));
+    p.bump();
+
+    // Consume optional whitespace after ::
+    p.eat(SyntaxKind::WHITESPACE);
+
+    // Consume value until end of line
+    while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+        p.bump();
+    }
+
+    m.complete(p, SyntaxKind::PROPERTY);
+}
+
+/// Parse autolink <url>.
+fn autolink(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume opening <
+    debug_assert!(p.at(SyntaxKind::LT));
+    p.bump();
+
+    // Consume content until >
+    let mut found_close = false;
+    while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+        if p.at(SyntaxKind::GT) {
+            p.bump();
+            found_close = true;
+            break;
+        }
+        p.bump();
+    }
+
+    if found_close {
+        m.complete(p, SyntaxKind::AUTOLINK);
+    } else {
+        // Unclosed < - treat as inline text
+        m.complete(p, SyntaxKind::INLINE);
+    }
+}
+
+/// Parse goal reference ((uuid)).
+fn block_ref(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume opening ((
+    debug_assert!(p.at(SyntaxKind::LPAREN));
+    p.bump(); // (
+    debug_assert!(p.at(SyntaxKind::LPAREN));
+    p.bump(); // (
+
+    // Consume content until ))
+    while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+        if p.at(SyntaxKind::RPAREN) && p.nth(1) == SyntaxKind::RPAREN {
+            // Found closing ))
+            p.bump(); // )
+            p.bump(); // )
+            break;
+        }
+        p.bump();
+    }
+
+    m.complete(p, SyntaxKind::BLOCK_REF);
+}
+
+/// Parse strikethrough ~~text~~.
+fn strikethrough(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Count opening tildes (need exactly 2)
+    let mut open_count = 0;
+    while p.at(SyntaxKind::TILDE) && open_count < 2 {
+        p.bump();
+        open_count += 1;
+    }
+
+    if open_count < 2 {
+        // Not enough tildes for strikethrough - just plain text
+        m.complete(p, SyntaxKind::INLINE);
+        return;
+    }
+
+    // Parse content until matching ~~
+    while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+        if p.at(SyntaxKind::TILDE) && p.nth(1) == SyntaxKind::TILDE {
+            // Found closing ~~
+            p.bump(); // ~
+            p.bump(); // ~
+            break;
+        }
+        p.bump();
+    }
+
+    m.complete(p, SyntaxKind::STRIKETHROUGH);
 }
 
 #[cfg(test)]
@@ -310,6 +491,175 @@ mod tests {
     #[test]
     fn inline_preserves_text() {
         let input = "Text with [[wikilink]] and [link](url) and `code` and *em*.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === Phase 1: Underscore emphasis ===
+
+    #[test]
+    fn parse_underscore_emphasis() {
+        let tree = parse("This is _emphasized_ text.\n");
+        let em = find_node(&tree, SyntaxKind::EMPHASIS).unwrap();
+        assert!(em.text().to_string().contains("emphasized"));
+    }
+
+    #[test]
+    fn parse_underscore_strong() {
+        let tree = parse("This is __strong__ text.\n");
+        let strong = find_node(&tree, SyntaxKind::STRONG).unwrap();
+        assert!(strong.text().to_string().contains("strong"));
+    }
+
+    #[test]
+    fn parse_mixed_emphasis() {
+        let input = "Both *star* and _underscore_ work.\n";
+        let tree = parse(input);
+        let ems: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::EMPHASIS)
+            .collect();
+        assert_eq!(ems.len(), 2, "Should have two EMPHASIS nodes");
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === Phase 1: Strikethrough ===
+
+    #[test]
+    fn parse_strikethrough() {
+        let tree = parse("This is ~~deleted~~ text.\n");
+        let strike = find_node(&tree, SyntaxKind::STRIKETHROUGH).unwrap();
+        assert!(strike.text().to_string().contains("deleted"));
+    }
+
+    #[test]
+    fn strikethrough_preserves_text() {
+        let input = "Text with ~~strikethrough~~ and *emphasis*.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+
+        let strike = find_node(&tree, SyntaxKind::STRIKETHROUGH);
+        assert!(strike.is_some());
+    }
+
+    // === Phase 1: Images ===
+
+    #[test]
+    fn parse_image() {
+        let tree = parse("See ![alt text](image.png) here.\n");
+        let img = find_node(&tree, SyntaxKind::IMAGE).unwrap();
+        let text = img.text().to_string();
+        assert!(text.contains("alt text"));
+        assert!(text.contains("image.png"));
+    }
+
+    #[test]
+    fn image_preserves_text() {
+        let input = "An ![image](url) and a [link](url).\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+
+        let img = find_node(&tree, SyntaxKind::IMAGE);
+        let link = find_node(&tree, SyntaxKind::LINK);
+        assert!(img.is_some(), "Should have IMAGE node");
+        assert!(link.is_some(), "Should have LINK node");
+    }
+
+    // === Phase 2: Goal references ===
+
+    #[test]
+    fn parse_block_ref() {
+        let tree = parse("See ((abc-123-def)) for details.\n");
+        let goal = find_node(&tree, SyntaxKind::BLOCK_REF).unwrap();
+        assert!(goal.text().to_string().contains("abc-123-def"));
+    }
+
+    #[test]
+    fn block_ref_preserves_text() {
+        let input = "Link to ((goal-uuid)) here.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn single_paren_not_block_ref() {
+        // Single (text) should not become BLOCK_REF
+        let tree = parse("Normal (parentheses) here.\n");
+        let goal = find_node(&tree, SyntaxKind::BLOCK_REF);
+        assert!(goal.is_none(), "Single parens should not be BLOCK_REF");
+    }
+
+    #[test]
+    fn unclosed_block_ref() {
+        // Unclosed (( should still produce a BLOCK_REF node (containing unclosed content)
+        let tree = parse("See ((unclosed here.\n");
+        let goal = find_node(&tree, SyntaxKind::BLOCK_REF);
+        assert!(goal.is_some(), "Unclosed goal ref still produces node");
+        assert_eq!(tree.text().to_string(), "See ((unclosed here.\n");
+    }
+
+    // === Phase 2: Autolinks ===
+
+    #[test]
+    fn parse_autolink() {
+        let tree = parse("Visit <https://example.com> for info.\n");
+        let autolink = find_node(&tree, SyntaxKind::AUTOLINK).unwrap();
+        assert!(autolink.text().to_string().contains("example.com"));
+    }
+
+    #[test]
+    fn autolink_preserves_text() {
+        let input = "Link: <https://rust-lang.org> here.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn lt_without_gt_not_autolink() {
+        // < followed by text without > should not crash
+        let tree = parse("Less than 5 < 10 works.\n");
+        assert_eq!(tree.text().to_string(), "Less than 5 < 10 works.\n");
+    }
+
+    #[test]
+    fn autolink_at_line_start() {
+        // Autolink on its own line should be AUTOLINK in PARAGRAPH, not HTML_BLOCK
+        let tree = parse("<https://example.com>\n");
+        let autolink = find_node(&tree, SyntaxKind::AUTOLINK);
+        assert!(autolink.is_some(), "Should parse as AUTOLINK");
+
+        let html_block = find_node(&tree, SyntaxKind::HTML_BLOCK);
+        assert!(html_block.is_none(), "Should NOT be HTML_BLOCK");
+    }
+
+    // === Phase 2: Properties ===
+
+    #[test]
+    fn parse_property() {
+        let tree = parse("status:: DONE\n");
+        let prop = find_node(&tree, SyntaxKind::PROPERTY).unwrap();
+        let text = prop.text().to_string();
+        assert!(text.contains("status"));
+        assert!(text.contains("DONE"));
+    }
+
+    #[test]
+    fn property_in_text() {
+        let tree = parse("Task priority:: high here.\n");
+        let prop = find_node(&tree, SyntaxKind::PROPERTY).unwrap();
+        assert!(prop.text().to_string().contains("priority"));
+    }
+
+    #[test]
+    fn single_colon_not_property() {
+        let tree = parse("Time: 10:30 AM\n");
+        let prop = find_node(&tree, SyntaxKind::PROPERTY);
+        assert!(prop.is_none(), "Single colon should not be PROPERTY");
+    }
+
+    #[test]
+    fn property_preserves_text() {
+        let input = "- task with status:: DONE inline\n";
         let tree = parse(input);
         assert_eq!(tree.text().to_string(), input);
     }

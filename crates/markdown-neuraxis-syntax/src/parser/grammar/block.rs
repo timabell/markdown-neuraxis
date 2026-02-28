@@ -20,12 +20,17 @@
 //! - `*` could start a list item OR a thematic break OR emphasis in a paragraph
 //! - We use lookahead (`is_thematic_break`, `is_code_fence`) to disambiguate
 //!
-//! ## Current Limitations
+//! ## Supported Block Types
 //!
-//! This is a TDD exploration, so some features aren't implemented yet:
-//!
-//! - **Indented code blocks**: Currently treated as paragraphs
-//! - **Setext headings**: Only ATX (`#`) headings are supported
+//! - ATX headings: `# heading`
+//! - Setext headings: `Title\n====`
+//! - Blockquotes: `> quote`
+//! - Lists: `-`, `*`, `+`, `1.`
+//! - Task checkboxes: `- [ ]`, `- [x]`
+//! - Fenced code: `` ``` `` and `~~~`
+//! - Indented code: 4+ spaces at line start
+//! - Thematic breaks: `---`, `***`
+//! - HTML blocks: `<div>...</div>`
 
 use crate::parser::Parser;
 use crate::syntax_kind::SyntaxKind;
@@ -73,9 +78,19 @@ pub fn block(p: &mut Parser<'_, '_>) {
                 paragraph(p);
             }
         }
+        SyntaxKind::LT => {
+            // Could be HTML block or autolink in paragraph
+            if is_html_block_start(p) {
+                html_block(p);
+            } else {
+                paragraph(p);
+            }
+        }
         SyntaxKind::WHITESPACE => {
-            // Indented content - could be nested list item or continuation
-            if is_indented_list_item(p) {
+            // Indented content - could be indented code, nested list item, or continuation
+            if is_indented_code_block(p) {
+                indented_code(p);
+            } else if is_indented_list_item(p) {
                 list_item_indented(p);
             } else {
                 paragraph(p);
@@ -83,6 +98,84 @@ pub fn block(p: &mut Parser<'_, '_>) {
         }
         _ => paragraph(p),
     }
+}
+
+/// Check if current position starts an HTML block (<tag...)
+fn is_html_block_start(p: &Parser<'_, '_>) -> bool {
+    if p.current() != SyntaxKind::LT {
+        return false;
+    }
+
+    // Look at what follows <
+    let next = p.nth(1);
+
+    // If followed by TEXT, check if it's a URL scheme (autolink) or HTML tag
+    if next == SyntaxKind::TEXT {
+        let text = p.nth_text(1);
+        // Common URL schemes - these are autolinks, not HTML
+        if text.starts_with("http")
+            || text.starts_with("https")
+            || text.starts_with("ftp")
+            || text.starts_with("mailto")
+        {
+            return false;
+        }
+        // It's a tag name
+        return true;
+    }
+
+    // <! for comments or doctype
+    if next == SyntaxKind::EXCLAIM {
+        return true;
+    }
+
+    false
+}
+
+/// Parse an HTML block
+fn html_block(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume until blank line or EOF
+    loop {
+        while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+            p.bump();
+        }
+
+        if !p.eat(SyntaxKind::NEWLINE) {
+            break;
+        }
+
+        // Blank line ends HTML block
+        if p.at(SyntaxKind::NEWLINE) || p.at_end() {
+            break;
+        }
+    }
+
+    m.complete(p, SyntaxKind::HTML_BLOCK);
+}
+
+/// Check if current position is a setext heading underline (=== or ---)
+fn is_setext_underline(p: &Parser<'_, '_>) -> bool {
+    let marker = p.current();
+    if !matches!(marker, SyntaxKind::EQUALS | SyntaxKind::DASH) {
+        return false;
+    }
+
+    // Need at least 3 markers for a setext underline
+    let mut count = 0;
+    let mut i = 0;
+
+    while p.nth(i) != SyntaxKind::EOF && p.nth(i) != SyntaxKind::NEWLINE {
+        match p.nth(i) {
+            k if k == marker => count += 1,
+            SyntaxKind::WHITESPACE => {} // trailing whitespace OK
+            _ => return false,           // any other character invalidates
+        }
+        i += 1;
+    }
+
+    count >= 3
 }
 
 /// Check if current position is a thematic break (---, ***, etc.)
@@ -294,6 +387,13 @@ fn list_item(p: &mut Parser<'_, '_>) {
 
 /// Parse list item content (PARAGRAPH with continuations, then nested blocks).
 fn list_item_content(p: &mut Parser<'_, '_>) {
+    // Check for checkbox at start: [ ] or [x] or [X]
+    if is_checkbox(p) {
+        checkbox(p);
+        // Consume whitespace after checkbox
+        p.eat(SyntaxKind::WHITESPACE);
+    }
+
     // Start paragraph for the content
     let para = p.start();
 
@@ -438,6 +538,45 @@ fn thematic_break(p: &mut Parser<'_, '_>) {
     m.complete(p, SyntaxKind::THEMATIC_BREAK);
 }
 
+/// Check if current position is a checkbox: [ ] or [x] or [X]
+fn is_checkbox(p: &Parser<'_, '_>) -> bool {
+    if p.current() != SyntaxKind::LBRACKET {
+        return false;
+    }
+
+    // Check for [ ] or [x] or [X]
+    let inner = p.nth(1);
+    let close = p.nth(2);
+
+    if close != SyntaxKind::RBRACKET {
+        return false;
+    }
+
+    match inner {
+        SyntaxKind::WHITESPACE => true, // [ ]
+        SyntaxKind::TEXT => {
+            // [x] or [X]
+            let text = p.nth_text(1);
+            text == "x" || text == "X"
+        }
+        _ => false,
+    }
+}
+
+/// Parse a checkbox [ ] or [x]
+fn checkbox(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume [
+    p.bump();
+    // Consume space or x/X
+    p.bump();
+    // Consume ]
+    p.bump();
+
+    m.complete(p, SyntaxKind::CHECKBOX);
+}
+
 /// Check if current position is a numbered list item (e.g., "1. ")
 fn is_numbered_list_item(p: &Parser<'_, '_>) -> bool {
     // Must start with TEXT containing only digits
@@ -474,6 +613,67 @@ fn list_item_numbered(p: &mut Parser<'_, '_>) {
     list_item_content(p);
 
     m.complete(p, SyntaxKind::LIST_ITEM);
+}
+
+/// Check if current position starts an indented code block (4+ spaces not followed by list marker)
+fn is_indented_code_block(p: &Parser<'_, '_>) -> bool {
+    if p.current() != SyntaxKind::WHITESPACE {
+        return false;
+    }
+
+    // Need at least 4 spaces/tab
+    let ws_text = p.current_text();
+    let ws_len: usize = ws_text.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum();
+
+    if ws_len < 4 {
+        return false;
+    }
+
+    // Must NOT be followed by a list marker
+    let after_ws = p.nth(1);
+    match after_ws {
+        SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+            // List marker - not indented code
+            false
+        }
+        SyntaxKind::TEXT => {
+            // Could be numbered list like "1."
+            !(p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE)
+        }
+        _ => true,
+    }
+}
+
+/// Parse an indented code block (4+ spaces at line start)
+fn indented_code(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Parse consecutive indented lines
+    loop {
+        // Consume the whitespace and line content
+        while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+            p.bump();
+        }
+
+        // Consume newline
+        if !p.eat(SyntaxKind::NEWLINE) {
+            break;
+        }
+
+        // Check if next line continues the code block (4+ spaces)
+        if p.at(SyntaxKind::WHITESPACE) {
+            let ws_text = p.current_text();
+            let ws_len: usize = ws_text.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum();
+            if ws_len >= 4 {
+                continue; // Continue code block
+            }
+        }
+
+        // Not a continuation - end code block
+        break;
+    }
+
+    m.complete(p, SyntaxKind::INDENTED_CODE);
 }
 
 /// Check if current whitespace precedes an indented list item
@@ -574,7 +774,7 @@ fn fenced_code(p: &mut Parser<'_, '_>) {
     m.complete(p, SyntaxKind::FENCED_CODE);
 }
 
-/// Parse a paragraph (default block).
+/// Parse a paragraph (default block), possibly converting to setext heading.
 fn paragraph(p: &mut Parser<'_, '_>) {
     let m = p.start();
 
@@ -589,6 +789,17 @@ fn paragraph(p: &mut Parser<'_, '_>) {
         // Check for paragraph break (blank line or new block)
         if p.at_end() || p.at(SyntaxKind::NEWLINE) {
             break;
+        }
+
+        // Check for setext heading underline (=== or ---)
+        if is_setext_underline(p) {
+            // Consume the underline
+            while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+                p.bump();
+            }
+            p.eat(SyntaxKind::NEWLINE);
+            m.complete(p, SyntaxKind::SETEXT_HEADING);
+            return;
         }
 
         // Check for block-level constructs that interrupt paragraphs
@@ -1231,5 +1442,156 @@ mod tests {
         assert_eq!(fenced.len(), 2, "Should have two FENCED_CODE blocks");
 
         assert_eq!(tree.text().to_string(), input, "Text should be preserved");
+    }
+
+    // === Phase 3: Task checkboxes ===
+
+    fn find_node(
+        tree: &crate::syntax_kind::SyntaxNode,
+        kind: SyntaxKind,
+    ) -> Option<crate::syntax_kind::SyntaxNode> {
+        if tree.kind() == kind {
+            return Some(tree.clone());
+        }
+        for child in tree.children() {
+            if let Some(found) = find_node(&child, kind) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn parse_unchecked_checkbox() {
+        let tree = parse("- [ ] Task to do\n");
+        let checkbox = find_node(&tree, SyntaxKind::CHECKBOX).unwrap();
+        assert!(checkbox.text().to_string().contains("[ ]"));
+    }
+
+    #[test]
+    fn parse_checked_checkbox() {
+        let tree = parse("- [x] Task done\n");
+        let checkbox = find_node(&tree, SyntaxKind::CHECKBOX).unwrap();
+        assert!(checkbox.text().to_string().contains("[x]"));
+    }
+
+    #[test]
+    fn checkbox_uppercase_x() {
+        let tree = parse("- [X] Also done\n");
+        let checkbox = find_node(&tree, SyntaxKind::CHECKBOX).unwrap();
+        assert!(checkbox.text().to_string().contains("[X]"));
+    }
+
+    #[test]
+    fn checkbox_preserves_text() {
+        let input = "- [ ] unchecked\n- [x] checked\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn numbered_list_with_checkbox() {
+        let tree = parse("1. [ ] Numbered task\n");
+        let checkbox = find_node(&tree, SyntaxKind::CHECKBOX);
+        assert!(checkbox.is_some(), "Numbered list item can have checkbox");
+    }
+
+    // === Phase 4: Setext headings ===
+
+    #[test]
+    fn parse_setext_heading_h1() {
+        let tree = parse("Title\n=====\n");
+        let heading = find_node(&tree, SyntaxKind::SETEXT_HEADING).unwrap();
+        assert!(heading.text().to_string().contains("Title"));
+    }
+
+    #[test]
+    fn parse_setext_heading_h2() {
+        let tree = parse("Subtitle\n--------\n");
+        let heading = find_node(&tree, SyntaxKind::SETEXT_HEADING).unwrap();
+        assert!(heading.text().to_string().contains("Subtitle"));
+    }
+
+    #[test]
+    fn setext_preserves_text() {
+        let input = "Heading\n=======\nParagraph text.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn single_equals_not_setext() {
+        // A single = is not enough
+        let tree = parse("Text\n=\n");
+        let setext = find_node(&tree, SyntaxKind::SETEXT_HEADING);
+        assert!(setext.is_none());
+    }
+
+    // === Phase 4: Indented code blocks ===
+
+    #[test]
+    fn parse_indented_code() {
+        let tree = parse("    code line\n");
+        let code = find_node(&tree, SyntaxKind::INDENTED_CODE).unwrap();
+        assert!(code.text().to_string().contains("code line"));
+    }
+
+    #[test]
+    fn indented_code_multiple_lines() {
+        let tree = parse("    line 1\n    line 2\n");
+        let code = find_node(&tree, SyntaxKind::INDENTED_CODE).unwrap();
+        let text = code.text().to_string();
+        assert!(text.contains("line 1"));
+        assert!(text.contains("line 2"));
+    }
+
+    #[test]
+    fn indented_code_preserves_text() {
+        let input = "    code\nParagraph after.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn indented_code_not_in_list() {
+        // Indented content in a list context should be list continuation, not indented code
+        let input = "- Item\n    not code\n";
+        let tree = parse(input);
+        let code = find_node(&tree, SyntaxKind::INDENTED_CODE);
+        assert!(code.is_none(), "Inside list, indentation is continuation");
+    }
+
+    // === Phase 4: HTML blocks ===
+
+    #[test]
+    fn parse_html_block() {
+        let tree = parse("<div>\nsome content\n</div>\n");
+        let html = find_node(&tree, SyntaxKind::HTML_BLOCK).unwrap();
+        assert!(html.text().to_string().contains("<div>"));
+    }
+
+    #[test]
+    fn html_block_self_closing() {
+        let tree = parse("<br/>\n");
+        let html = find_node(&tree, SyntaxKind::HTML_BLOCK).unwrap();
+        assert!(html.text().to_string().contains("<br/>"));
+    }
+
+    #[test]
+    fn html_block_preserves_text() {
+        let input = "<div class=\"test\">\nContent here.\n</div>\nParagraph after.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn autolink_not_html_block() {
+        // <url> should be autolink (inline), not HTML block
+        let tree = parse("See <https://example.com> here.\n");
+        let html_block = find_node(&tree, SyntaxKind::HTML_BLOCK);
+        assert!(
+            html_block.is_none(),
+            "Autolink should not become HTML_BLOCK"
+        );
     }
 }

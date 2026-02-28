@@ -181,6 +181,11 @@ impl<'t, 'input> Parser<'t, 'input> {
         self.tokens.get(self.pos).map(|t| t.text).unwrap_or("")
     }
 
+    /// Get the text of the token at offset n.
+    pub fn nth_text(&self, n: usize) -> &'input str {
+        self.tokens.get(self.pos + n).map(|t| t.text).unwrap_or("")
+    }
+
     /// Check if we're at the start of a line (after newline or at start).
     pub fn at_line_start(&self) -> bool {
         if self.pos == 0 {

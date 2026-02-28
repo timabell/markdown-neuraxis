@@ -1,6 +1,5 @@
 ---
 source: crates/markdown-neuraxis-syntax/src/lib.rs
-assertion_line: 163
 expression: "format_tree(&tree, 0)"
 ---
 ROOT@0..437
@@ -82,7 +81,8 @@ ROOT@0..437
         TEXT@144..145 "{"
         NEWLINE@145..146 "\\n"
         WHITESPACE@146..153 "       "
-        TEXT@153..161 "println!"
+        TEXT@153..160 "println"
+        EXCLAIM@160..161 "!"
         LPAREN@161..162 "("
         TEXT@162..165 "\"in"
         WHITESPACE@165..166 " "

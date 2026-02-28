@@ -51,12 +51,12 @@ ROOT@0..443
     LIST_ITEM@103..136
       DASH@103..104 "-"
       WHITESPACE@104..105 " "
-      PARAGRAPH@105..136
-        INLINE@105..108
-          LBRACKET@105..106 "["
-          WHITESPACE@106..107 " "
-          RBRACKET@107..108 "]"
-        WHITESPACE@108..109 " "
+      CHECKBOX@105..108
+        LBRACKET@105..106 "["
+        WHITESPACE@106..107 " "
+        RBRACKET@107..108 "]"
+      WHITESPACE@108..109 " "
+      PARAGRAPH@109..136
         TEXT@109..113 "Call"
         WHITESPACE@113..114 " "
         WIKILINK@114..135
@@ -72,12 +72,12 @@ ROOT@0..443
     LIST_ITEM@136..157
       DASH@136..137 "-"
       WHITESPACE@137..138 " "
-      PARAGRAPH@138..157
-        INLINE@138..141
-          LBRACKET@138..139 "["
-          TEXT@139..140 "x"
-          RBRACKET@140..141 "]"
-        WHITESPACE@141..142 " "
+      CHECKBOX@138..141
+        LBRACKET@138..139 "["
+        TEXT@139..140 "x"
+        RBRACKET@140..141 "]"
+      WHITESPACE@141..142 " "
+      PARAGRAPH@142..157
         TEXT@142..148 "Review"
         WHITESPACE@148..149 " "
         TEXT@149..151 "PR"
@@ -140,9 +140,10 @@ ROOT@0..443
   PARAGRAPH@283..314
     TEXT@283..287 "Some"
     WHITESPACE@287..288 " "
-    LT@288..289 "<"
-    TEXT@289..290 "b"
-    GT@290..291 ">"
+    AUTOLINK@288..291
+      LT@288..289 "<"
+      TEXT@289..290 "b"
+      GT@290..291 ">"
     TEXT@291..295 "html"
     WHITESPACE@295..296 " "
     TEXT@296..302 "that's"
@@ -163,7 +164,7 @@ ROOT@0..443
     TEXT@329..335 "broken"
     LPAREN@335..336 "("
     RPAREN@336..337 ")"
-    TEXT@337..338 ":"
+    COLON@337..338 ":"
     NEWLINE@338..339 "\\n"
     WHITESPACE@339..343 "    "
     HASH@343..344 "#"
@@ -207,7 +208,8 @@ ROOT@0..443
     DASH@427..428 "-"
     NEWLINE@428..429 "\\n"
     NEWLINE@429..430 "\\n"
-    TEXT@430..435 "TODO:"
+    TEXT@430..434 "TODO"
+    COLON@434..435 ":"
     WHITESPACE@435..436 " "
     TEXT@436..439 "fix"
     WHITESPACE@439..440 " "
