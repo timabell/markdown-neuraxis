@@ -1,5 +1,6 @@
 ---
 source: crates/markdown-neuraxis-syntax/src/lib.rs
+assertion_line: 163
 expression: "format_tree(&tree, 0)"
 ---
 ROOT@0..437
@@ -57,19 +58,19 @@ ROOT@0..437
       TEXT@95..96 "1"
       DOT@96..97 "."
       WHITESPACE@97..98 " "
-      PARAGRAPH@98..188
+      PARAGRAPH@98..117
         TEXT@98..106 "Numbered"
         WHITESPACE@106..107 " "
         TEXT@107..111 "with"
         WHITESPACE@111..112 " "
         TEXT@112..116 "code"
         NEWLINE@116..117 "\\n"
-        WHITESPACE@117..120 "   "
-        CODE_SPAN@120..127
-          BACKTICK@120..121 "`"
-          BACKTICK@121..122 "`"
-          BACKTICK@122..123 "`"
-          TEXT@123..127 "rust"
+      WHITESPACE@117..120 "   "
+      FENCED_CODE@120..188
+        BACKTICK@120..121 "`"
+        BACKTICK@121..122 "`"
+        BACKTICK@122..123 "`"
+        TEXT@123..127 "rust"
         NEWLINE@127..128 "\\n"
         WHITESPACE@128..131 "   "
         TEXT@131..133 "fn"
@@ -95,10 +96,9 @@ ROOT@0..437
         TEXT@179..180 "}"
         NEWLINE@180..181 "\\n"
         WHITESPACE@181..184 "   "
-        CODE_SPAN@184..187
-          BACKTICK@184..185 "`"
-          BACKTICK@185..186 "`"
-          BACKTICK@186..187 "`"
+        BACKTICK@184..185 "`"
+        BACKTICK@185..186 "`"
+        BACKTICK@186..187 "`"
         NEWLINE@187..188 "\\n"
       WHITESPACE@188..191 "   "
       LIST@191..210

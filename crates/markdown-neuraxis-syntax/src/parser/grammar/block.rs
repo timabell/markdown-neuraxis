@@ -110,14 +110,19 @@ fn is_thematic_break(p: &Parser<'_, '_>) -> bool {
 
 /// Check if current position starts a code fence.
 fn is_code_fence(p: &Parser<'_, '_>) -> bool {
-    let marker = p.current();
+    is_code_fence_at(p, 0)
+}
+
+/// Check if position at offset starts a code fence.
+fn is_code_fence_at(p: &Parser<'_, '_>, offset: usize) -> bool {
+    let marker = p.nth(offset);
     if !matches!(marker, SyntaxKind::BACKTICK | SyntaxKind::TILDE) {
         return false;
     }
 
     // Count consecutive markers
     let mut count = 0;
-    let mut i = 0;
+    let mut i = offset;
 
     while p.nth(i) == marker {
         count += 1;
@@ -341,6 +346,15 @@ fn list_item_content(p: &mut Parser<'_, '_>) {
                 }
                 // Otherwise it's just text, continue paragraph
             }
+            SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
+                // Could be fenced code block
+                if is_code_fence_at(p, 1) {
+                    para.complete(p, SyntaxKind::PARAGRAPH);
+                    list_item_nested_blocks(p);
+                    return;
+                }
+                // Otherwise it's inline code, continue paragraph
+            }
             _ => {}
         }
 
@@ -355,7 +369,7 @@ fn list_item_content(p: &mut Parser<'_, '_>) {
     para.complete(p, SyntaxKind::PARAGRAPH);
 }
 
-/// Parse nested blocks within a list item (blockquotes, nested lists).
+/// Parse nested blocks within a list item (blockquotes, nested lists, fenced code).
 fn list_item_nested_blocks(p: &mut Parser<'_, '_>) {
     loop {
         if p.at_end() {
@@ -391,6 +405,15 @@ fn list_item_nested_blocks(p: &mut Parser<'_, '_>) {
                     p.bump(); // consume indentation
                     nested_list(p);
                     break;
+                } else {
+                    break;
+                }
+            }
+            SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
+                // Fenced code block
+                if is_code_fence_at(p, 1) {
+                    p.bump(); // consume indentation
+                    fenced_code(p);
                 } else {
                     break;
                 }
@@ -512,17 +535,23 @@ fn fenced_code(p: &mut Parser<'_, '_>) {
             break;
         }
 
-        // Check for closing fence at start of line
-        if p.at(fence_marker) {
+        // Check for closing fence (may have leading whitespace for indented code)
+        let fence_offset = if p.at(SyntaxKind::WHITESPACE) { 1 } else { 0 };
+
+        if p.nth(fence_offset) == fence_marker {
             let mut close_len = 0;
 
             // Peek ahead to count fence markers
-            while p.nth(close_len) == fence_marker {
+            while p.nth(fence_offset + close_len) == fence_marker {
                 close_len += 1;
             }
 
             if close_len >= fence_len {
-                // This is the closing fence - consume it
+                // This is the closing fence - consume indentation if present
+                if fence_offset > 0 {
+                    p.bump();
+                }
+                // Consume the fence markers
                 for _ in 0..close_len {
                     p.bump();
                 }
@@ -1099,5 +1128,108 @@ mod tests {
 
         // Text should be preserved
         assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === Fenced code in list items ===
+
+    #[test]
+    fn list_item_with_fenced_code() {
+        let input = "- Item with code\n  ```rust\n  fn example() {}\n  ```\n";
+        let tree = parse(input);
+
+        let list = tree.children().next().unwrap();
+        assert_eq!(list.kind(), SyntaxKind::LIST);
+
+        let item = list
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .unwrap();
+
+        // Should have FENCED_CODE as child (not CODE_SPAN)
+        let fenced = item
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FENCED_CODE);
+        assert!(fenced.is_some(), "LIST_ITEM should contain FENCED_CODE");
+
+        // Should NOT have CODE_SPAN (which is inline backticks)
+        let code_span = item.children().any(|n| n.kind() == SyntaxKind::CODE_SPAN);
+        assert!(!code_span, "Should not have CODE_SPAN at list item level");
+    }
+
+    #[test]
+    fn numbered_list_with_fenced_code() {
+        let input = "1. Numbered with code\n   ```rust\n   fn example() {}\n   ```\n";
+        let tree = parse(input);
+
+        let fenced: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FENCED_CODE)
+            .collect();
+        assert_eq!(fenced.len(), 1, "Should have one FENCED_CODE block");
+
+        assert_eq!(tree.text().to_string(), input, "Text should be preserved");
+    }
+
+    #[test]
+    fn list_item_code_then_nested_list() {
+        let input = "1. Item\n   ```\n   code\n   ```\n   1. Nested\n";
+        let tree = parse(input);
+
+        let fenced: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FENCED_CODE)
+            .collect();
+        assert_eq!(fenced.len(), 1, "Should have FENCED_CODE");
+
+        let items: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(items.len(), 2, "Should have parent and nested item");
+    }
+
+    #[test]
+    fn list_item_with_tilde_fenced_code() {
+        let input = "- Item with tilde code\n  ~~~rust\n  fn example() {}\n  ~~~\n";
+        let tree = parse(input);
+
+        let fenced: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FENCED_CODE)
+            .collect();
+        assert_eq!(fenced.len(), 1, "Should have one FENCED_CODE block");
+
+        assert_eq!(tree.text().to_string(), input, "Text should be preserved");
+    }
+
+    #[test]
+    fn list_item_with_unclosed_fenced_code() {
+        // Unclosed fenced code consumes rest of document
+        let input = "- Item\n  ```rust\n  unclosed code\n- Next item\n";
+        let tree = parse(input);
+
+        // Parser should still succeed with whatever structure it produces
+        assert_eq!(tree.text().to_string(), input, "Text should be preserved");
+
+        // Should have exactly one FENCED_CODE (even if unclosed)
+        let fenced: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FENCED_CODE)
+            .collect();
+        assert_eq!(fenced.len(), 1, "Should have one FENCED_CODE block");
+    }
+
+    #[test]
+    fn list_item_with_multiple_fenced_code() {
+        let input = "- Item\n  ```\n  first\n  ```\n  ```\n  second\n  ```\n";
+        let tree = parse(input);
+
+        let fenced: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FENCED_CODE)
+            .collect();
+        assert_eq!(fenced.len(), 2, "Should have two FENCED_CODE blocks");
+
+        assert_eq!(tree.text().to_string(), input, "Text should be preserved");
     }
 }
