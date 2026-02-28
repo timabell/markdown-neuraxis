@@ -1,0 +1,14 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..25]
+  lines:
+    full:0..25 prefix:0..0"" content:0..24"Some `inline code` here."
+  inlines:
+    Code [5..18]
+Paragraph [26..64]
+  lines:
+    full:26..64 prefix:26..26"" content:26..63"And ``code with `backticks` inside``."
+  inlines:
+    Code [30..62]

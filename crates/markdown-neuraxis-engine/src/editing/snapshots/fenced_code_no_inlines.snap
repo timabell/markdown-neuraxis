@@ -1,0 +1,14 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+FencedCode { language: None } [0..49]
+  lines:
+    full:0..4 prefix:0..0"" content:0..3"```"
+    full:4..45 prefix:4..4"" content:4..44"*not emphasis* **not strong** `not code`"
+    full:45..49 prefix:45..45"" content:45..48"```"
+FencedCode { language: Some("rust") } [50..92]
+  lines:
+    full:50..58 prefix:50..50"" content:50..57"```rust"
+    full:58..88 prefix:58..58"" content:58..87"let x = \"[[not a wikilink]]\";"
+    full:88..92 prefix:88..88"" content:88..91"```"

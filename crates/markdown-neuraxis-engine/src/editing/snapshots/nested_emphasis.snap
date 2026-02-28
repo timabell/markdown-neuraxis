@@ -1,0 +1,16 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..51]
+  lines:
+    full:0..51 prefix:0..0"" content:0..50"This has **strong with *nested emphasis* inside**."
+  inlines:
+    Strong [9..49]
+Paragraph [52..98]
+  lines:
+    full:52..98 prefix:52..52"" content:52..97"And *emphasis with **nested strong** inside*."
+  inlines:
+    Emphasis [56..72]
+    Emphasis [72..87]
+    Emphasis [87..96]

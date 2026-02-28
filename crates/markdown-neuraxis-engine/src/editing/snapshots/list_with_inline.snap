@@ -1,0 +1,50 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+List [0..91]
+  children:
+    ListItem { marker: "- " } [0..23]
+      root_range: 0..91
+      lines:
+        full:0..23 prefix:0..2"- " content:2..22"Item with *emphasis*"
+      children:
+        Paragraph [2..23]
+          root_range: 0..91
+          lines:
+            full:2..23 prefix:2..2"" content:2..22"Item with *emphasis*"
+          inlines:
+            Emphasis [12..22]
+    ListItem { marker: "- " } [23..47]
+      root_range: 0..91
+      lines:
+        full:23..47 prefix:23..25"- " content:25..46"Item with [link](url)"
+      children:
+        Paragraph [25..47]
+          root_range: 0..91
+          lines:
+            full:25..47 prefix:25..25"" content:25..46"Item with [link](url)"
+          inlines:
+            Link [35..46]
+    ListItem { marker: "- " } [47..66]
+      root_range: 0..91
+      lines:
+        full:47..66 prefix:47..49"- " content:49..65"Item with `code`"
+      children:
+        Paragraph [49..66]
+          root_range: 0..91
+          lines:
+            full:49..66 prefix:49..49"" content:49..65"Item with `code`"
+          inlines:
+            Code [59..65]
+    ListItem { marker: "- " } [66..91]
+      root_range: 0..91
+      lines:
+        full:66..91 prefix:66..68"- " content:68..90"Item with [[wikilink]]"
+      children:
+        Paragraph [68..91]
+          root_range: 0..91
+          lines:
+            full:68..91 prefix:68..68"" content:68..90"Item with [[wikilink]]"
+          inlines:
+            WikiLink [78..90]

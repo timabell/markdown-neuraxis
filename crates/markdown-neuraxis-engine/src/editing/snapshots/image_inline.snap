@@ -1,0 +1,24 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..33]
+  lines:
+    full:0..33 prefix:0..0"" content:0..32"An image: ![alt text](image.png)"
+  inlines:
+    Image [10..32]
+Paragraph [34..49]
+  lines:
+    full:34..49 prefix:34..34"" content:34..48"Image in list:"
+List [49..78]
+  children:
+    ListItem { marker: "- " } [49..78]
+      lines:
+        full:49..78 prefix:49..51"- " content:51..77"![icon](icon.png) Item one"
+      children:
+        Paragraph [51..78]
+          root_range: 49..78
+          lines:
+            full:51..78 prefix:51..51"" content:51..77"![icon](icon.png) Item one"
+          inlines:
+            Image [51..68]

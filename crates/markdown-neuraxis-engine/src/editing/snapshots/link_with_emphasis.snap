@@ -1,0 +1,19 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..30]
+  lines:
+    full:0..30 prefix:0..0"" content:0..29"[*emphasized link text*](url)"
+  inlines:
+    Link [0..29]
+Paragraph [31..59]
+  lines:
+    full:31..59 prefix:31..31"" content:31..58"[**strong link text**](url)"
+  inlines:
+    Link [31..58]
+Paragraph [60..91]
+  lines:
+    full:60..91 prefix:60..60"" content:60..90"[link with `code` inside](url)"
+  inlines:
+    Link [60..90]

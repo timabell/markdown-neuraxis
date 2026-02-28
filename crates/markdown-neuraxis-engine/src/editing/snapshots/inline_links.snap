@@ -1,0 +1,15 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..54]
+  lines:
+    full:0..54 prefix:0..0"" content:0..53"A paragraph with [a link](https://example.com) in it."
+  inlines:
+    Link [17..46]
+Paragraph [55..102]
+  lines:
+    full:55..102 prefix:55..55"" content:55..101"Also [[wikilink]] and [[wikilink|with alias]]."
+  inlines:
+    WikiLink [60..72]
+    WikiLink [77..100]

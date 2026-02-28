@@ -35,6 +35,9 @@ List [0..201]
             full:97..129 prefix:97..97"" content:97..128"This line has forced newlines  "
             full:129..147 prefix:129..131"  " content:131..146"by adding two  "
             full:147..170 prefix:147..149"  " content:149..169"trailing whitespaces"
+          inlines:
+            HardBreak [126..129]
+            HardBreak [144..147]
     ListItem { marker: "- " } [170..201]
       root_range: 0..201
       lines:
@@ -44,3 +47,5 @@ List [0..201]
           root_range: 0..201
           lines:
             full:172..201 prefix:172..172"" content:172..200"Bullet with trailing space  "
+          inlines:
+            HardBreak [198..201]

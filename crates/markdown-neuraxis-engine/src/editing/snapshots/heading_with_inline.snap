@@ -1,0 +1,19 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Heading { level: 1 } [0..26]
+  lines:
+    full:0..26 prefix:0..2"# " content:2..25"Heading with *emphasis*"
+  inlines:
+    Emphasis [15..25]
+Heading { level: 2 } [27..55]
+  lines:
+    full:27..55 prefix:27..30"## " content:30..54"Heading with [link](url)"
+  inlines:
+    Link [43..54]
+Heading { level: 3 } [56..80]
+  lines:
+    full:56..80 prefix:56..60"### " content:60..79"Heading with `code`"
+  inlines:
+    Code [73..79]

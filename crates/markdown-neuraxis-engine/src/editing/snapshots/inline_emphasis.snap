@@ -1,0 +1,16 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+expression: formatted
+---
+Paragraph [0..41]
+  lines:
+    full:0..41 prefix:0..0"" content:0..40"This has *emphasis* and **strong** text."
+  inlines:
+    Emphasis [9..19]
+    Strong [24..34]
+Paragraph [42..96]
+  lines:
+    full:42..96 prefix:42..42"" content:42..95"Also _underscore emphasis_ and __double underscore__."
+  inlines:
+    Emphasis [47..68]
+    Strong [73..94]

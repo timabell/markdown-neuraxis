@@ -11,7 +11,7 @@
 
 use std::ops::Range;
 
-use markdown_neuraxis_syntax::{SyntaxKind, SyntaxNode, parse};
+use markdown_neuraxis_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, parse};
 
 use crate::editing::AnchorId;
 
@@ -33,6 +33,36 @@ pub enum BlockContent {
     Leaf,
     /// Container block with child blocks
     Children(Vec<Block>),
+}
+
+/// An inline element within a block (emphasis, links, hard breaks, etc.)
+#[derive(Debug, Clone, PartialEq)]
+pub struct InlineElement {
+    /// What kind of inline this is
+    pub kind: InlineKind,
+    /// Byte range in source
+    pub range: Range<usize>,
+}
+
+/// The kind of inline element
+#[derive(Debug, Clone, PartialEq)]
+pub enum InlineKind {
+    /// Hard line break (two+ trailing spaces before newline)
+    HardBreak,
+    /// Emphasis (*text* or _text_)
+    Emphasis,
+    /// Strong emphasis (**text** or __text__)
+    Strong,
+    /// Inline code (`code`)
+    Code,
+    /// Link [text](url)
+    Link,
+    /// Wiki link [[target]] or [[target|alias]]
+    WikiLink,
+    /// Image ![alt](url)
+    Image,
+    /// Strikethrough ~~text~~
+    Strikethrough,
 }
 
 /// The kind of block
@@ -69,6 +99,8 @@ pub struct Block {
     pub root_range: Range<usize>,
     /// Per-line breakdown with prefix/content ranges
     pub lines: Vec<LineInfo>,
+    /// Inline elements within this block (emphasis, links, hard breaks, etc.)
+    pub inlines: Vec<InlineElement>,
     /// Block content (text or children)
     pub content: BlockContent,
 }
@@ -122,6 +154,19 @@ fn format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
                 prefix_text.replace('\n', "\\n"),
                 line.content,
                 content_text.replace('\n', "\\n")
+            )
+            .unwrap();
+        }
+    }
+
+    // Inlines
+    if !block.inlines.is_empty() {
+        writeln!(out, "{}  inlines:", prefix).unwrap();
+        for inline in &block.inlines {
+            writeln!(
+                out,
+                "{}    {:?} [{}..{}]",
+                prefix, inline.kind, inline.range.start, inline.range.end
             )
             .unwrap();
         }
@@ -197,6 +242,7 @@ fn process_list(source: &str, node: SyntaxNode, root_range: Range<usize>) -> Opt
         node_range: node_range.clone(),
         root_range: node_range,
         lines: vec![], // List container has no lines of its own
+        inlines: vec![],
         content: BlockContent::Children(children),
     })
 }
@@ -251,6 +297,7 @@ fn process_list_item(source: &str, node: SyntaxNode, root_range: Range<usize>) -
         node_range,
         root_range,
         lines: vec![first_line_info],
+        inlines: vec![],
         content,
     })
 }
@@ -282,12 +329,16 @@ fn process_paragraph(source: &str, node: SyntaxNode, root_range: Range<usize>) -
         pos = line_end;
     }
 
+    // Extract inline elements
+    let inlines = extract_inlines(&node);
+
     Some(Block {
         id: AnchorId(0),
         kind: BlockKindV2::Paragraph,
         node_range,
         root_range,
         lines,
+        inlines,
         content: BlockContent::Leaf,
     })
 }
@@ -355,6 +406,7 @@ fn process_block_quote(source: &str, node: SyntaxNode, root_range: Range<usize>)
         node_range,
         root_range,
         lines,
+        inlines: extract_inlines(&node),
         content,
     })
 }
@@ -386,6 +438,7 @@ fn process_heading(source: &str, node: SyntaxNode, root_range: Range<usize>) -> 
         node_range,
         root_range,
         lines: vec![line_info],
+        inlines: extract_inlines(&node),
         content: BlockContent::Leaf,
     })
 }
@@ -435,6 +488,7 @@ fn process_fenced_code(source: &str, node: SyntaxNode, root_range: Range<usize>)
         node_range,
         root_range,
         lines,
+        inlines: vec![], // Code blocks don't have inline formatting
         content: BlockContent::Leaf,
     })
 }
@@ -453,6 +507,7 @@ fn process_thematic_break(
         node_range,
         root_range,
         lines: vec![],
+        inlines: vec![],
         content: BlockContent::Leaf,
     })
 }
@@ -515,6 +570,42 @@ fn find_line_start(source: &str, pos: usize) -> usize {
     } else {
         0 // Start of document
     }
+}
+
+/// Extract inline elements from a node's children.
+/// Returns interesting inlines: HARD_BREAK, EMPHASIS, STRONG, CODE_SPAN, LINK, etc.
+fn extract_inlines(node: &SyntaxNode) -> Vec<InlineElement> {
+    let mut inlines = Vec::new();
+
+    for child in node.children_with_tokens() {
+        let range: Range<usize> = {
+            let r = child.text_range();
+            (r.start().into())..(r.end().into())
+        };
+
+        let kind = match &child {
+            SyntaxElement::Token(token) => match token.kind() {
+                SyntaxKind::HARD_BREAK => Some(InlineKind::HardBreak),
+                _ => None,
+            },
+            SyntaxElement::Node(node) => match node.kind() {
+                SyntaxKind::EMPHASIS => Some(InlineKind::Emphasis),
+                SyntaxKind::STRONG => Some(InlineKind::Strong),
+                SyntaxKind::CODE_SPAN => Some(InlineKind::Code),
+                SyntaxKind::LINK => Some(InlineKind::Link),
+                SyntaxKind::WIKILINK => Some(InlineKind::WikiLink),
+                SyntaxKind::IMAGE => Some(InlineKind::Image),
+                SyntaxKind::STRIKETHROUGH => Some(InlineKind::Strikethrough),
+                _ => None,
+            },
+        };
+
+        if let Some(kind) = kind {
+            inlines.push(InlineElement { kind, range });
+        }
+    }
+
+    inlines
 }
 
 #[cfg(test)]
