@@ -56,8 +56,10 @@ pub fn block(p: &mut Parser<'_, '_>) {
         SyntaxKind::HASH => heading(p),
         SyntaxKind::GT => blockquote(p),
         SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-            // Could be list item or thematic break
-            if is_thematic_break(p) {
+            // Could be frontmatter (--- at doc start with closing ---), thematic break, or list item
+            if p.at_document_start() && is_frontmatter_start(p) {
+                frontmatter(p);
+            } else if is_thematic_break(p) {
                 thematic_break(p);
             } else {
                 list(p);
@@ -98,6 +100,110 @@ pub fn block(p: &mut Parser<'_, '_>) {
         }
         _ => paragraph(p),
     }
+}
+
+/// Check if current position starts valid frontmatter (--- with closing ---)
+fn is_frontmatter_start(p: &Parser<'_, '_>) -> bool {
+    // Must be exactly 3 dashes followed by newline
+    if p.current() != SyntaxKind::DASH {
+        return false;
+    }
+
+    let mut count = 0;
+    let mut i = 0;
+
+    while p.nth(i) == SyntaxKind::DASH {
+        count += 1;
+        i += 1;
+    }
+
+    // Must be exactly 3 dashes, then newline (not EOF - need content)
+    if count != 3 || p.nth(i) != SyntaxKind::NEWLINE {
+        return false;
+    }
+
+    // Look ahead to find closing ---
+    i += 1; // skip newline
+    loop {
+        // Skip to start of next line
+        while p.nth(i) != SyntaxKind::EOF && p.nth(i) != SyntaxKind::NEWLINE {
+            i += 1;
+        }
+        if p.nth(i) == SyntaxKind::EOF {
+            return false; // No closing fence found
+        }
+        i += 1; // skip newline
+
+        // Check if this line is ---
+        if p.nth(i) == SyntaxKind::DASH {
+            let mut dash_count = 0;
+            let mut j = i;
+            while p.nth(j) == SyntaxKind::DASH {
+                dash_count += 1;
+                j += 1;
+            }
+            if dash_count == 3 && (p.nth(j) == SyntaxKind::NEWLINE || p.nth(j) == SyntaxKind::EOF) {
+                return true; // Found closing fence
+            }
+        }
+
+        if p.nth(i) == SyntaxKind::EOF {
+            return false;
+        }
+    }
+}
+
+/// Check if current position is a frontmatter fence (exactly ---)
+fn is_frontmatter_fence(p: &Parser<'_, '_>) -> bool {
+    if p.current() != SyntaxKind::DASH {
+        return false;
+    }
+
+    let mut count = 0;
+    let mut i = 0;
+
+    while p.nth(i) == SyntaxKind::DASH {
+        count += 1;
+        i += 1;
+    }
+
+    count == 3 && (p.nth(i) == SyntaxKind::NEWLINE || p.nth(i) == SyntaxKind::EOF)
+}
+
+/// Parse YAML frontmatter block
+fn frontmatter(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume opening ---
+    p.bump(); // -
+    p.bump(); // -
+    p.bump(); // -
+    p.eat(SyntaxKind::NEWLINE);
+
+    // Consume content until closing --- or EOF
+    loop {
+        if p.at_end() {
+            break;
+        }
+
+        // Check for closing fence at line start
+        if p.at(SyntaxKind::DASH) && is_frontmatter_fence(p) {
+            // Consume closing ---
+            p.bump(); // -
+            p.bump(); // -
+            p.bump(); // -
+            p.eat(SyntaxKind::NEWLINE);
+            break;
+        }
+
+        // Consume the line
+        while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+            p.bump();
+        }
+        p.eat(SyntaxKind::NEWLINE);
+    }
+
+    m.complete(p, SyntaxKind::FRONTMATTER);
 }
 
 /// Check if current position starts an HTML block (<tag...)
@@ -874,9 +980,21 @@ mod tests {
 
     #[test]
     fn parse_thematic_break() {
-        let tree = parse("---\n");
+        // Use *** since --- at document start is frontmatter
+        let tree = parse("***\n");
         let hr = tree.children().next().unwrap();
         assert_eq!(hr.kind(), SyntaxKind::THEMATIC_BREAK);
+    }
+
+    #[test]
+    fn parse_thematic_break_dashes_after_content() {
+        // --- after content is thematic break
+        let tree = parse("Text\n\n---\n");
+        let hr = find_node(&tree, SyntaxKind::THEMATIC_BREAK);
+        assert!(
+            hr.is_some(),
+            "--- after blank line should be thematic break"
+        );
     }
 
     #[test]
@@ -1592,6 +1710,71 @@ mod tests {
         assert!(
             html_block.is_none(),
             "Autolink should not become HTML_BLOCK"
+        );
+    }
+
+    // === Frontmatter ===
+
+    #[test]
+    fn parse_frontmatter() {
+        let tree = parse("---\ntitle: Test\n---\n# Heading\n");
+        let fm = find_node(&tree, SyntaxKind::FRONTMATTER).unwrap();
+        assert!(fm.text().to_string().contains("title"));
+    }
+
+    #[test]
+    fn frontmatter_preserves_text() {
+        let input = "---\nkey: value\ntags: [a, b]\n---\nContent here.\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    #[test]
+    fn frontmatter_only_at_start() {
+        // --- in the middle of document (after blank line) is thematic break, not frontmatter
+        let tree = parse("Some text.\n\n---\nMore text.\n");
+        let fm = find_node(&tree, SyntaxKind::FRONTMATTER);
+        assert!(fm.is_none(), "--- mid-document should be thematic break");
+
+        let hr = find_node(&tree, SyntaxKind::THEMATIC_BREAK);
+        assert!(hr.is_some(), "Should have thematic break");
+    }
+
+    #[test]
+    fn setext_heading_not_frontmatter() {
+        // --- immediately after text is setext heading, not frontmatter
+        let tree = parse("Heading\n---\n");
+        let fm = find_node(&tree, SyntaxKind::FRONTMATTER);
+        assert!(fm.is_none());
+
+        let setext = find_node(&tree, SyntaxKind::SETEXT_HEADING);
+        assert!(setext.is_some(), "Should be setext heading");
+    }
+
+    #[test]
+    fn frontmatter_unclosed_is_not_frontmatter() {
+        // Unclosed --- without closing fence is NOT frontmatter
+        let tree = parse("---\ntitle: Test\nno closing\n");
+        let fm = find_node(&tree, SyntaxKind::FRONTMATTER);
+        assert!(fm.is_none(), "Unclosed should not be frontmatter");
+
+        // Should have thematic break instead
+        let hr = find_node(&tree, SyntaxKind::THEMATIC_BREAK);
+        assert!(hr.is_some(), "Should be thematic break");
+    }
+
+    #[test]
+    fn single_fence_is_thematic_break_not_frontmatter() {
+        // Just --- with nothing after should be thematic break, not frontmatter
+        // Frontmatter needs content between opening and closing fences
+        let tree = parse("---\n");
+        let fm = find_node(&tree, SyntaxKind::FRONTMATTER);
+        let hr = find_node(&tree, SyntaxKind::THEMATIC_BREAK);
+
+        // This should NOT be frontmatter (no content, no closing fence)
+        assert!(
+            fm.is_none() || hr.is_some(),
+            "Single --- should be thematic break, not frontmatter"
         );
     }
 }

@@ -159,6 +159,8 @@ pub enum SyntaxKind {
     SETEXT_HEADING,
     /// Indented code block
     INDENTED_CODE,
+    /// YAML frontmatter block
+    FRONTMATTER,
 
     /// Error recovery node
     ERROR,

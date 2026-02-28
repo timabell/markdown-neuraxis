@@ -198,6 +198,11 @@ impl<'t, 'input> Parser<'t, 'input> {
             .unwrap_or(false)
     }
 
+    /// Check if we're at the very start of the document (position 0).
+    pub fn at_document_start(&self) -> bool {
+        self.pos == 0
+    }
+
     /// Remaining tokens count.
     pub fn remaining(&self) -> usize {
         self.tokens.len().saturating_sub(self.pos)
