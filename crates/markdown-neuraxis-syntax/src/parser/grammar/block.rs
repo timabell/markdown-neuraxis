@@ -413,6 +413,12 @@ fn paragraph(p: &mut Parser<'_, '_>) {
                     break;
                 }
             }
+            SyntaxKind::WHITESPACE => {
+                // Check for indented list item
+                if is_indented_list_item(p) {
+                    break;
+                }
+            }
             _ => {}
         }
 
@@ -540,6 +546,108 @@ mod tests {
             .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
             .collect();
         assert_eq!(items.len(), 2, "Should have parent and child list items");
+    }
+
+    #[test]
+    fn nested_list_items_have_correct_ranges() {
+        let input = "- Parent\n  - Child\n";
+        let tree = parse(input);
+
+        let items: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+
+        assert_eq!(items.len(), 2);
+
+        // Parent item: "- Parent\n" (bytes 0..9)
+        let parent = &items[0];
+        assert_eq!(parent.text().to_string(), "- Parent\n", "Parent item text");
+        assert_eq!(
+            usize::from(parent.text_range().start()),
+            0,
+            "Parent starts at 0"
+        );
+        assert_eq!(
+            usize::from(parent.text_range().end()),
+            9,
+            "Parent ends at 9"
+        );
+
+        // Child item: "  - Child\n" (bytes 9..19) - includes indentation
+        let child = &items[1];
+        assert_eq!(child.text().to_string(), "  - Child\n", "Child item text");
+        assert_eq!(
+            usize::from(child.text_range().start()),
+            9,
+            "Child starts at 9"
+        );
+        assert_eq!(
+            usize::from(child.text_range().end()),
+            19,
+            "Child ends at 19"
+        );
+    }
+
+    #[test]
+    fn nested_list_items_are_siblings_at_root() {
+        // Verify the tree structure: are nested items children of parent or siblings?
+        let input = "- Parent\n  - Child\n";
+        let tree = parse(input);
+
+        // Get direct children of root
+        let root_children: Vec<_> = tree.children().collect();
+        assert_eq!(
+            root_children.len(),
+            2,
+            "Both list items should be direct children of ROOT"
+        );
+
+        // Both should be LIST_ITEM
+        assert_eq!(root_children[0].kind(), SyntaxKind::LIST_ITEM);
+        assert_eq!(root_children[1].kind(), SyntaxKind::LIST_ITEM);
+
+        // The parent list item should NOT contain the child as a descendant
+        let parent_descendants: Vec<_> = root_children[0]
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(
+            parent_descendants.len(),
+            1,
+            "Parent should only contain itself, not child"
+        );
+    }
+
+    #[test]
+    fn complex_nested_list_structure() {
+        // This is the input that was failing in the engine test
+        let input = r#"- Simple item
+- Multi-line item that has
+  a hard wrap in the middle
+  - Nested item under multiline parent
+  - Another nested item
+- Another simple item
+- Final item with
+  multiple lines and
+  even more content
+  - Deep nested item"#;
+        let tree = parse(input);
+
+        let items: Vec<_> = tree
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+
+        // Should have 7 list items:
+        // 1. Simple item
+        // 2. Multi-line item...
+        // 3. Nested item under multiline parent
+        // 4. Another nested item
+        // 5. Another simple item
+        // 6. Final item with...
+        // 7. Deep nested item
+        assert_eq!(items.len(), 7, "Should have 7 list items total");
     }
 
     #[test]
