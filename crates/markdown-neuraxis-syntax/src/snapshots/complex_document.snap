@@ -96,33 +96,37 @@ ROOT@0..250
     DOT@177..178 "."
     NEWLINE@178..179 "\\n"
   NEWLINE@179..180 "\\n"
-  LIST_ITEM@180..193
-    DASH@180..181 "-"
-    WHITESPACE@181..182 " "
-    TEXT@182..187 "First"
-    WHITESPACE@187..188 " "
-    TEXT@188..192 "item"
-    NEWLINE@192..193 "\\n"
-  LIST_ITEM@193..207
-    DASH@193..194 "-"
-    WHITESPACE@194..195 " "
-    TEXT@195..201 "Second"
-    WHITESPACE@201..202 " "
-    TEXT@202..206 "item"
-    NEWLINE@206..207 "\\n"
-  LIST_ITEM@207..227
-    DASH@207..208 "-"
-    WHITESPACE@208..209 " "
-    TEXT@209..214 "Third"
-    WHITESPACE@214..215 " "
-    TEXT@215..219 "with"
-    WHITESPACE@219..220 " "
-    CODE_SPAN@220..226
-      BACKTICK@220..221 "`"
-      TEXT@221..225 "code"
-      BACKTICK@225..226 "`"
-    NEWLINE@226..227 "\\n"
-  NEWLINE@227..228 "\\n"
+  LIST@180..228
+    LIST_ITEM@180..193
+      DASH@180..181 "-"
+      WHITESPACE@181..182 " "
+      PARAGRAPH@182..193
+        TEXT@182..187 "First"
+        WHITESPACE@187..188 " "
+        TEXT@188..192 "item"
+        NEWLINE@192..193 "\\n"
+    LIST_ITEM@193..207
+      DASH@193..194 "-"
+      WHITESPACE@194..195 " "
+      PARAGRAPH@195..207
+        TEXT@195..201 "Second"
+        WHITESPACE@201..202 " "
+        TEXT@202..206 "item"
+        NEWLINE@206..207 "\\n"
+    LIST_ITEM@207..227
+      DASH@207..208 "-"
+      WHITESPACE@208..209 " "
+      PARAGRAPH@209..227
+        TEXT@209..214 "Third"
+        WHITESPACE@214..215 " "
+        TEXT@215..219 "with"
+        WHITESPACE@219..220 " "
+        CODE_SPAN@220..226
+          BACKTICK@220..221 "`"
+          TEXT@221..225 "code"
+          BACKTICK@225..226 "`"
+        NEWLINE@226..227 "\\n"
+    NEWLINE@227..228 "\\n"
   THEMATIC_BREAK@228..232
     DASH@228..229 "-"
     DASH@229..230 "-"

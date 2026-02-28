@@ -26,10 +26,12 @@ ROOT@0..52
       RBRACKET@37..38 "]"
     NEWLINE@38..39 "\\n"
   NEWLINE@39..40 "\\n"
-  LIST_ITEM@40..52
-    DASH@40..41 "-"
-    WHITESPACE@41..42 " "
-    TEXT@42..46 "List"
-    WHITESPACE@46..47 " "
-    TEXT@47..51 "item"
-    NEWLINE@51..52 "\\n"
+  LIST@40..52
+    LIST_ITEM@40..52
+      DASH@40..41 "-"
+      WHITESPACE@41..42 " "
+      PARAGRAPH@42..52
+        TEXT@42..46 "List"
+        WHITESPACE@46..47 " "
+        TEXT@47..51 "item"
+        NEWLINE@51..52 "\\n"

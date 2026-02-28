@@ -24,8 +24,6 @@
 //!
 //! This is a TDD exploration, so some features aren't implemented yet:
 //!
-//! - **Nested containers**: Lists inside blockquotes, blockquotes inside lists
-//! - **LIST grouping**: Consecutive list items aren't wrapped in a LIST node
 //! - **Indented code blocks**: Currently treated as paragraphs
 //! - **Setext headings**: Only ATX (`#`) headings are supported
 
@@ -57,7 +55,7 @@ pub fn block(p: &mut Parser<'_, '_>) {
             if is_thematic_break(p) {
                 thematic_break(p);
             } else {
-                list_item(p);
+                list(p);
             }
         }
         SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
@@ -70,7 +68,7 @@ pub fn block(p: &mut Parser<'_, '_>) {
         SyntaxKind::TEXT => {
             // Could be a numbered list item (e.g., "1. item")
             if is_numbered_list_item(p) {
-                list_item_numbered(p);
+                list(p);
             } else {
                 paragraph(p);
             }
@@ -177,7 +175,99 @@ fn blockquote(p: &mut Parser<'_, '_>) {
     m.complete(p, SyntaxKind::BLOCK_QUOTE);
 }
 
+/// Parse a list (consecutive list items wrapped in LIST node).
+/// `nested` indicates if this list is inside a list item (requires indentation for siblings).
+fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
+    let m = p.start();
+
+    // Parse the first list item
+    if is_numbered_list_item(p) {
+        list_item_numbered(p);
+    } else {
+        list_item(p);
+    }
+
+    // Continue parsing list items at the same level
+    loop {
+        // Skip blank lines within the list - but a blank line followed by non-list ends the list
+        let mut blank_count = 0;
+        while p.at(SyntaxKind::NEWLINE) {
+            blank_count += 1;
+            p.bump();
+        }
+
+        if p.at_end() {
+            break;
+        }
+
+        // For nested lists, siblings must be indented
+        if nested {
+            if !p.at(SyntaxKind::WHITESPACE) {
+                break; // Outdented - not part of this nested list
+            }
+            // Consume indentation and check for list marker
+            p.bump();
+            match p.current() {
+                SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+                    if p.nth(1) != SyntaxKind::WHITESPACE {
+                        break; // Not a valid list item
+                    }
+                    if blank_count > 0 {
+                        break;
+                    }
+                    list_item(p);
+                }
+                SyntaxKind::TEXT if is_numbered_list_item(p) => {
+                    if blank_count > 0 {
+                        break;
+                    }
+                    list_item_numbered(p);
+                }
+                _ => break,
+            }
+        } else {
+            // Root level list - items start without indentation
+            match p.current() {
+                SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+                    if is_thematic_break(p) {
+                        break; // Not a list item
+                    }
+                    if blank_count > 0 {
+                        break;
+                    }
+                    list_item(p);
+                }
+                SyntaxKind::TEXT if is_numbered_list_item(p) => {
+                    if blank_count > 0 {
+                        break;
+                    }
+                    list_item_numbered(p);
+                }
+                _ => break, // Not a list item, end the list
+            }
+        }
+    }
+
+    m.complete(p, SyntaxKind::LIST);
+}
+
+/// Parse a root-level list.
+fn list(p: &mut Parser<'_, '_>) {
+    list_ext(p, false);
+}
+
+/// Parse a nested list (inside a list item).
+fn nested_list(p: &mut Parser<'_, '_>) {
+    list_ext(p, true);
+}
+
 /// Parse a list item.
+///
+/// A list item contains:
+/// - A marker (-, *, +) followed by space
+/// - Content wrapped in PARAGRAPH
+/// - Optional continuation lines (indented)
+/// - Optional nested blocks (blockquotes, nested lists)
 fn list_item(p: &mut Parser<'_, '_>) {
     let m = p.start();
 
@@ -191,13 +281,123 @@ fn list_item(p: &mut Parser<'_, '_>) {
         return paragraph(p);
     }
 
-    // Parse inline content
+    // Parse content as PARAGRAPH child
+    list_item_content(p);
+
+    m.complete(p, SyntaxKind::LIST_ITEM);
+}
+
+/// Parse list item content (PARAGRAPH with continuations, then nested blocks).
+fn list_item_content(p: &mut Parser<'_, '_>) {
+    // Start paragraph for the content
+    let para = p.start();
+
+    // Parse first line content
     inline::inline_until_newline(p);
 
     // Consume newline
-    p.eat(SyntaxKind::NEWLINE);
+    if !p.eat(SyntaxKind::NEWLINE) {
+        para.complete(p, SyntaxKind::PARAGRAPH);
+        return;
+    }
 
-    m.complete(p, SyntaxKind::LIST_ITEM);
+    // Check for continuation lines (indented plain text)
+    loop {
+        if p.at_end() {
+            break;
+        }
+
+        // Must start with whitespace to be a continuation
+        if !p.at(SyntaxKind::WHITESPACE) {
+            break;
+        }
+
+        // Check what follows the whitespace
+        let after_ws = p.nth(1);
+
+        // If it's a block marker, end the paragraph and handle as nested block
+        match after_ws {
+            SyntaxKind::GT => {
+                // Blockquote - end paragraph, parse blockquote as sibling
+                para.complete(p, SyntaxKind::PARAGRAPH);
+                list_item_nested_blocks(p);
+                return;
+            }
+            SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+                // Could be nested list item
+                if p.nth(2) == SyntaxKind::WHITESPACE {
+                    para.complete(p, SyntaxKind::PARAGRAPH);
+                    list_item_nested_blocks(p);
+                    return;
+                }
+                // Otherwise it's just text, continue paragraph
+            }
+            SyntaxKind::TEXT => {
+                // Could be nested numbered list item (e.g., "   1. item")
+                if p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE {
+                    para.complete(p, SyntaxKind::PARAGRAPH);
+                    list_item_nested_blocks(p);
+                    return;
+                }
+                // Otherwise it's just text, continue paragraph
+            }
+            _ => {}
+        }
+
+        // This is a continuation line - consume whitespace and content
+        p.bump(); // whitespace
+        inline::inline_until_newline(p);
+        if !p.eat(SyntaxKind::NEWLINE) {
+            break;
+        }
+    }
+
+    para.complete(p, SyntaxKind::PARAGRAPH);
+}
+
+/// Parse nested blocks within a list item (blockquotes, nested lists).
+fn list_item_nested_blocks(p: &mut Parser<'_, '_>) {
+    loop {
+        if p.at_end() {
+            break;
+        }
+
+        // Must start with whitespace (indentation)
+        if !p.at(SyntaxKind::WHITESPACE) {
+            break;
+        }
+
+        let after_ws = p.nth(1);
+
+        match after_ws {
+            SyntaxKind::GT => {
+                // Nested blockquote
+                p.bump(); // consume indentation
+                blockquote(p);
+            }
+            SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+                if p.nth(2) == SyntaxKind::WHITESPACE {
+                    // Nested bullet list
+                    p.bump(); // consume indentation
+                    nested_list(p);
+                    break; // Only one nested list
+                } else {
+                    break;
+                }
+            }
+            SyntaxKind::TEXT => {
+                // Could be nested numbered list (e.g., "   1. item")
+                if p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE {
+                    p.bump(); // consume indentation
+                    nested_list(p);
+                    break;
+                } else {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
 }
 
 /// Parse a thematic break.
@@ -247,11 +447,8 @@ fn list_item_numbered(p: &mut Parser<'_, '_>) {
         return paragraph(p);
     }
 
-    // Parse inline content
-    inline::inline_until_newline(p);
-
-    // Consume newline
-    p.eat(SyntaxKind::NEWLINE);
+    // Parse content as PARAGRAPH child
+    list_item_content(p);
 
     m.complete(p, SyntaxKind::LIST_ITEM);
 }
@@ -277,49 +474,15 @@ fn is_indented_list_item(p: &Parser<'_, '_>) -> bool {
     }
 }
 
-/// Parse an indented list item (nested list)
+/// Parse an indented list item (nested list) - wraps in LIST for consistency
 fn list_item_indented(p: &mut Parser<'_, '_>) {
-    let m = p.start();
-
     // Consume leading whitespace (indentation)
     while p.at(SyntaxKind::WHITESPACE) {
         p.bump();
     }
 
-    // Parse based on marker type
-    match p.current() {
-        SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-            // Consume the marker
-            p.bump();
-
-            // Consume required space
-            if !p.eat(SyntaxKind::WHITESPACE) {
-                m.abandon(p);
-                return paragraph(p);
-            }
-        }
-        SyntaxKind::TEXT => {
-            // Numbered list - consume number, dot, space
-            p.bump(); // number
-            p.bump(); // dot
-            if !p.eat(SyntaxKind::WHITESPACE) {
-                m.abandon(p);
-                return paragraph(p);
-            }
-        }
-        _ => {
-            m.abandon(p);
-            return paragraph(p);
-        }
-    }
-
-    // Parse inline content
-    inline::inline_until_newline(p);
-
-    // Consume newline
-    p.eat(SyntaxKind::NEWLINE);
-
-    m.complete(p, SyntaxKind::LIST_ITEM);
+    // Now we should be at a list marker - delegate to list()
+    list(p);
 }
 
 /// Parse a fenced code block.
@@ -460,7 +623,12 @@ mod tests {
     #[test]
     fn parse_list_item() {
         let tree = parse("- item\n");
-        let item = tree.children().next().unwrap();
+        let list = tree.children().next().unwrap();
+        assert_eq!(list.kind(), SyntaxKind::LIST);
+        let item = list
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .unwrap();
         assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
     }
 
@@ -494,7 +662,7 @@ mod tests {
         assert_eq!(blocks.len(), 3);
         assert_eq!(blocks[0].kind(), SyntaxKind::HEADING);
         assert_eq!(blocks[1].kind(), SyntaxKind::PARAGRAPH);
-        assert_eq!(blocks[2].kind(), SyntaxKind::LIST_ITEM);
+        assert_eq!(blocks[2].kind(), SyntaxKind::LIST);
     }
 
     #[test]
@@ -509,15 +677,24 @@ mod tests {
     #[test]
     fn parse_numbered_list_item() {
         let tree = parse("1. First item\n");
-        let item = tree.children().next().unwrap();
-        assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
+        let list = tree.children().next().unwrap();
+        assert_eq!(list.kind(), SyntaxKind::LIST);
+        let item = list
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .unwrap();
         assert!(item.text().to_string().contains("First item"));
     }
 
     #[test]
     fn parse_numbered_list_multi_digit() {
         let tree = parse("10. Tenth item\n");
-        let item = tree.children().next().unwrap();
+        let list = tree.children().next().unwrap();
+        assert_eq!(list.kind(), SyntaxKind::LIST);
+        let item = list
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .unwrap();
         assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
     }
 
@@ -527,11 +704,15 @@ mod tests {
         let tree = parse(input);
         assert_eq!(tree.text().to_string(), input);
 
-        let items: Vec<_> = tree.children().collect();
+        let lists: Vec<_> = tree.children().collect();
+        assert_eq!(lists.len(), 1);
+        assert_eq!(lists[0].kind(), SyntaxKind::LIST);
+
+        let items: Vec<_> = lists[0]
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
         assert_eq!(items.len(), 3);
-        for item in items {
-            assert_eq!(item.kind(), SyntaxKind::LIST_ITEM);
-        }
     }
 
     // === Nested list tests ===
@@ -560,9 +741,13 @@ mod tests {
 
         assert_eq!(items.len(), 2);
 
-        // Parent item: "- Parent\n" (bytes 0..9)
+        // Parent item: contains everything including nested child (bytes 0..19)
         let parent = &items[0];
-        assert_eq!(parent.text().to_string(), "- Parent\n", "Parent item text");
+        assert_eq!(
+            parent.text().to_string(),
+            input,
+            "Parent item text includes child"
+        );
         assert_eq!(
             usize::from(parent.text_range().start()),
             0,
@@ -570,52 +755,22 @@ mod tests {
         );
         assert_eq!(
             usize::from(parent.text_range().end()),
-            9,
-            "Parent ends at 9"
+            19,
+            "Parent ends at 19 (includes child)"
         );
 
-        // Child item: "  - Child\n" (bytes 9..19) - includes indentation
+        // Child item: "- Child\n" (bytes 11..19) - indentation consumed separately
         let child = &items[1];
-        assert_eq!(child.text().to_string(), "  - Child\n", "Child item text");
+        assert_eq!(child.text().to_string(), "- Child\n", "Child item text");
         assert_eq!(
             usize::from(child.text_range().start()),
-            9,
-            "Child starts at 9"
+            11,
+            "Child starts at 11 (after indentation)"
         );
         assert_eq!(
             usize::from(child.text_range().end()),
             19,
             "Child ends at 19"
-        );
-    }
-
-    #[test]
-    fn nested_list_items_are_siblings_at_root() {
-        // Verify the tree structure: are nested items children of parent or siblings?
-        let input = "- Parent\n  - Child\n";
-        let tree = parse(input);
-
-        // Get direct children of root
-        let root_children: Vec<_> = tree.children().collect();
-        assert_eq!(
-            root_children.len(),
-            2,
-            "Both list items should be direct children of ROOT"
-        );
-
-        // Both should be LIST_ITEM
-        assert_eq!(root_children[0].kind(), SyntaxKind::LIST_ITEM);
-        assert_eq!(root_children[1].kind(), SyntaxKind::LIST_ITEM);
-
-        // The parent list item should NOT contain the child as a descendant
-        let parent_descendants: Vec<_> = root_children[0]
-            .descendants()
-            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
-            .collect();
-        assert_eq!(
-            parent_descendants.len(),
-            1,
-            "Parent should only contain itself, not child"
         );
     }
 
@@ -748,6 +903,201 @@ mod tests {
     fn parse_blockquote_preserves_text() {
         let input = "> Line 1\n>> Nested\n>>> Deep\n";
         let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === Phase 1: LIST grouping tests ===
+
+    #[test]
+    fn single_list_item_wrapped_in_list() {
+        let tree = parse("- item\n");
+        let list = tree.children().next().unwrap();
+        assert_eq!(
+            list.kind(),
+            SyntaxKind::LIST,
+            "Single item should be wrapped in LIST"
+        );
+
+        let items: Vec<_> = list
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(items.len(), 1, "LIST should contain one LIST_ITEM");
+    }
+
+    #[test]
+    fn consecutive_list_items_in_one_list() {
+        let input = "- First\n- Second\n- Third\n";
+        let tree = parse(input);
+
+        let lists: Vec<_> = tree
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .collect();
+        assert_eq!(lists.len(), 1, "Should have one LIST");
+
+        let items: Vec<_> = lists[0]
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(items.len(), 3, "LIST should contain three LIST_ITEMs");
+    }
+
+    #[test]
+    fn lists_separated_by_blank_line_are_separate() {
+        let input = "- First\n\n- Second\n";
+        let tree = parse(input);
+
+        let lists: Vec<_> = tree
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .collect();
+        assert_eq!(lists.len(), 2, "Should have two separate LISTs");
+    }
+
+    #[test]
+    fn list_grouping_preserves_text() {
+        let input = "- First\n- Second\n";
+        let tree = parse(input);
+        assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === Phase 2: List item content as PARAGRAPH ===
+
+    #[test]
+    fn list_item_content_is_paragraph() {
+        let tree = parse("- item content\n");
+        let list = tree.children().next().unwrap();
+        let item = list
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .unwrap();
+
+        let para = item.children().find(|n| n.kind() == SyntaxKind::PARAGRAPH);
+        assert!(para.is_some(), "LIST_ITEM should contain PARAGRAPH child");
+    }
+
+    #[test]
+    fn list_item_continuation_extends_paragraph() {
+        let input = "- First line\n  continued here\n";
+        let tree = parse(input);
+
+        let list = tree.children().next().unwrap();
+        let item = list
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .unwrap();
+
+        // Should have one PARAGRAPH containing both lines
+        let paras: Vec<_> = item
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::PARAGRAPH)
+            .collect();
+        assert_eq!(paras.len(), 1, "Should have one PARAGRAPH");
+
+        let para_text = paras[0].text().to_string();
+        assert!(
+            para_text.contains("First line"),
+            "PARAGRAPH should contain first line"
+        );
+        assert!(
+            para_text.contains("continued here"),
+            "PARAGRAPH should contain continuation"
+        );
+    }
+
+    // === Phase 3: Nested content in list items ===
+
+    #[test]
+    fn list_item_with_blockquote_child() {
+        let input = "- Item\n  > quoted\n";
+        let tree = parse(input);
+
+        let list = tree.children().next().unwrap();
+        let item = list
+            .children()
+            .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .unwrap();
+
+        let bq = item
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BLOCK_QUOTE);
+        assert!(bq.is_some(), "LIST_ITEM should contain BLOCK_QUOTE");
+    }
+
+    #[test]
+    fn list_item_with_nested_list() {
+        let input = "- Parent\n  - Child\n";
+        let tree = parse(input);
+
+        // Root should have one LIST
+        let root_lists: Vec<_> = tree
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .collect();
+        assert_eq!(root_lists.len(), 1, "Root should have one LIST");
+
+        // That LIST should have one LIST_ITEM (parent)
+        let parent_items: Vec<_> = root_lists[0]
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(parent_items.len(), 1, "Root LIST should have one LIST_ITEM");
+
+        // Parent item should contain a nested LIST with the child
+        let nested_lists: Vec<_> = parent_items[0]
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .collect();
+        assert_eq!(
+            nested_lists.len(),
+            1,
+            "Parent item should contain nested LIST"
+        );
+
+        let child_items: Vec<_> = nested_lists[0]
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(
+            child_items.len(),
+            1,
+            "Nested LIST should have one LIST_ITEM"
+        );
+    }
+
+    #[test]
+    fn multiline_nested_structure() {
+        // The target test case from snapshot_v2
+        let input = "- First item\n  continued here\n  > quoted part\n  > more quote\n  >> deeply nested\n- Second item\n";
+        let tree = parse(input);
+
+        // Should have one LIST at root
+        let lists: Vec<_> = tree
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .collect();
+        assert_eq!(lists.len(), 1, "Should have one LIST");
+
+        // LIST should have two LIST_ITEMs
+        let items: Vec<_> = lists[0]
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LIST_ITEM)
+            .collect();
+        assert_eq!(items.len(), 2, "LIST should have two LIST_ITEMs");
+
+        // First item should have PARAGRAPH and BLOCK_QUOTE children
+        let first_item = &items[0];
+        let has_para = first_item
+            .children()
+            .any(|n| n.kind() == SyntaxKind::PARAGRAPH);
+        let has_bq = first_item
+            .children()
+            .any(|n| n.kind() == SyntaxKind::BLOCK_QUOTE);
+        assert!(has_para, "First item should have PARAGRAPH");
+        assert!(has_bq, "First item should have BLOCK_QUOTE");
+
+        // Text should be preserved
         assert_eq!(tree.text().to_string(), input);
     }
 }
