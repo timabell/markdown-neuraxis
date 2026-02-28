@@ -152,6 +152,11 @@ pub enum TokenKind {
     #[token("=")]
     Equals,
 
+    /// Hard line break - two or more trailing spaces followed by newline
+    /// Logos uses longest-match, so this wins over Whitespace+Newline
+    #[regex(r"  +\r?\n")]
+    HardBreak,
+
     /// Plain text - anything not matched by other rules
     #[regex(r"[^\s\[\]()>`*+#|~.<_!:=-]+")]
     Text,
@@ -181,6 +186,7 @@ impl TokenKind {
             TokenKind::Exclaim => SyntaxKind::EXCLAIM,
             TokenKind::Colon => SyntaxKind::COLON,
             TokenKind::Equals => SyntaxKind::EQUALS,
+            TokenKind::HardBreak => SyntaxKind::HARD_BREAK,
             TokenKind::Text => SyntaxKind::TEXT,
         }
     }
@@ -486,5 +492,124 @@ mod tests {
         let tokens = lex(input);
         let reconstructed: String = tokens.iter().map(|t| t.text).collect();
         assert_eq!(input, reconstructed);
+    }
+
+    #[test]
+    fn lex_hard_break_two_spaces() {
+        let tokens = lex("text  \n");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "text"),
+                token(SyntaxKind::HARD_BREAK, "  \n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_hard_break_three_spaces() {
+        let tokens = lex("text   \n");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "text"),
+                token(SyntaxKind::HARD_BREAK, "   \n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_single_space_not_hard_break() {
+        let tokens = lex("text \n");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "text"),
+                token(SyntaxKind::WHITESPACE, " "),
+                token(SyntaxKind::NEWLINE, "\n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_hard_break_crlf() {
+        let tokens = lex("text  \r\n");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "text"),
+                token(SyntaxKind::HARD_BREAK, "  \r\n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn all_bytes_preserved_with_hard_break() {
+        let input = "line one  \nline two   \nline three";
+        let tokens = lex(input);
+        let reconstructed: String = tokens.iter().map(|t| t.text).collect();
+        assert_eq!(input, reconstructed);
+    }
+
+    #[test]
+    fn lex_hard_break_at_line_start() {
+        // Just spaces + newline (no preceding text)
+        let tokens = lex("  \n");
+        assert_eq!(tokens, vec![token(SyntaxKind::HARD_BREAK, "  \n"),]);
+    }
+
+    #[test]
+    fn lex_tab_space_not_hard_break() {
+        // Tab + space + newline is not a hard break (needs 2+ spaces)
+        let tokens = lex("text\t \n");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "text"),
+                token(SyntaxKind::WHITESPACE, "\t "),
+                token(SyntaxKind::NEWLINE, "\n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_space_tab_space_not_hard_break() {
+        // Space + tab + space is not 2 consecutive spaces
+        let tokens = lex("text \t \n");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "text"),
+                token(SyntaxKind::WHITESPACE, " \t "),
+                token(SyntaxKind::NEWLINE, "\n"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_multiple_hard_breaks() {
+        let tokens = lex("a  \nb  \nc");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "a"),
+                token(SyntaxKind::HARD_BREAK, "  \n"),
+                token(SyntaxKind::TEXT, "b"),
+                token(SyntaxKind::HARD_BREAK, "  \n"),
+                token(SyntaxKind::TEXT, "c"),
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_hard_break_many_spaces() {
+        let tokens = lex("text      \n");
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::TEXT, "text"),
+                token(SyntaxKind::HARD_BREAK, "      \n"),
+            ]
+        );
     }
 }

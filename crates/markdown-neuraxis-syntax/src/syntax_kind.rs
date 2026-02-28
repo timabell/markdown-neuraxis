@@ -107,6 +107,8 @@ pub enum SyntaxKind {
     COLON,
     /// `=` for setext headings
     EQUALS,
+    /// Hard line break (two+ trailing spaces before newline)
+    HARD_BREAK,
     /// Raw HTML content
     HTML_TEXT,
     /// End of file marker
