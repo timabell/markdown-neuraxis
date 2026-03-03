@@ -6,6 +6,11 @@ set -e
 # Source Android environment variables
 source "$(dirname "$0")/set-android-envs.sh"
 
+# Force rebuild of FFI and its dependencies to pick up engine changes
+# (cargo-ndk cross-compilation doesn't always detect dependency changes)
+cargo clean -p markdown-neuraxis-ffi --target aarch64-linux-android 2>/dev/null || true
+cargo clean -p markdown-neuraxis-ffi --target x86_64-linux-android 2>/dev/null || true
+
 # Build for arm64 (primary target - modern phones)
 echo "Building for aarch64-linux-android (arm64-v8a)..."
 cargo ndk -t aarch64-linux-android build --release -p markdown-neuraxis-ffi
@@ -38,8 +43,8 @@ if [ ! -f android/gradlew ]; then
     (cd android && gradle wrapper --gradle-version 8.9)
 fi
 
-# Build the APK
+# Build the APK (clean first to ensure native libs are repackaged)
 echo "Building APK..."
-(cd android && ./gradlew assembleDebug)
+(cd android && ./gradlew clean assembleDebug)
 
 echo "Done! APK at android/app/build/outputs/apk/debug/app-debug.apk"
