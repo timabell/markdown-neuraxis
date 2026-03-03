@@ -8,8 +8,10 @@ source "$(dirname "$0")/set-android-envs.sh"
 
 # Force rebuild of FFI and its dependencies to pick up engine changes
 # (cargo-ndk cross-compilation doesn't always detect dependency changes)
-cargo clean -p markdown-neuraxis-ffi --target aarch64-linux-android 2>/dev/null || true
-cargo clean -p markdown-neuraxis-ffi --target x86_64-linux-android 2>/dev/null || true
+for pkg in markdown-neuraxis-ffi markdown-neuraxis-engine markdown-neuraxis-syntax; do
+    cargo clean -p "$pkg" --target aarch64-linux-android 2>/dev/null || true
+    cargo clean -p "$pkg" --target x86_64-linux-android 2>/dev/null || true
+done
 
 # Build for arm64 (primary target - modern phones)
 echo "Building for aarch64-linux-android (arm64-v8a)..."
