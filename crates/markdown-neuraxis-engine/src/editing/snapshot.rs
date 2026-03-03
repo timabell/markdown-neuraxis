@@ -26,6 +26,23 @@ pub struct LineInfo {
     pub content: Range<usize>,
 }
 
+impl LineInfo {
+    /// Create a new LineInfo, clamping content range to be valid.
+    /// If content_start > content_end (e.g., whitespace-only line), returns empty range.
+    pub fn new(
+        full: Range<usize>,
+        prefix: Range<usize>,
+        content_start: usize,
+        content_end: usize,
+    ) -> Self {
+        Self {
+            full,
+            prefix,
+            content: content_start.min(content_end)..content_end,
+        }
+    }
+}
+
 /// Content of a block: either leaf (no children) or nested children
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockContent {
@@ -437,11 +454,12 @@ fn process_list_item(
     let content_start = line_start + marker_len;
     let content_end = node_range.start + first_line_content_end;
 
-    let first_line_info = LineInfo {
-        full: line_start..line_end_with_newline,
-        prefix: line_start..(line_start + marker_len),
-        content: content_start..content_end,
-    };
+    let first_line_info = LineInfo::new(
+        line_start..line_end_with_newline,
+        line_start..(line_start + marker_len),
+        content_start,
+        content_end,
+    );
 
     // Process children (nested content)
     // Note: Skip PARAGRAPH children since LIST_ITEM already extracts its text from lines.
@@ -508,14 +526,13 @@ fn process_paragraph(
             line_end
         };
         let content_start = pos + trimmed_start;
-        // Ensure valid range when line is all whitespace
-        let content_start = content_start.min(content_end);
 
-        lines.push(LineInfo {
-            full: pos..line_end,
-            prefix: pos..(pos + trimmed_start),
-            content: content_start..content_end,
-        });
+        lines.push(LineInfo::new(
+            pos..line_end,
+            pos..(pos + trimmed_start),
+            content_start,
+            content_end,
+        ));
 
         pos = line_end;
     }
@@ -576,14 +593,13 @@ fn process_block_quote(
             line_end
         };
         let content_start = actual_line_start + prefix_end;
-        // Ensure valid range when line is all prefix/whitespace
-        let content_start = content_start.min(content_end);
 
-        lines.push(LineInfo {
-            full: actual_line_start..line_end,
-            prefix: actual_line_start..(actual_line_start + prefix_end),
-            content: content_start..content_end,
-        });
+        lines.push(LineInfo::new(
+            actual_line_start..line_end,
+            actual_line_start..(actual_line_start + prefix_end),
+            content_start,
+            content_end,
+        ));
 
         pos = line_end;
     }
@@ -638,11 +654,12 @@ fn process_heading(
         node_range.end
     };
 
-    let line_info = LineInfo {
-        full: node_range.clone(),
-        prefix: node_range.start..(node_range.start + prefix_end),
-        content: (node_range.start + prefix_end)..content_end,
-    };
+    let line_info = LineInfo::new(
+        node_range.clone(),
+        node_range.start..(node_range.start + prefix_end),
+        node_range.start + prefix_end,
+        content_end,
+    );
 
     // Look up anchor ID for this heading
     let id = find_anchor_for_range(anchors, &node_range);
@@ -693,11 +710,12 @@ fn process_fenced_code(
             line_end
         };
 
-        lines.push(LineInfo {
-            full: pos..line_end,
-            prefix: pos..pos, // Code blocks have no prefix
-            content: pos..content_end,
-        });
+        lines.push(LineInfo::new(
+            pos..line_end,
+            pos..pos, // Code blocks have no prefix
+            pos,
+            content_end,
+        ));
 
         pos = line_end;
     }
