@@ -80,14 +80,13 @@ pub mod commands;
 pub mod document;
 pub mod patch;
 pub mod snapshot;
-pub mod snapshot_v2;
 
 // Public API re-exports
 pub use anchors::{Anchor, AnchorId};
 pub use commands::Cmd;
 pub use document::{Document, Marker};
 pub use patch::Patch;
-pub use snapshot::{BlockKind, ContentGroup, ListItem, RenderBlock, Snapshot};
+pub use snapshot::{Block, BlockContent, BlockKind, InlineElement, InlineKind, LineInfo, Snapshot};
 
 /// Point description for ADR-0004 selection/caret transformation
 /// Maps global document positions to local textarea coordinates

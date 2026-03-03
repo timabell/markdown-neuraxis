@@ -1,6 +1,9 @@
 //! Test that reproduces the exact anchor ID collision found in diagnostic output
 
+mod test_helpers;
+
 use markdown_neuraxis_engine::editing::Document;
+use test_helpers::flatten_blocks;
 
 #[test]
 fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
@@ -24,7 +27,7 @@ fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
 # other content
 
 - indented 1
-    - indented 1.1 hoooooray  
+    - indented 1.1 hoooooray
     - indented 1.2
         - indented 1.2.1 - then clicked this
 "#;
@@ -32,17 +35,17 @@ fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
     let mut doc = Document::from_bytes(actual_file_content.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
+    let source = doc.text();
     let snapshot = doc.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Find the specific blocks that collided in the diagnostic output
-    let indented_1_blocks: Vec<_> = snapshot
-        .blocks
+    let indented_1_blocks: Vec<_> = blocks
         .iter()
         .filter(|b| b.content == "indented 1")
         .collect();
 
-    let indented_1_2_blocks: Vec<_> = snapshot
-        .blocks
+    let indented_1_2_blocks: Vec<_> = blocks
         .iter()
         .filter(|b| b.content == "indented 1.2")
         .collect();
@@ -50,18 +53,12 @@ fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
     println!("=== REPRODUCING EXACT DIAGNOSTIC COLLISION ===");
     println!("'indented 1' blocks found: {}", indented_1_blocks.len());
     for (i, block) in indented_1_blocks.iter().enumerate() {
-        println!(
-            "  [{}] '{}' anchor_id={} depth={}",
-            i, block.content, block.id.0, block.depth
-        );
+        println!("  [{}] '{}' anchor_id={}", i, block.content, block.id.0);
     }
 
     println!("'indented 1.2' blocks found: {}", indented_1_2_blocks.len());
     for (i, block) in indented_1_2_blocks.iter().enumerate() {
-        println!(
-            "  [{}] '{}' anchor_id={} depth={}",
-            i, block.content, block.id.0, block.depth
-        );
+        println!("  [{}] '{}' anchor_id={}", i, block.content, block.id.0);
     }
 
     // The specific collision from diagnostic output
@@ -75,13 +72,13 @@ fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
         .iter()
         .find(|b| b.id.0 == collision_anchor_id);
 
-    if let (Some(block_1), Some(block_1_2)) =
+    if let (Some(block_1), Some(_block_1_2)) =
         (indented_1_with_collision_id, indented_1_2_with_collision_id)
     {
         panic!(
-            "EXACT DIAGNOSTIC BUG REPRODUCED: Both 'indented 1' (depth={}) and 'indented 1.2' (depth={}) have anchor ID {}. \
+            "EXACT DIAGNOSTIC BUG REPRODUCED: Both 'indented 1' and 'indented 1.2' have anchor ID {}. \
              This causes the multiple textarea bug when clicking either item.",
-            block_1.depth, block_1_2.depth, collision_anchor_id
+            block_1.id.0
         );
     }
 
@@ -133,10 +130,14 @@ fn test_anchor_generation_algorithm_produces_unique_ids_for_similar_content() {
         doc1.create_anchors_from_tree();
         doc2.create_anchors_from_tree();
 
+        let source1 = doc1.text();
+        let source2 = doc2.text();
         let snapshot1 = doc1.snapshot();
         let snapshot2 = doc2.snapshot();
+        let blocks1 = flatten_blocks(&snapshot1.blocks, &source1);
+        let blocks2 = flatten_blocks(&snapshot2.blocks, &source2);
 
-        if let (Some(block1), Some(block2)) = (snapshot1.blocks.first(), snapshot2.blocks.first()) {
+        if let (Some(block1), Some(block2)) = (blocks1.first(), blocks2.first()) {
             println!("  '{}' -> anchor_id={}", content1, block1.id.0);
             println!("  '{}' -> anchor_id={}", content2, block2.id.0);
 
@@ -163,7 +164,7 @@ fn test_combined_document_collision_reproduction() {
 	- indented 1.1
 	- indented 1.2
 
-# other section  
+# other section
 
 - indented 1
     - indented 1.1 hoooooray
@@ -175,13 +176,15 @@ fn test_combined_document_collision_reproduction() {
     let mut doc = Document::from_bytes(problematic_markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
+    let source = doc.text();
     let snapshot = doc.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Build collision detection map
     let mut anchor_to_blocks: std::collections::HashMap<u128, Vec<String>> =
         std::collections::HashMap::new();
 
-    for block in &snapshot.blocks {
+    for block in &blocks {
         anchor_to_blocks
             .entry(block.id.0)
             .or_default()
@@ -189,15 +192,24 @@ fn test_combined_document_collision_reproduction() {
     }
 
     // Find collisions (same anchor ID, different content)
+    // Note: We filter out empty content strings because LIST containers don't have content
+    // and they get fallback IDs that may collide. This is expected behavior.
     let mut collisions = Vec::new();
     for (anchor_id, contents) in &anchor_to_blocks {
         if contents.len() > 1 {
-            let unique_contents: std::collections::HashSet<_> = contents.iter().collect();
-            if unique_contents.len() > 1 {
-                collisions.push((
-                    *anchor_id,
-                    unique_contents.into_iter().cloned().collect::<Vec<_>>(),
-                ));
+            // Filter out empty strings (from LIST containers)
+            let non_empty_contents: Vec<_> =
+                contents.iter().filter(|c| !c.is_empty()).cloned().collect();
+
+            if non_empty_contents.len() > 1 {
+                let unique_contents: std::collections::HashSet<_> =
+                    non_empty_contents.iter().collect();
+                if unique_contents.len() > 1 {
+                    collisions.push((
+                        *anchor_id,
+                        unique_contents.into_iter().cloned().collect::<Vec<_>>(),
+                    ));
+                }
             }
         }
     }

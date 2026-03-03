@@ -3,8 +3,11 @@
 //! This test reproduces the bug where after editing a list item, other list items
 //! get assigned the wrong anchor IDs when the snapshot is recreated.
 
+mod test_helpers;
+
 use markdown_neuraxis_engine::editing::{Cmd, Document};
 use std::collections::HashMap;
+use test_helpers::flatten_blocks;
 
 #[test]
 fn test_anchor_id_confusion_after_editing() {
@@ -26,9 +29,12 @@ fn test_anchor_id_confusion_after_editing() {
     doc.create_anchors_from_tree();
 
     // Take initial snapshot and record anchor IDs
+    let source = doc.text();
     let initial_snapshot = doc.snapshot();
+    let initial_blocks = flatten_blocks(&initial_snapshot.blocks, &source);
+
     let mut initial_anchor_mapping = HashMap::new();
-    for block in &initial_snapshot.blocks {
+    for block in &initial_blocks {
         initial_anchor_mapping.insert(block.content.clone(), block.id);
     }
 
@@ -40,8 +46,7 @@ fn test_anchor_id_confusion_after_editing() {
     }
 
     // Find the "indented 1.2" block to simulate editing it
-    let indented_1_2_block = initial_snapshot
-        .blocks
+    let indented_1_2_block = initial_blocks
         .iter()
         .find(|b| b.content == "indented 1.2")
         .expect("Should find 'indented 1.2' block");
@@ -52,9 +57,12 @@ fn test_anchor_id_confusion_after_editing() {
         indented_1_2_block.id
     );
 
-    // Simulate editing "indented 1.2" by inserting some text
-    // This is what happens when user clicks on "indented 1.2" and types
-    let edit_position = indented_1_2_block.byte_range.start + "indented 1.2".len();
+    // Find position of "indented 1.2" in source and edit after it
+    // Search for the content to find its position
+    let edit_position = source
+        .find("indented 1.2")
+        .expect("Should find 'indented 1.2' in source")
+        + "indented 1.2".len();
     let edit_cmd = Cmd::InsertText {
         text: " EDITED".to_string(),
         at: edit_position,
@@ -64,9 +72,11 @@ fn test_anchor_id_confusion_after_editing() {
     let _patch = doc.apply(edit_cmd);
 
     // Take snapshot after editing
+    let after_source = doc.text();
     let after_edit_snapshot = doc.snapshot();
+    let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks, &after_source);
     let mut after_edit_anchor_mapping = HashMap::new();
-    for block in &after_edit_snapshot.blocks {
+    for block in &after_edit_blocks {
         after_edit_anchor_mapping.insert(block.content.clone(), block.id);
     }
 
@@ -150,9 +160,10 @@ fn test_multiple_edit_cycles_preserve_anchor_identity() {
     doc.create_anchors_from_tree();
 
     // Record initial anchor mappings
+    let source = doc.text();
     let initial_snapshot = doc.snapshot();
-    let initial_mappings: HashMap<String, _> = initial_snapshot
-        .blocks
+    let initial_blocks = flatten_blocks(&initial_snapshot.blocks, &source);
+    let initial_mappings: HashMap<String, _> = initial_blocks
         .iter()
         .map(|b| (b.content.clone(), b.id))
         .collect();
@@ -169,16 +180,17 @@ fn test_multiple_edit_cycles_preserve_anchor_identity() {
             _ => unreachable!(),
         };
 
-        // Find the target block
-        let current_snapshot = doc.snapshot();
-        let target_block = current_snapshot
-            .blocks
-            .iter()
-            .find(|b| b.content.contains(target_content) && !b.content.contains("CYCLE"))
-            .unwrap_or_else(|| panic!("Should find '{}' block in cycle {}", target_content, cycle));
+        // Find the target in current source text
+        let current_source = doc.text();
 
-        // Edit the target
-        let edit_position = target_block.byte_range.start + target_block.content.len();
+        // Find position of target content in source and edit after it
+        let edit_position = current_source.find(target_content).unwrap_or_else(|| {
+            panic!(
+                "Should find '{}' in source at cycle {}",
+                target_content, cycle
+            )
+        }) + target_content.len();
+
         let edit_cmd = Cmd::InsertText {
             text: edit_text.to_string(),
             at: edit_position,
@@ -187,8 +199,15 @@ fn test_multiple_edit_cycles_preserve_anchor_identity() {
         let _patch = doc.apply(edit_cmd);
 
         // Check that anchor identity is preserved
+        let after_source = doc.text();
         let after_edit_snapshot = doc.snapshot();
-        for block in &after_edit_snapshot.blocks {
+        let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks, &after_source);
+        for block in &after_edit_blocks {
+            // Skip empty content blocks (LIST containers don't have stable anchors)
+            if block.content.is_empty() {
+                continue;
+            }
+
             // Extract the original content (remove CYCLE suffixes)
             let original_content = block
                 .content

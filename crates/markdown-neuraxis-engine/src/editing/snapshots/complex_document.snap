@@ -1,5 +1,5 @@
 ---
-source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Heading { level: 1 } [0..19]
@@ -18,10 +18,6 @@ List [60..125]
       lines:
         full:60..74 prefix:60..62"- " content:62..73"Feature one"
       children:
-        Paragraph [62..74]
-          root_range: 60..125
-          lines:
-            full:62..74 prefix:62..62"" content:62..73"Feature one"
         List [76..110]
           children:
             ListItem { marker: "- " } [76..110]
@@ -29,30 +25,16 @@ List [60..125]
               lines:
                 full:76..92 prefix:76..78"- " content:78..91"Sub-feature A"
               children:
-                Paragraph [78..92]
-                  root_range: 60..125
-                  lines:
-                    full:78..92 prefix:78..78"" content:78..91"Sub-feature A"
                 List [94..110]
                   children:
                     ListItem { marker: "- " } [94..110]
                       root_range: 60..125
                       lines:
                         full:94..110 prefix:94..96"- " content:96..109"Sub-feature B"
-                      children:
-                        Paragraph [96..110]
-                          root_range: 60..125
-                          lines:
-                            full:96..110 prefix:96..96"" content:96..109"Sub-feature B"
     ListItem { marker: "- " } [110..124]
       root_range: 60..125
       lines:
         full:110..124 prefix:110..112"- " content:112..123"Feature two"
-      children:
-        Paragraph [112..124]
-          root_range: 60..125
-          lines:
-            full:112..124 prefix:112..112"" content:112..123"Feature two"
 Heading { level: 2 } [125..141]
   lines:
     full:125..141 prefix:125..128"## " content:128..140"Code Example"

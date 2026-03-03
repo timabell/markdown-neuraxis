@@ -1,5 +1,5 @@
 ---
-source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Paragraph [0..33]
@@ -15,10 +15,5 @@ List [49..78]
     ListItem { marker: "- " } [49..78]
       lines:
         full:49..78 prefix:49..51"- " content:51..77"![icon](icon.png) Item one"
-      children:
-        Paragraph [51..78]
-          root_range: 49..78
-          lines:
-            full:51..78 prefix:51..51"" content:51..77"![icon](icon.png) Item one"
-          inlines:
-            Image [51..68] alt:53..57 "icon" url:59..67 "icon.png"
+      inlines:
+        Image [51..68] alt:53..57 "icon" url:59..67 "icon.png"

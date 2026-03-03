@@ -154,56 +154,88 @@ impl App {
     }
 
     fn render_document_content(&self, document: &Document) -> Vec<String> {
+        use markdown_neuraxis_engine::editing::snapshot::{Block, BlockContent, BlockKind};
+
         let snapshot = document.snapshot();
+        let source = document.text();
         let mut lines = Vec::new();
 
-        for block in &snapshot.blocks {
+        fn render_block(block: &Block, source: &str, lines: &mut Vec<String>) {
+            // Extract content from line ranges
+            let content: String = block
+                .lines
+                .iter()
+                .map(|line| &source[line.content.clone()])
+                .collect::<Vec<_>>()
+                .join("\n");
+
             match &block.kind {
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::Heading { level } => {
+                BlockKind::Root => {
+                    // Process children
+                    if let BlockContent::Children(children) = &block.content {
+                        for child in children {
+                            render_block(child, source, lines);
+                        }
+                    }
+                }
+                BlockKind::Heading { level } => {
                     let prefix = "#".repeat(*level as usize);
-                    lines.push(format!("{} {}", prefix, block.content));
-                    lines.push(String::new()); // Empty line after heading
+                    lines.push(format!("{} {}", prefix, content));
+                    lines.push(String::new());
                 }
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::Paragraph => {
-                    lines.push(block.content.clone());
-                    lines.push(String::new()); // Empty line after paragraph
+                BlockKind::Paragraph => {
+                    lines.push(content);
+                    lines.push(String::new());
                 }
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::ListItem {
-                    marker, ..
-                } => {
-                    let marker_str = match marker {
-                        markdown_neuraxis_engine::editing::document::Marker::Dash => "•",
-                        markdown_neuraxis_engine::editing::document::Marker::Asterisk => "*",
-                        markdown_neuraxis_engine::editing::document::Marker::Plus => "+",
-                        markdown_neuraxis_engine::editing::document::Marker::Numbered(_) => "1.",
+                BlockKind::List => {
+                    // Process list items
+                    if let BlockContent::Children(children) = &block.content {
+                        for child in children {
+                            render_block(child, source, lines);
+                        }
+                    }
+                }
+                BlockKind::ListItem { marker } => {
+                    // Use bullet for display
+                    let marker_display = if marker.trim().starts_with('-')
+                        || marker.trim().starts_with('*')
+                        || marker.trim().starts_with('+')
+                    {
+                        "•"
+                    } else {
+                        marker.trim()
                     };
-                    lines.push(format!("{} {}", marker_str, block.content));
+                    lines.push(format!("{} {}", marker_display, content));
+                    // Process nested content
+                    if let BlockContent::Children(children) = &block.content {
+                        for child in children {
+                            render_block(child, source, lines);
+                        }
+                    }
                 }
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::CodeFence { lang } => {
-                    lines.push(format!("```{}", lang.as_deref().unwrap_or("")));
-                    lines.extend(block.content.lines().map(|s| s.to_string()));
+                BlockKind::FencedCode { language } => {
+                    lines.push(format!("```{}", language.as_deref().unwrap_or("")));
+                    for line in content.lines() {
+                        lines.push(line.to_string());
+                    }
                     lines.push("```".to_string());
                     lines.push(String::new());
                 }
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::BlockQuote => {
-                    for line in block.content.lines() {
+                BlockKind::BlockQuote => {
+                    for line in content.lines() {
                         lines.push(format!("> {}", line));
                     }
                     lines.push(String::new());
                 }
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::ThematicBreak => {
+                BlockKind::ThematicBreak => {
                     lines.push("---".to_string());
                     lines.push(String::new());
                 }
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::HtmlBlock => {
-                    lines.push(block.content.clone());
-                    lines.push(String::new());
-                }
-                markdown_neuraxis_engine::editing::snapshot::BlockKind::UnhandledMarkdown => {
-                    lines.push(format!("[Unhandled] {}", block.content));
-                    lines.push(String::new());
-                }
             }
+        }
+
+        for block in &snapshot.blocks {
+            render_block(block, &source, &mut lines);
         }
 
         lines

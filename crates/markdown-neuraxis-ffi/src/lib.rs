@@ -5,7 +5,10 @@
 //!
 //! See ADR-0011 for the implementation plan.
 
-use markdown_neuraxis_engine::{BlockKind, Document, Marker, RenderBlock, Snapshot, TextSegment};
+use markdown_neuraxis_engine::Document;
+use markdown_neuraxis_engine::editing::snapshot::{
+    Block, BlockContent, BlockKind, InlineElement, InlineKind, Snapshot,
+};
 use std::sync::Mutex;
 
 uniffi::setup_scaffolding!();
@@ -58,8 +61,9 @@ impl DocumentHandle {
     pub fn get_snapshot(&self) -> SnapshotDto {
         // Recover from poisoned mutex (another thread panicked while holding lock)
         let doc = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let source = doc.text();
         let snapshot = doc.snapshot();
-        SnapshotDto::from_engine(snapshot)
+        SnapshotDto::from_engine(snapshot, &source)
     }
 }
 
@@ -68,21 +72,77 @@ impl DocumentHandle {
 /// UI-ready snapshot of a document.
 #[derive(uniffi::Record)]
 pub struct SnapshotDto {
-    /// Document version for change detection
+    /// Document version for change detection (placeholder - always 0 for now)
     pub version: u64,
     /// Flat list of blocks for rendering
     pub blocks: Vec<RenderBlockDto>,
 }
 
 impl SnapshotDto {
-    fn from_engine(snapshot: Snapshot) -> Self {
+    fn from_engine(snapshot: Snapshot, source: &str) -> Self {
+        let mut blocks = Vec::new();
+        flatten_blocks(&snapshot.blocks, source, &mut blocks, 0);
         Self {
-            version: snapshot.version,
-            blocks: snapshot
-                .blocks
-                .into_iter()
-                .map(RenderBlockDto::from_engine)
-                .collect(),
+            version: 0, // TODO: Add version to Snapshot when needed
+            blocks,
+        }
+    }
+}
+
+/// Flatten the hierarchical block tree into a list for mobile rendering
+fn flatten_blocks(blocks: &[Block], source: &str, out: &mut Vec<RenderBlockDto>, depth: u32) {
+    for block in blocks {
+        // Extract content from line ranges
+        let content: String = block
+            .lines
+            .iter()
+            .map(|line| &source[line.content.clone()])
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let (kind, heading_level, list_marker) = match &block.kind {
+            BlockKind::Root => {
+                // Don't emit root, just process children
+                if let BlockContent::Children(children) = &block.content {
+                    flatten_blocks(children, source, out, depth);
+                }
+                continue;
+            }
+            BlockKind::List => {
+                // Don't emit list container, just process children
+                if let BlockContent::Children(children) = &block.content {
+                    flatten_blocks(children, source, out, depth);
+                }
+                continue;
+            }
+            BlockKind::Paragraph => ("paragraph".to_string(), 0, None),
+            BlockKind::Heading { level } => ("heading".to_string(), *level, None),
+            BlockKind::ListItem { marker } => ("list_item".to_string(), 0, Some(marker.clone())),
+            BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None),
+            BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None),
+            BlockKind::BlockQuote => ("block_quote".to_string(), 0, None),
+        };
+
+        // Convert inline elements to segments
+        let segments: Vec<TextSegmentDto> = block
+            .inlines
+            .iter()
+            .filter_map(|inline| TextSegmentDto::from_inline(inline, source))
+            .collect();
+
+        out.push(RenderBlockDto {
+            id: block.id.0.to_string(),
+            kind,
+            heading_level,
+            list_marker,
+            depth,
+            content,
+            segments,
+        });
+
+        // Process children (e.g., list item content)
+        if let BlockContent::Children(children) = &block.content {
+            flatten_blocks(children, source, out, depth + 1);
         }
     }
 }
@@ -106,70 +166,43 @@ pub struct RenderBlockDto {
     pub segments: Vec<TextSegmentDto>,
 }
 
-impl RenderBlockDto {
-    fn from_engine(block: RenderBlock) -> Self {
-        let (kind, heading_level, list_marker) = match block.kind {
-            BlockKind::Paragraph => ("paragraph".to_string(), 0, None),
-            BlockKind::Heading { level } => ("heading".to_string(), level, None),
-            BlockKind::ListItem { marker, .. } => {
-                let marker_str = match marker {
-                    Marker::Dash => "-".to_string(),
-                    Marker::Asterisk => "*".to_string(),
-                    Marker::Plus => "+".to_string(),
-                    Marker::Numbered(s) => s, // "1.", "2.", etc.
-                };
-                ("list_item".to_string(), 0, Some(marker_str))
-            }
-            BlockKind::CodeFence { .. } => ("code_fence".to_string(), 0, None),
-            BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None),
-            BlockKind::BlockQuote => ("block_quote".to_string(), 0, None),
-            BlockKind::HtmlBlock => ("html_block".to_string(), 0, None),
-            BlockKind::UnhandledMarkdown => ("unhandled".to_string(), 0, None),
-        };
-
-        let segments = block
-            .segments
-            .unwrap_or_default()
-            .into_iter()
-            .map(TextSegmentDto::from_engine)
-            .collect();
-
-        Self {
-            id: block.id.0.to_string(),
-            kind,
-            heading_level,
-            list_marker,
-            depth: block.depth as u32,
-            content: block.content,
-            segments,
-        }
-    }
-}
-
 /// A segment of inline content within a block.
 #[derive(uniffi::Record)]
 pub struct TextSegmentDto {
-    /// Segment type: "text", "wiki_link", or "url"
+    /// Segment type: "text", "wiki_link", "url", "emphasis", "strong", "code", "link", "image"
     pub kind: String,
     /// The text content or link target
     pub content: String,
 }
 
 impl TextSegmentDto {
-    fn from_engine(segment: TextSegment) -> Self {
-        match segment {
-            TextSegment::Text(text) => Self {
-                kind: "text".to_string(),
-                content: text,
-            },
-            TextSegment::WikiLink { target } => Self {
+    fn from_inline(inline: &InlineElement, source: &str) -> Option<Self> {
+        match &inline.kind {
+            InlineKind::WikiLink { target, .. } => Some(Self {
                 kind: "wiki_link".to_string(),
-                content: target,
-            },
-            TextSegment::Url { href } => Self {
+                content: source[target.clone()].to_string(),
+            }),
+            InlineKind::Link { url, .. } => Some(Self {
                 kind: "url".to_string(),
-                content: href,
-            },
+                content: source[url.clone()].to_string(),
+            }),
+            InlineKind::Emphasis { content } => Some(Self {
+                kind: "emphasis".to_string(),
+                content: source[content.clone()].to_string(),
+            }),
+            InlineKind::Strong { content } => Some(Self {
+                kind: "strong".to_string(),
+                content: source[content.clone()].to_string(),
+            }),
+            InlineKind::Code { content } => Some(Self {
+                kind: "code".to_string(),
+                content: source[content.clone()].to_string(),
+            }),
+            InlineKind::Image { alt, url } => Some(Self {
+                kind: "image".to_string(),
+                content: format!("{}|{}", &source[alt.clone()], &source[url.clone()]),
+            }),
+            InlineKind::HardBreak | InlineKind::Strikethrough { .. } => None,
         }
     }
 }

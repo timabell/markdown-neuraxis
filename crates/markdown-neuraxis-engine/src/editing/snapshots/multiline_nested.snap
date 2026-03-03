@@ -1,5 +1,5 @@
 ---
-source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 List [0..94]
@@ -9,11 +9,6 @@ List [0..94]
       lines:
         full:0..13 prefix:0..2"- " content:2..12"First item"
       children:
-        Paragraph [2..30]
-          root_range: 0..94
-          lines:
-            full:2..13 prefix:2..2"" content:2..12"First item"
-            full:13..30 prefix:13..15"  " content:15..29"continued here"
         BlockQuote [32..46]
           root_range: 0..94
           lines:
@@ -35,8 +30,3 @@ List [0..94]
       root_range: 0..94
       lines:
         full:80..94 prefix:80..82"- " content:82..93"Second item"
-      children:
-        Paragraph [82..94]
-          root_range: 0..94
-          lines:
-            full:82..94 prefix:82..82"" content:82..93"Second item"
