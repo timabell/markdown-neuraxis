@@ -337,4 +337,18 @@ mod tests {
         let result = resolve_wikilink("Missing".to_string(), paths);
         assert_eq!(result, None);
     }
+
+    #[test]
+    fn test_emphasis_at_eof_no_newline() {
+        // Minimal repro: emphasis at end of file without trailing newline
+        // Bug: content range computed as (range.start + 1)..(range.end - 1)
+        // but range.end points past EOF, so we get start > end
+        let content = "*emphasis*";
+        assert!(!content.ends_with('\n'));
+
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        assert!(!snapshot.blocks.is_empty());
+    }
 }

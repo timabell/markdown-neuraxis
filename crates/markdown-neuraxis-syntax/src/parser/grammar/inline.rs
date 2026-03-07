@@ -482,6 +482,15 @@ mod tests {
     }
 
     #[test]
+    fn parse_emphasis_at_eof_no_newline() {
+        // Bug repro: emphasis at EOF without trailing newline
+        // Previously this was parsed as a list (STAR treated as list marker)
+        let tree = parse("*emphasis*");
+        let em = find_node(&tree, SyntaxKind::EMPHASIS).unwrap();
+        assert_eq!(em.text().to_string(), "*emphasis*");
+    }
+
+    #[test]
     fn parse_strong() {
         let tree = parse("This is **strong** text.\n");
         let strong = find_node(&tree, SyntaxKind::STRONG).unwrap();

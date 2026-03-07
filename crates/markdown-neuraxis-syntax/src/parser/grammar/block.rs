@@ -56,13 +56,16 @@ pub fn block(p: &mut Parser<'_, '_>) {
         SyntaxKind::HASH => heading(p),
         SyntaxKind::GT => blockquote(p),
         SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-            // Could be frontmatter (--- at doc start with closing ---), thematic break, or list item
+            // Could be frontmatter (--- at doc start with closing ---), thematic break, list item, or paragraph
             if p.at_document_start() && is_frontmatter_start(p) {
                 frontmatter(p);
             } else if is_thematic_break(p) {
                 thematic_break(p);
-            } else {
+            } else if is_bullet_list_start(p) {
                 list(p);
+            } else {
+                // Not a list (e.g., *emphasis* at start of line)
+                paragraph(p);
             }
         }
         SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
@@ -282,6 +285,14 @@ fn is_setext_underline(p: &Parser<'_, '_>) -> bool {
     }
 
     count >= 3
+}
+
+/// Check if current position starts a bullet list item (marker + whitespace)
+fn is_bullet_list_start(p: &Parser<'_, '_>) -> bool {
+    matches!(
+        p.current(),
+        SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS
+    ) && p.nth(1) == SyntaxKind::WHITESPACE
 }
 
 /// Check if current position is a thematic break (---, ***, etc.)
