@@ -188,6 +188,10 @@ fn code_span(p: &mut Parser<'_, '_>) {
         open_count += 1;
     }
 
+    // Track whether we find content and closing backticks
+    let mut has_content = false;
+    let mut found_close = false;
+
     // Parse content until matching backticks
     while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
         if p.at(SyntaxKind::BACKTICK) {
@@ -203,17 +207,26 @@ fn code_span(p: &mut Parser<'_, '_>) {
                 for _ in 0..close_count {
                     p.bump();
                 }
+                found_close = true;
                 break;
             } else {
                 // Not matching - consume one backtick and continue
                 p.bump();
+                has_content = true;
             }
         } else {
             p.bump();
+            has_content = true;
         }
     }
 
-    m.complete(p, SyntaxKind::CODE_SPAN);
+    // Only produce CODE_SPAN if properly closed with content
+    if found_close && has_content {
+        m.complete(p, SyntaxKind::CODE_SPAN);
+    } else {
+        // Unclosed or empty - abandon marker, tokens become plain text
+        m.abandon(p);
+    }
 }
 
 /// Parse emphasis *text* or strong **text** (or underscore variants).
@@ -232,6 +245,10 @@ fn emphasis_or_strong(p: &mut Parser<'_, '_>, delimiter: SyntaxKind) {
         return;
     }
 
+    // Track whether we find content and closing delimiters
+    let mut has_content = false;
+    let mut found_close = false;
+
     // Parse content until matching delimiters
     while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
         if p.at(delimiter) {
@@ -246,23 +263,32 @@ fn emphasis_or_strong(p: &mut Parser<'_, '_>, delimiter: SyntaxKind) {
                 for _ in 0..open_count {
                     p.bump();
                 }
+                found_close = true;
                 break;
             } else {
                 // Not enough delimiters - consume and continue
                 p.bump();
+                has_content = true;
             }
         } else {
             p.bump();
+            has_content = true;
         }
     }
 
-    let kind = if open_count >= 2 {
-        SyntaxKind::STRONG
+    // Only produce EMPHASIS/STRONG if properly closed with content
+    // Otherwise the downstream content range calculation would be invalid
+    if found_close && has_content {
+        let kind = if open_count >= 2 {
+            SyntaxKind::STRONG
+        } else {
+            SyntaxKind::EMPHASIS
+        };
+        m.complete(p, kind);
     } else {
-        SyntaxKind::EMPHASIS
-    };
-
-    m.complete(p, kind);
+        // Unclosed or empty - abandon marker, tokens become plain text
+        m.abandon(p);
+    }
 }
 
 /// Parse image ![alt](url).
@@ -396,10 +422,14 @@ fn strikethrough(p: &mut Parser<'_, '_>) {
     }
 
     if open_count < 2 {
-        // Not enough tildes for strikethrough - just plain text
-        m.complete(p, SyntaxKind::INLINE);
+        // Not enough tildes for strikethrough - abandon marker
+        m.abandon(p);
         return;
     }
+
+    // Track whether we find content and closing tildes
+    let mut has_content = false;
+    let mut found_close = false;
 
     // Parse content until matching ~~
     while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
@@ -407,12 +437,20 @@ fn strikethrough(p: &mut Parser<'_, '_>) {
             // Found closing ~~
             p.bump(); // ~
             p.bump(); // ~
+            found_close = true;
             break;
         }
         p.bump();
+        has_content = true;
     }
 
-    m.complete(p, SyntaxKind::STRIKETHROUGH);
+    // Only produce STRIKETHROUGH if properly closed with content
+    if found_close && has_content {
+        m.complete(p, SyntaxKind::STRIKETHROUGH);
+    } else {
+        // Unclosed or empty - abandon marker, tokens become plain text
+        m.abandon(p);
+    }
 }
 
 #[cfg(test)]
@@ -671,5 +709,71 @@ mod tests {
         let input = "- task with status:: DONE inline\n";
         let tree = parse(input);
         assert_eq!(tree.text().to_string(), input);
+    }
+
+    // === TDD: Unclosed inline constructs should not produce specialized nodes ===
+    // These tests document the expected behavior: unclosed delimiters should NOT
+    // produce EMPHASIS/STRONG/CODE_SPAN/STRIKETHROUGH nodes because downstream
+    // processing (snapshot) computes inner content ranges by subtracting delimiter
+    // lengths, which produces invalid ranges for unclosed constructs.
+
+    #[test]
+    fn unclosed_emphasis_not_emphasis_node() {
+        // *word without closing * should NOT produce EMPHASIS
+        // because snapshot computes content as (start+1)..(end-1) which assumes closing delimiter
+        let tree = parse("*unclosed\n");
+        let em = find_node(&tree, SyntaxKind::EMPHASIS);
+        assert!(
+            em.is_none(),
+            "Unclosed *word should NOT produce EMPHASIS node"
+        );
+        // But text should be preserved
+        assert_eq!(tree.text().to_string(), "*unclosed\n");
+    }
+
+    #[test]
+    fn unclosed_strong_not_strong_node() {
+        // **word without closing ** should NOT produce STRONG
+        let tree = parse("**unclosed\n");
+        let strong = find_node(&tree, SyntaxKind::STRONG);
+        assert!(
+            strong.is_none(),
+            "Unclosed **word should NOT produce STRONG node"
+        );
+        assert_eq!(tree.text().to_string(), "**unclosed\n");
+    }
+
+    #[test]
+    fn empty_emphasis_not_emphasis_node() {
+        // ** alone (no content between delimiters) should NOT produce STRONG
+        // Test truly empty: just ** at EOF
+        let tree = parse("**\n");
+        let strong = find_node(&tree, SyntaxKind::STRONG);
+        assert!(strong.is_none(), "Empty ** should NOT produce STRONG node");
+        assert_eq!(tree.text().to_string(), "**\n");
+    }
+
+    #[test]
+    fn unclosed_code_span_not_code_node() {
+        // `code without closing backtick should NOT produce CODE_SPAN
+        let tree = parse("`unclosed\n");
+        let code = find_node(&tree, SyntaxKind::CODE_SPAN);
+        assert!(
+            code.is_none(),
+            "Unclosed `code should NOT produce CODE_SPAN node"
+        );
+        assert_eq!(tree.text().to_string(), "`unclosed\n");
+    }
+
+    #[test]
+    fn unclosed_strikethrough_not_strike_node() {
+        // ~~text without closing ~~ should NOT produce STRIKETHROUGH
+        let tree = parse("~~unclosed\n");
+        let strike = find_node(&tree, SyntaxKind::STRIKETHROUGH);
+        assert!(
+            strike.is_none(),
+            "Unclosed ~~text should NOT produce STRIKETHROUGH node"
+        );
+        assert_eq!(tree.text().to_string(), "~~unclosed\n");
     }
 }
