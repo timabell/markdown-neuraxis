@@ -327,14 +327,14 @@ pub fn create_snapshot(doc: &crate::editing::Document) -> Snapshot {
 
 /// Find the best matching anchor for a given byte range.
 ///
-/// This mirrors the logic from the tree-sitter version:
+/// Matching strategy:
 /// 1. Exact range match
 /// 2. Start position match
 /// 3. Fallback: generate deterministic ID from range
 ///
-/// The start position match is crucial because tree-sitter anchors may have
-/// truncated ranges (e.g., list items stop before nested children) while
-/// Rowan produces full ranges. Both should start at the same position.
+/// The start position match handles cases where anchor ranges may differ
+/// (e.g., list item anchors stop before nested children) while Rowan
+/// produces full ranges. Both should start at the same position.
 fn find_anchor_for_range(anchors: &[Anchor], range: &Range<usize>) -> AnchorId {
     // First try: exact range match
     for anchor in anchors {
@@ -409,8 +409,8 @@ fn process_list(
         }
     }
 
-    // LIST containers don't have anchors in the tree-sitter model
-    // (only list_item, atx_heading, fenced_code_block, etc. get anchors).
+    // LIST containers don't have their own anchors - only leaf/editable
+    // blocks (list_item, heading, fenced_code, etc.) get anchors.
     // Generate a fallback ID directly without trying to match anchors,
     // to avoid accidentally stealing an anchor from a child LIST_ITEM.
     let id = generate_fallback_anchor_id(&node_range);
@@ -540,7 +540,7 @@ fn process_paragraph(
     // Extract inline elements
     let inlines = extract_inlines(&node, source);
 
-    // Paragraphs don't have anchors in the tree-sitter model,
+    // Paragraphs don't have their own anchors in the current model,
     // so we generate a fallback ID from the range
     let id = find_anchor_for_range(anchors, &node_range);
 
@@ -619,7 +619,7 @@ fn process_block_quote(
         BlockContent::Children(children)
     };
 
-    // Blockquotes don't have anchors in the tree-sitter model,
+    // Blockquotes don't have their own anchors in the current model,
     // so we generate a fallback ID from the range
     let id = find_anchor_for_range(anchors, &node_range);
 
@@ -743,7 +743,7 @@ fn process_thematic_break(
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
 
-    // Thematic breaks don't have anchors in the tree-sitter model,
+    // Thematic breaks don't have their own anchors in the current model,
     // so we generate a fallback ID from the range
     let id = find_anchor_for_range(anchors, &node_range);
 
