@@ -74,14 +74,13 @@ impl DocumentHandle {
 pub struct SnapshotDto {
     /// Document version for change detection (placeholder - always 0 for now)
     pub version: u64,
-    /// Flat list of blocks for rendering
-    pub blocks: Vec<RenderBlockDto>,
+    /// Hierarchical tree of blocks for rendering
+    pub blocks: Vec<BlockDto>,
 }
 
 impl SnapshotDto {
     fn from_engine(snapshot: Snapshot, source: &str) -> Self {
-        let mut blocks = Vec::new();
-        flatten_blocks(&snapshot.blocks, source, &mut blocks, 0);
+        let blocks = convert_blocks(&snapshot.blocks, source);
         Self {
             version: 0, // TODO: Add version to Snapshot when needed
             blocks,
@@ -89,67 +88,78 @@ impl SnapshotDto {
     }
 }
 
-/// Flatten the hierarchical block tree into a list for mobile rendering
-fn flatten_blocks(blocks: &[Block], source: &str, out: &mut Vec<RenderBlockDto>, depth: u32) {
+/// Convert engine blocks to DTOs recursively, preserving tree structure.
+/// List containers are "unwrapped" - their children are promoted to the parent level.
+fn convert_blocks(blocks: &[Block], source: &str) -> Vec<BlockDto> {
+    let mut result = Vec::new();
     for block in blocks {
-        // Extract content from line ranges
-        let content: String = block
-            .lines
-            .iter()
-            .map(|line| &source[line.content.clone()])
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let (kind, heading_level, list_marker) = match &block.kind {
-            BlockKind::Root => {
-                // Don't emit root, just process children
-                if let BlockContent::Children(children) = &block.content {
-                    flatten_blocks(children, source, out, depth);
-                }
-                continue;
-            }
-            BlockKind::List => {
-                // Don't emit list container, just process children
-                if let BlockContent::Children(children) = &block.content {
-                    flatten_blocks(children, source, out, depth);
-                }
-                continue;
-            }
-            BlockKind::Paragraph => ("paragraph".to_string(), 0, None),
-            BlockKind::Heading { level } => ("heading".to_string(), *level, None),
-            BlockKind::ListItem { marker } => ("list_item".to_string(), 0, Some(marker.clone())),
-            BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None),
-            BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None),
-            BlockKind::BlockQuote => ("block_quote".to_string(), 0, None),
-        };
-
-        // Convert inline elements to segments
-        let segments: Vec<TextSegmentDto> = block
-            .inlines
-            .iter()
-            .filter_map(|inline| TextSegmentDto::from_inline(inline, source))
-            .collect();
-
-        out.push(RenderBlockDto {
-            id: block.id.0.to_string(),
-            kind,
-            heading_level,
-            list_marker,
-            depth,
-            content,
-            segments,
-        });
-
-        // Process children (e.g., list item content)
-        if let BlockContent::Children(children) = &block.content {
-            flatten_blocks(children, source, out, depth + 1);
-        }
+        convert_block_into(block, source, &mut result);
     }
+    result
 }
 
-/// A single renderable block in the document.
+/// Convert a single engine block to DTOs, appending to the result vector.
+/// Some blocks (List, Root) are "unwrapped" and their children are added directly.
+fn convert_block_into(block: &Block, source: &str, result: &mut Vec<BlockDto>) {
+    match &block.kind {
+        BlockKind::Root | BlockKind::List => {
+            // Unwrap containers: add children directly to result
+            if let BlockContent::Children(children) = &block.content {
+                for child in children {
+                    convert_block_into(child, source, result);
+                }
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    // Extract content from line ranges
+    let content: String = block
+        .lines
+        .iter()
+        .map(|line| &source[line.content.clone()])
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let (kind, heading_level, list_marker) = match &block.kind {
+        BlockKind::Root | BlockKind::List => unreachable!(), // Handled above
+        BlockKind::Paragraph => ("paragraph".to_string(), 0, None),
+        BlockKind::Heading { level } => ("heading".to_string(), *level, None),
+        BlockKind::ListItem { marker } => ("list_item".to_string(), 0, Some(marker.clone())),
+        BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None),
+        BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None),
+        BlockKind::BlockQuote => ("block_quote".to_string(), 0, None),
+    };
+
+    // Convert inline elements to segments
+    let segments: Vec<TextSegmentDto> = block
+        .inlines
+        .iter()
+        .filter_map(|inline| TextSegmentDto::from_inline(inline, source))
+        .collect();
+
+    // Process children recursively
+    let children = if let BlockContent::Children(child_blocks) = &block.content {
+        convert_blocks(child_blocks, source)
+    } else {
+        Vec::new()
+    };
+
+    result.push(BlockDto {
+        id: block.id.0.to_string(),
+        kind,
+        heading_level,
+        list_marker,
+        content,
+        segments,
+        children,
+    });
+}
+
+/// A single block in the document tree.
 #[derive(uniffi::Record)]
-pub struct RenderBlockDto {
+pub struct BlockDto {
     /// Stable identifier for this block (persists across edits)
     pub id: String,
     /// Block type (e.g., "heading", "list_item", "paragraph")
@@ -158,12 +168,12 @@ pub struct RenderBlockDto {
     pub heading_level: u8,
     /// List marker if this is a list item
     pub list_marker: Option<String>,
-    /// Nesting depth for indentation
-    pub depth: u32,
     /// The text content of this block
     pub content: String,
     /// Parsed inline segments (wiki-links, URLs, plain text)
     pub segments: Vec<TextSegmentDto>,
+    /// Child blocks (e.g., nested list items)
+    pub children: Vec<BlockDto>,
 }
 
 /// A segment of inline content within a block.
@@ -235,6 +245,29 @@ pub fn resolve_wikilink(target: String, file_paths: Vec<String>) -> Option<Strin
 mod tests {
     use super::*;
 
+    /// Recursively collect all blocks from the tree into a flat list
+    fn collect_all_blocks(blocks: &[BlockDto]) -> Vec<&BlockDto> {
+        let mut result = Vec::new();
+        for block in blocks {
+            result.push(block);
+            result.extend(collect_all_blocks(&block.children));
+        }
+        result
+    }
+
+    /// Find a block by kind in the tree (depth-first)
+    fn find_block_by_kind<'a>(blocks: &'a [BlockDto], kind: &str) -> Option<&'a BlockDto> {
+        for block in blocks {
+            if block.kind == kind {
+                return Some(block);
+            }
+            if let Some(found) = find_block_by_kind(&block.children, kind) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
     #[test]
     fn test_document_from_string() {
         let content = "# Hello World\n\n- Item 1\n- Item 2";
@@ -261,24 +294,22 @@ mod tests {
     }
 
     #[test]
-    fn test_render_block_dto_kinds() {
+    fn test_block_dto_kinds() {
         let content = "# H1\n## H2\n\n- Dash\n* Star\n+ Plus\n1. Numbered\n\n---\n\n> Quote\n\n```rust\ncode\n```";
         let doc = DocumentHandle::from_string(content.to_string()).unwrap();
         let snapshot = doc.get_snapshot();
 
+        // Collect all blocks from tree
+        let all_blocks = collect_all_blocks(&snapshot.blocks);
+
         // Find heading blocks
-        let headings: Vec<_> = snapshot
-            .blocks
-            .iter()
-            .filter(|b| b.kind == "heading")
-            .collect();
+        let headings: Vec<_> = all_blocks.iter().filter(|b| b.kind == "heading").collect();
         assert_eq!(headings.len(), 2);
         assert_eq!(headings[0].heading_level, 1);
         assert_eq!(headings[1].heading_level, 2);
 
         // Find list items
-        let list_items: Vec<_> = snapshot
-            .blocks
+        let list_items: Vec<_> = all_blocks
             .iter()
             .filter(|b| b.kind == "list_item")
             .collect();
@@ -297,8 +328,8 @@ mod tests {
         let doc = DocumentHandle::from_string(content.to_string()).unwrap();
         let snapshot = doc.get_snapshot();
 
-        // Find the list item
-        let list_item = snapshot.blocks.iter().find(|b| b.kind == "list_item");
+        // Find the list item in the tree
+        let list_item = find_block_by_kind(&snapshot.blocks, "list_item");
         assert!(list_item.is_some());
 
         let segments = &list_item.unwrap().segments;
@@ -350,5 +381,57 @@ mod tests {
         let snapshot = doc.get_snapshot();
 
         assert!(!snapshot.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_nested_list_tree_structure() {
+        // Verify nested lists produce a proper tree, not a flat list
+        let content = "- parent\n  - child 1\n  - child 2\n    - grandchild";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        // Top level should have the parent list item
+        assert_eq!(snapshot.blocks.len(), 1);
+        let parent = &snapshot.blocks[0];
+        assert_eq!(parent.kind, "list_item");
+        assert!(parent.content.contains("parent"));
+
+        // Parent should have nested items
+        assert!(
+            !parent.children.is_empty(),
+            "Parent should have nested items"
+        );
+
+        // Count total nested list items (child 1, child 2, grandchild)
+        let all_nested = collect_all_blocks(&parent.children);
+        let nested_list_items: Vec<_> = all_nested
+            .iter()
+            .filter(|b| b.kind == "list_item")
+            .collect();
+        assert_eq!(
+            nested_list_items.len(),
+            3,
+            "Should have 3 nested items total (child 1, child 2, grandchild)"
+        );
+
+        // Verify we can traverse to find specific items
+        let grandchild = find_block_by_kind(&parent.children, "list_item")
+            .and_then(|c1| find_block_by_kind(&c1.children, "list_item"))
+            .and_then(|c2| find_block_by_kind(&c2.children, "list_item"));
+        assert!(grandchild.is_some(), "Should find grandchild through tree");
+        assert!(grandchild.unwrap().content.contains("grandchild"));
+    }
+
+    #[test]
+    fn test_blockquote_tree_structure() {
+        // Verify blockquotes with content produce correct structure
+        let content = "> This is a quote";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let quote = &snapshot.blocks[0];
+        assert_eq!(quote.kind, "block_quote");
+        assert_eq!(quote.content, "This is a quote");
     }
 }

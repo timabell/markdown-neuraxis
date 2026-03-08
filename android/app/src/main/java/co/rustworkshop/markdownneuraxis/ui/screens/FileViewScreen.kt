@@ -4,9 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -25,8 +25,8 @@ import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
 import co.rustworkshop.markdownneuraxis.model.FileTree
+import uniffi.markdown_neuraxis_ffi.BlockDto
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
-import uniffi.markdown_neuraxis_ffi.RenderBlockDto
 import uniffi.markdown_neuraxis_ffi.TextSegmentDto
 import uniffi.markdown_neuraxis_ffi.resolveWikilink
 
@@ -45,7 +45,7 @@ fun FileViewScreen(
     val content = remember(file) {
         readFileContent(context, file)
     }
-    val snapshot = remember(content) {
+    val blocks = remember(content) {
         content?.let { parseDocument(it) }
     }
 
@@ -72,7 +72,7 @@ fun FileViewScreen(
                 Text("Error reading file")
             }
         }
-        snapshot == null -> {
+        blocks == null -> {
             Box(
                 modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -81,15 +81,31 @@ fun FileViewScreen(
             }
         }
         else -> {
-            LazyColumn(
+            Column(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                items(snapshot) { block ->
-                    RenderBlock(block, onWikiLinkClick)
-                }
+                RenderBlockTree(blocks, depth = 0, onWikiLinkClick = onWikiLinkClick)
             }
+        }
+    }
+}
+
+/**
+ * Recursively render a list of blocks and their children.
+ */
+@Composable
+private fun RenderBlockTree(
+    blocks: List<BlockDto>,
+    depth: Int,
+    onWikiLinkClick: (String) -> Unit
+) {
+    for (block in blocks) {
+        RenderBlock(block, depth, onWikiLinkClick)
+        if (block.children.isNotEmpty()) {
+            RenderBlockTree(block.children, depth + 1, onWikiLinkClick)
         }
     }
 }
@@ -157,8 +173,8 @@ private fun RenderSegments(
 }
 
 @Composable
-private fun RenderBlock(block: RenderBlockDto, onWikiLinkClick: (String) -> Unit) {
-    val indent = (block.depth.toInt() * 16).dp
+private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -> Unit) {
+    val indent = (depth * 16).dp
 
     when (block.kind) {
         "heading" -> {
@@ -243,7 +259,7 @@ private fun RenderBlock(block: RenderBlockDto, onWikiLinkClick: (String) -> Unit
     }
 }
 
-private fun parseDocument(content: String): List<RenderBlockDto>? {
+private fun parseDocument(content: String): List<BlockDto>? {
     return try {
         val doc = DocumentHandle.fromString(content)
         doc.getSnapshot().blocks
