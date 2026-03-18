@@ -75,7 +75,7 @@ pub fn BlockRenderer(
                 rsx! {}
             }
         }
-        BlockKind::ListItem { marker } => {
+        BlockKind::ListItem { .. } => {
             if is_focused {
                 // Use source directly via node_range
                 let content_text = source
@@ -107,16 +107,9 @@ pub fn BlockRenderer(
                             let mut focused_anchor_id = focused_anchor_id;
                             move |_| focused_anchor_id.set(Some(block_id))
                         },
-                        span {
-                            class: "list-marker",
-                            "{marker}"
-                        }
-                        span {
-                            class: "list-content",
-                            InlineSegments {
-                                segments,
-                                on_wikilink_click
-                            }
+                        InlineSegments {
+                            segments,
+                            on_wikilink_click
                         }
                         // Render nested children (nested lists)
                         if let BlockContent::Children(children) = &block.content {
