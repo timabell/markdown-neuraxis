@@ -71,7 +71,8 @@ notes/               # Markdown files can be anywhere in root
 ### Technology Stack
 
 **Shared Core (Rust)**:
-- **Markdown Parsing**: `tree-sitter-md` for incremental parsing (ADR-0004 editing architecture)
+- **Markdown Parsing**: Custom Rowan-based parser (`markdown-neuraxis-syntax` crate) with lossless CST
+- **Syntax Tree**: Rowan library (from rust-analyzer) for red-green tree representation
 - **FFI**: UniFFI for generating cross-platform bindings (Kotlin, Swift)
 - **Testing**: `rstest` for parameterized tests, `insta` for snapshot testing, `pretty_assertions`
 
@@ -87,35 +88,36 @@ notes/               # Markdown files can be anywhere in root
 - **File System**: Storage Access Framework (DocumentFile API)
 - **Min SDK**: 29 (Android 10), Target SDK: 35 (Android 15)
 
-### Desktop Code Organization
+### Rust Workspace Structure
 ```
-src/
-├── main.rs              # Entry point, CLI argument handling, window config
-├── lib.rs               # Module exports and core unit tests
-├── models/              # Core data structures
-│   ├── document.rs      # Document with ContentBlock enum (headings, lists, etc.)
-│   └── mod.rs
-├── editing/             # Core editing model (ADR-0004)
-│   ├── document.rs      # xi-rope buffer + tree-sitter parsing
-│   ├── commands.rs      # Edit command compilation
-│   ├── anchors.rs       # Stable block identity system
-│   └── snapshot.rs      # UI-ready document view
-├── io/                  # File system operations
-│   └── mod.rs           # File scanning, validation, reading
-├── ui/                  # Dioxus components
-│   ├── app.rs           # Main App component with sidebar/content layout
-│   └── components/      # Reusable UI components
-│       ├── file_item.rs # Individual file list items
-│       ├── main_panel.rs # Content display panel
-│       ├── outline.rs   # Hierarchical outline renderer
-│       └── mod.rs
-├── assets/              # Static resources
-│   └── solarized-light.css # Theme styling
-├── tests/               # Integration tests
-│   ├── integration.rs
-│   └── mod.rs
-└── snapshots/           # Insta snapshot test files
+crates/
+├── markdown-neuraxis-syntax/    # Rowan-based Markdown parser (see ADR-0012)
+│   └── src/
+│       ├── lib.rs               # Parser entry point: parse(source) -> SyntaxNode
+│       ├── lexer.rs             # Token-based lexer producing SyntaxKind tokens
+│       ├── syntax_kind.rs       # SyntaxKind enum (tokens + composite nodes)
+│       └── parser/              # Recursive descent parser
+│           └── grammar/         # Block and inline parsing rules
+│
+├── markdown-neuraxis-engine/    # Core editing model (ADR-0004)
+│   └── src/
+│       └── editing/
+│           ├── document.rs      # xi-rope buffer + Rowan parsing
+│           ├── commands.rs      # Edit command compilation (Cmd → Delta)
+│           ├── anchors.rs       # Stable block identity system
+│           └── snapshot.rs      # UI-ready Block tree projection
+│
+├── markdown-neuraxis-dioxus/    # Desktop GUI (Dioxus 0.6)
+│   └── src/
+│       ├── ui/app.rs            # Main App component
+│       └── ui/components/       # Block renderers, editor, file browser
+│
+├── markdown-neuraxis-ffi/       # UniFFI bindings for mobile
+├── markdown-neuraxis-cli/       # CLI entry point
+└── markdown-neuraxis-config/    # Configuration management
 ```
+
+**Layer Separation Rule**: ALL parsing logic belongs in `markdown-neuraxis-syntax`. The snapshot layer (`snapshot.rs`) only projects/transforms the syntax tree into UI types - it must NOT perform any parsing or syntax detection. The UI layer renders what it's given. If you find yourself detecting syntax patterns in snapshot or UI code, that logic belongs in the parser.
 
 ### Android Code Organization
 ```
@@ -166,9 +168,14 @@ android/
 ### Data Flow Architecture
 1. **Startup**: CLI validates notes directory structure via `io::validate_notes_dir()`
 2. **File Discovery**: `io::scan_markdown_files()` recursively finds `.md` files in notes root directory
-3. **File Selection**: User clicks file → `io::read_file()` → `parsing::parse_markdown()` 
-4. **Rendering**: Parsed `Document` with hierarchical `OutlineItem`s rendered via Dioxus components
-5. **State Management**: Dioxus signals track selected file and current document
+3. **File Selection**: User clicks file → `io::read_file()` → `Document::from_bytes()`
+4. **Parsing**: `markdown_neuraxis_syntax::parse()` produces lossless Rowan `SyntaxNode` tree
+5. **Snapshot**: `Document::snapshot()` projects syntax tree into UI-ready `Block` tree with:
+   - `BlockKind` (Heading, Paragraph, List, ListItem, etc.)
+   - `InlineSegment`s for formatted text (emphasis, links, wiki-links)
+   - Stable `AnchorId`s for focus tracking across edits
+6. **Rendering**: Dioxus `BlockRenderer` recursively renders `Block` tree to HTML
+7. **Editing**: Focus block → show raw source in textarea → `Cmd` → `Delta` → re-parse
 
 ### Plugin Architecture (ADR-0002)
 - **Current**: Static internal plugins via traits (compile-time)
