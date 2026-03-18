@@ -102,7 +102,7 @@ fn convert_blocks(blocks: &[Block], source: &str) -> Vec<BlockDto> {
 /// Some blocks (List, Root) are "unwrapped" and their children are added directly.
 fn convert_block_into(block: &Block, source: &str, result: &mut Vec<BlockDto>) {
     match &block.kind {
-        BlockKind::Root | BlockKind::List => {
+        BlockKind::Root | BlockKind::List { .. } => {
             // Unwrap containers: add children directly to result
             if let BlockContent::Children(children) = &block.content {
                 for child in children {
@@ -123,7 +123,7 @@ fn convert_block_into(block: &Block, source: &str, result: &mut Vec<BlockDto>) {
         .join("\n");
 
     let (kind, heading_level, list_marker) = match &block.kind {
-        BlockKind::Root | BlockKind::List => unreachable!(), // Handled above
+        BlockKind::Root | BlockKind::List { .. } => unreachable!(), // Handled above
         BlockKind::Paragraph => ("paragraph".to_string(), 0, None),
         BlockKind::Heading { level } => ("heading".to_string(), *level, None),
         BlockKind::ListItem { marker } => ("list_item".to_string(), 0, Some(marker.clone())),

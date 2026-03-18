@@ -119,8 +119,10 @@ pub enum SyntaxKind {
     ROOT,
     /// Blockquote container (`> ...`)
     BLOCK_QUOTE,
-    /// List container (ordered or unordered)
-    LIST,
+    /// Ordered list container (1. 2. 3.)
+    ORDERED_LIST,
+    /// Unordered list container (- * +)
+    UNORDERED_LIST,
     /// Individual list item
     LIST_ITEM,
     /// Paragraph block

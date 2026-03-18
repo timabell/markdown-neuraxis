@@ -47,7 +47,7 @@ ROOT@0..443
     WHITESPACE@96..97 " "
     TEXT@97..102 "Items"
     NEWLINE@102..103 "\\n"
-  LIST@103..230
+  UNORDERED_LIST@103..230
     LIST_ITEM@103..136
       DASH@103..104 "-"
       WHITESPACE@104..105 " "
@@ -104,7 +104,7 @@ ROOT@0..443
         TEXT@188..193 "style"
         NEWLINE@193..194 "\\n"
       WHITESPACE@194..196 "  "
-      LIST@196..230
+      UNORDERED_LIST@196..230
         LIST_ITEM@196..229
           DASH@196..197 "-"
           WHITESPACE@197..198 " "

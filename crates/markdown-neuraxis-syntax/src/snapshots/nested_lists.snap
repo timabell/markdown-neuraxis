@@ -3,7 +3,7 @@ source: crates/markdown-neuraxis-syntax/src/lib.rs
 expression: "format_tree(&tree, 0)"
 ---
 ROOT@0..437
-  LIST@0..95
+  UNORDERED_LIST@0..95
     LIST_ITEM@0..80
       DASH@0..1 "-"
       WHITESPACE@1..2 " "
@@ -52,7 +52,7 @@ ROOT@0..437
         TEXT@89..93 "item"
         NEWLINE@93..94 "\\n"
     NEWLINE@94..95 "\\n"
-  LIST@95..228
+  ORDERED_LIST@95..228
     LIST_ITEM@95..210
       TEXT@95..96 "1"
       DOT@96..97 "."
@@ -101,7 +101,7 @@ ROOT@0..437
         BACKTICK@186..187 "`"
         NEWLINE@187..188 "\\n"
       WHITESPACE@188..191 "   "
-      LIST@191..210
+      ORDERED_LIST@191..210
         LIST_ITEM@191..210
           TEXT@191..192 "1"
           DOT@192..193 "."
@@ -121,7 +121,7 @@ ROOT@0..437
         TEXT@218..226 "numbered"
         NEWLINE@226..227 "\\n"
     NEWLINE@227..228 "\\n"
-  LIST@228..437
+  UNORDERED_LIST@228..437
     LIST_ITEM@228..424
       DASH@228..229 "-"
       WHITESPACE@229..230 " "

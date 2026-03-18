@@ -13,7 +13,7 @@ Paragraph [34..49]
     full:34..49 prefix:34..34"" content:34..48"Image in list:"
   segments:
     Text [34..48] "Image in list:"
-List [49..78]
+List { ordered: false } [49..78]
   children:
     ListItem { marker: "- " } [49..78]
       lines:

@@ -26,7 +26,7 @@ ROOT@0..52
       RBRACKET@37..38 "]"
     NEWLINE@38..39 "\\n"
   NEWLINE@39..40 "\\n"
-  LIST@40..52
+  UNORDERED_LIST@40..52
     LIST_ITEM@40..52
       DASH@40..41 "-"
       WHITESPACE@41..42 " "

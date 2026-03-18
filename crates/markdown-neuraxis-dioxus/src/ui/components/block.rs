@@ -35,20 +35,38 @@ pub fn BlockRenderer(
                 rsx! {}
             }
         }
-        BlockKind::List => {
+        BlockKind::List { ordered } => {
             // Container: render list items
             if let BlockContent::Children(children) = &block.content {
-                rsx! {
-                    ul {
-                        class: "list",
-                        for (i, child) in children.iter().enumerate() {
-                            BlockRenderer {
-                                key: "{i}",
-                                block: child.clone(),
-                                source: source.clone(),
-                                focused_anchor_id,
-                                on_command,
-                                on_wikilink_click
+                if *ordered {
+                    rsx! {
+                        ol {
+                            class: "list",
+                            for (i, child) in children.iter().enumerate() {
+                                BlockRenderer {
+                                    key: "{i}",
+                                    block: child.clone(),
+                                    source: source.clone(),
+                                    focused_anchor_id,
+                                    on_command,
+                                    on_wikilink_click
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    rsx! {
+                        ul {
+                            class: "list",
+                            for (i, child) in children.iter().enumerate() {
+                                BlockRenderer {
+                                    key: "{i}",
+                                    block: child.clone(),
+                                    source: source.clone(),
+                                    focused_anchor_id,
+                                    on_command,
+                                    on_wikilink_click
+                                }
                             }
                         }
                     }

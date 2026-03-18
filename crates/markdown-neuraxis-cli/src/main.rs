@@ -187,7 +187,7 @@ impl App {
                     lines.push(content);
                     lines.push(String::new());
                 }
-                BlockKind::List => {
+                BlockKind::List { .. } => {
                     // Process list items
                     if let BlockContent::Children(children) = &block.content {
                         for child in children {

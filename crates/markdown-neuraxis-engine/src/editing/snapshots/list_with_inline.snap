@@ -2,7 +2,7 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-List [0..91]
+List { ordered: false } [0..91]
   children:
     ListItem { marker: "- " } [0..23]
       root_range: 0..91

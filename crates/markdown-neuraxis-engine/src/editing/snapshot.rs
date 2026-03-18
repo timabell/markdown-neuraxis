@@ -94,7 +94,7 @@ pub enum BlockKind {
     /// Root document container
     Root,
     /// List container (wraps LIST_ITEMs)
-    List,
+    List { ordered: bool },
     /// Individual list item
     ListItem { marker: String },
     /// Blockquote (can span multiple lines)
@@ -373,7 +373,8 @@ fn process_node(
     let root_range = root_range.unwrap_or_else(|| node_range.clone());
 
     match node.kind() {
-        SyntaxKind::LIST => process_list(source, node, root_range, anchors),
+        SyntaxKind::ORDERED_LIST => process_list(source, node, root_range, anchors, true),
+        SyntaxKind::UNORDERED_LIST => process_list(source, node, root_range, anchors, false),
         SyntaxKind::LIST_ITEM => process_list_item(source, node, root_range, anchors),
         SyntaxKind::PARAGRAPH => process_paragraph(source, node, root_range, anchors),
         SyntaxKind::BLOCK_QUOTE => process_block_quote(source, node, root_range, anchors),
@@ -389,6 +390,7 @@ fn process_list(
     node: SyntaxNode,
     root_range: Range<usize>,
     anchors: &[Anchor],
+    ordered: bool,
 ) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
@@ -408,7 +410,7 @@ fn process_list(
 
     Some(Block {
         id,
-        kind: BlockKind::List,
+        kind: BlockKind::List { ordered },
         node_range: node_range.clone(),
         root_range: node_range,
         lines: vec![],    // List container has no lines of its own
@@ -1149,7 +1151,7 @@ mod tests {
         // Should have a single top-level List block
         assert_eq!(snapshot.blocks.len(), 1);
         let list = &snapshot.blocks[0];
-        assert_eq!(list.kind, BlockKind::List);
+        assert_eq!(list.kind, BlockKind::List { ordered: false });
 
         // List should have children (the list items)
         if let BlockContent::Children(items) = &list.content {

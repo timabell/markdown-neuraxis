@@ -1121,7 +1121,7 @@ mod tests {
         let top_list = snapshot
             .blocks
             .iter()
-            .find(|b| matches!(b.kind, BlockKind::List))
+            .find(|b| matches!(b.kind, BlockKind::List { .. }))
             .expect("Should have a top-level list");
 
         // The list should have children (the list items)
@@ -1192,7 +1192,7 @@ mod tests {
         let tab_list = tab_snapshot
             .blocks
             .iter()
-            .find(|b| matches!(b.kind, BlockKind::List))
+            .find(|b| matches!(b.kind, BlockKind::List { .. }))
             .expect("Should have a top-level list");
 
         if let BlockContent::Children(ref items) = tab_list.content {

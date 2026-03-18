@@ -395,8 +395,9 @@ fn blockquote(p: &mut Parser<'_, '_>) {
 fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
     let m = p.start();
 
-    // Parse the first list item
-    if is_numbered_list_item(p) {
+    // Parse the first list item and track whether it's ordered
+    let is_ordered = is_numbered_list_item(p);
+    if is_ordered {
         list_item_numbered(p);
     } else {
         list_item(p);
@@ -463,7 +464,12 @@ fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
         }
     }
 
-    m.complete(p, SyntaxKind::LIST);
+    let kind = if is_ordered {
+        SyntaxKind::ORDERED_LIST
+    } else {
+        SyntaxKind::UNORDERED_LIST
+    };
+    m.complete(p, kind);
 }
 
 /// Parse a root-level list.
@@ -981,7 +987,7 @@ mod tests {
     fn parse_list_item() {
         let tree = parse("- item\n");
         let list = tree.children().next().unwrap();
-        assert_eq!(list.kind(), SyntaxKind::LIST);
+        assert_eq!(list.kind(), SyntaxKind::UNORDERED_LIST);
         let item = list
             .children()
             .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
@@ -1031,7 +1037,7 @@ mod tests {
         assert_eq!(blocks.len(), 3);
         assert_eq!(blocks[0].kind(), SyntaxKind::HEADING);
         assert_eq!(blocks[1].kind(), SyntaxKind::PARAGRAPH);
-        assert_eq!(blocks[2].kind(), SyntaxKind::LIST);
+        assert_eq!(blocks[2].kind(), SyntaxKind::UNORDERED_LIST);
     }
 
     #[test]
@@ -1047,7 +1053,7 @@ mod tests {
     fn parse_numbered_list_item() {
         let tree = parse("1. First item\n");
         let list = tree.children().next().unwrap();
-        assert_eq!(list.kind(), SyntaxKind::LIST);
+        assert_eq!(list.kind(), SyntaxKind::ORDERED_LIST);
         let item = list
             .children()
             .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
@@ -1059,7 +1065,7 @@ mod tests {
     fn parse_numbered_list_multi_digit() {
         let tree = parse("10. Tenth item\n");
         let list = tree.children().next().unwrap();
-        assert_eq!(list.kind(), SyntaxKind::LIST);
+        assert_eq!(list.kind(), SyntaxKind::ORDERED_LIST);
         let item = list
             .children()
             .find(|n| n.kind() == SyntaxKind::LIST_ITEM)
@@ -1075,7 +1081,7 @@ mod tests {
 
         let lists: Vec<_> = tree.children().collect();
         assert_eq!(lists.len(), 1);
-        assert_eq!(lists[0].kind(), SyntaxKind::LIST);
+        assert_eq!(lists[0].kind(), SyntaxKind::ORDERED_LIST);
 
         let items: Vec<_> = lists[0]
             .children()
@@ -1283,8 +1289,8 @@ mod tests {
         let list = tree.children().next().unwrap();
         assert_eq!(
             list.kind(),
-            SyntaxKind::LIST,
-            "Single item should be wrapped in LIST"
+            SyntaxKind::UNORDERED_LIST,
+            "Single item should be wrapped in UNORDERED_LIST"
         );
 
         let items: Vec<_> = list
@@ -1301,9 +1307,9 @@ mod tests {
 
         let lists: Vec<_> = tree
             .children()
-            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .filter(|n| n.kind() == SyntaxKind::UNORDERED_LIST)
             .collect();
-        assert_eq!(lists.len(), 1, "Should have one LIST");
+        assert_eq!(lists.len(), 1, "Should have one UNORDERED_LIST");
 
         let items: Vec<_> = lists[0]
             .children()
@@ -1319,7 +1325,7 @@ mod tests {
 
         let lists: Vec<_> = tree
             .children()
-            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .filter(|n| n.kind() == SyntaxKind::UNORDERED_LIST)
             .collect();
         assert_eq!(lists.len(), 2, "Should have two separate LISTs");
     }
@@ -1399,12 +1405,12 @@ mod tests {
         let input = "- Parent\n  - Child\n";
         let tree = parse(input);
 
-        // Root should have one LIST
+        // Root should have one UNORDERED_LIST
         let root_lists: Vec<_> = tree
             .children()
-            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .filter(|n| n.kind() == SyntaxKind::UNORDERED_LIST)
             .collect();
-        assert_eq!(root_lists.len(), 1, "Root should have one LIST");
+        assert_eq!(root_lists.len(), 1, "Root should have one UNORDERED_LIST");
 
         // That LIST should have one LIST_ITEM (parent)
         let parent_items: Vec<_> = root_lists[0]
@@ -1413,15 +1419,15 @@ mod tests {
             .collect();
         assert_eq!(parent_items.len(), 1, "Root LIST should have one LIST_ITEM");
 
-        // Parent item should contain a nested LIST with the child
+        // Parent item should contain a nested UNORDERED_LIST with the child
         let nested_lists: Vec<_> = parent_items[0]
             .children()
-            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .filter(|n| n.kind() == SyntaxKind::UNORDERED_LIST)
             .collect();
         assert_eq!(
             nested_lists.len(),
             1,
-            "Parent item should contain nested LIST"
+            "Parent item should contain nested UNORDERED_LIST"
         );
 
         let child_items: Vec<_> = nested_lists[0]
@@ -1441,12 +1447,12 @@ mod tests {
         let input = "- First item\n  continued here\n  > quoted part\n  > more quote\n  >> deeply nested\n- Second item\n";
         let tree = parse(input);
 
-        // Should have one LIST at root
+        // Should have one UNORDERED_LIST at root
         let lists: Vec<_> = tree
             .children()
-            .filter(|n| n.kind() == SyntaxKind::LIST)
+            .filter(|n| n.kind() == SyntaxKind::UNORDERED_LIST)
             .collect();
-        assert_eq!(lists.len(), 1, "Should have one LIST");
+        assert_eq!(lists.len(), 1, "Should have one UNORDERED_LIST");
 
         // LIST should have two LIST_ITEMs
         let items: Vec<_> = lists[0]
@@ -1478,7 +1484,7 @@ mod tests {
         let tree = parse(input);
 
         let list = tree.children().next().unwrap();
-        assert_eq!(list.kind(), SyntaxKind::LIST);
+        assert_eq!(list.kind(), SyntaxKind::UNORDERED_LIST);
 
         let item = list
             .children()

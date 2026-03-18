@@ -2,7 +2,7 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-List [0..112]
+List { ordered: false } [0..112]
   children:
     ListItem { marker: "- " } [0..95]
       root_range: 0..112
@@ -11,7 +11,7 @@ List [0..112]
       segments:
         Text [2..13] "Parent item"
       children:
-        List [16..95]
+        List { ordered: false } [16..95]
           children:
             ListItem { marker: "- " } [16..95]
               root_range: 0..112
@@ -20,7 +20,7 @@ List [0..112]
               segments:
                 Text [18..32] "Child item one"
               children:
-                List [35..95]
+                List { ordered: false } [35..95]
                   children:
                     ListItem { marker: "- " } [35..95]
                       root_range: 0..112
@@ -29,7 +29,7 @@ List [0..112]
                       segments:
                         Text [37..51] "Child item two"
                       children:
-                        List [56..95]
+                        List { ordered: false } [56..95]
                           children:
                             ListItem { marker: "- " } [56..95]
                               root_range: 0..112
@@ -38,7 +38,7 @@ List [0..112]
                               segments:
                                 Text [58..73] "Grandchild item"
                               children:
-                                List [76..95]
+                                List { ordered: false } [76..95]
                                   children:
                                     ListItem { marker: "- " } [76..95]
                                       root_range: 0..112
