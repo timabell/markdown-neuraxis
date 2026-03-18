@@ -1,0 +1,4 @@
+- Item with *emphasis*
+- Item with [link](url)
+- Item with `code`
+- Item with [[wikilink]]

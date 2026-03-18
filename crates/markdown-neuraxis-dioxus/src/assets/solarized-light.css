@@ -235,33 +235,14 @@ hr {
 }
 
 /* List styles */
-.bullet-list,
-.numbered-list {
-    margin: 12px 0;
+.list {
+    margin: 8px 0;
+    padding-left: 24px;
 }
 
 .list-item {
-    display: flex;
-    align-items: flex-start;
     margin: 4px 0;
-}
-
-
-.list-marker {
-    margin-right: 8px;
-    flex-shrink: 0;
-    font-weight: 500;
-    color: var(--blue);
-    min-width: 1.2em;
-}
-
-.list-content {
-    flex: 1;
-    color: var(--base01);
-}
-
-.nested-list {
-    margin-top: 4px;
+    line-height: 1.5;
 }
 
 /* Code block styles */

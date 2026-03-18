@@ -1,0 +1,147 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Markdown Data Flow: File → Parser → Snapshot → UI",
+  "description": "Traces how a single markdown element (# Hello **world**) flows from a .md file through the parser and snapshot layers into the three UI targets: CLI, Dioxus, and Kotlin/Compose.",
+  "steps": [
+    {
+      "title": "Overview: The Example",
+      "description": "# Markdown Data Flow Tour\n\nWe'll trace this markdown through the entire system:\n\n```markdown\n# Hello **world**\n```\n\nThis contains:\n- **Block element**: A level-1 heading\n- **Inline element**: Strong emphasis (`**world**`)\n\n## Layer Overview\n\n```\nFile System → Document (xi-rope + tree-sitter) → Snapshot (Rowan CST) → UI\n```"
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/io/mod.rs",
+      "line": 17,
+      "title": "Step 1: File Reading (Rust)",
+      "description": "## File Reading\n\nThe journey begins here. `read_file()` takes a relative path and notes root, returning the raw UTF-8 string.\n\nFor our example: `\"# Hello **world**\\n\"`\n\nAndroid uses a different path via Storage Access Framework (DocumentFile API), but the result is the same - a UTF-8 string."
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/document.rs",
+      "line": 1,
+      "title": "Step 2: Document Structure",
+      "description": "## The Document Struct\n\nThe `Document` holds two parallel representations:\n\n- **xi-rope buffer**: Stores exact UTF-8 bytes, enables efficient O(log n) edits\n- **tree-sitter parser**: Incremental syntax parsing\n- **anchors**: Stable block IDs that survive edits\n\nThese work together to provide both lossless round-trip fidelity and structured access."
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/document.rs",
+      "line": 127,
+      "title": "Step 2: Document::from_bytes()",
+      "description": "## Parsing the Document\n\n```rust\npub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self>\n```\n\nThis function:\n1. Validates UTF-8\n2. Creates xi-rope buffer (lossless storage)\n3. Detects indentation style (tabs vs spaces)\n4. Initializes tree-sitter parser with markdown grammar\n5. Performs initial parse\n\nAfter parsing `\"# Hello **world**\\n\"`, we have a CST with heading and strong emphasis nodes."
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",
+      "line": 20,
+      "title": "Step 3: LineInfo - Per-line Range Info",
+      "description": "## LineInfo Structure\n\nThe snapshot layer provides ergonomic primitives for the UI. `LineInfo` breaks down each line:\n\n```rust\npub struct LineInfo {\n    pub full: Range<usize>,      // Full line including prefixes\n    pub prefix: Range<usize>,    // Indent + markers (\"# \")\n    pub content: Range<usize>,   // Actual text after prefix\n}\n```\n\nFor our heading:\n- `full`: 0..17 (entire line)\n- `prefix`: 0..2 (\"# \")\n- `content`: 2..16 (\"Hello **world**\")"
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",
+      "line": 56,
+      "title": "Step 3: InlineElement - Formatting Info",
+      "description": "## InlineElement Structure\n\nInline formatting is extracted separately from block structure:\n\n```rust\npub struct InlineElement {\n    pub kind: InlineKind,        // Strong, Emphasis, WikiLink, etc.\n    pub range: Range<usize>,     // Byte range in source\n}\n```\n\nFor `**world**`:\n- `kind`: `InlineKind::Strong { content: 10..15 }` (\"world\" without markers)\n- `range`: 8..17 (full \"**world**\" span)"
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",
+      "line": 116,
+      "title": "Step 3: Block - The Core UI Primitive",
+      "description": "## Block Structure\n\nThe main primitive the UI works with:\n\n```rust\npub struct Block {\n    pub id: AnchorId,            // Stable ID (survives edits)\n    pub kind: BlockKind,         // Heading, Paragraph, ListItem, etc.\n    pub node_range: Range<usize>,\n    pub root_range: Range<usize>,\n    pub lines: Vec<LineInfo>,    // Per-line breakdown\n    pub inlines: Vec<InlineElement>, // Emphasis, links, etc.\n    pub content: BlockContent,   // Leaf or Children(Vec<Block>)\n}\n```\n\nThis gives the UI everything it needs without understanding markdown syntax."
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",
+      "line": 307,
+      "title": "Step 3: create_snapshot() - Entry Point",
+      "description": "## Creating the Snapshot\n\n```rust\npub fn create_snapshot(doc: &Document) -> Snapshot\n```\n\nThis:\n1. Gets the source text from the document\n2. Parses with Rowan CST parser\n3. Processes each top-level node into a Block\n4. Returns `Snapshot { blocks: Vec<Block> }`\n\nThe anchors are passed through to ensure stable block IDs."
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",
+      "line": 637,
+      "title": "Step 3: process_heading() - Heading Block Creation",
+      "description": "## Processing a Heading\n\nFor `\"# Hello **world**\\n\"`:\n\n1. Extract node range (0..17)\n2. Count `#` characters → level = 1\n3. Calculate prefix end (2 for \"# \")\n4. Create `LineInfo` with proper ranges\n5. Call `extract_inlines()` to find **world**\n6. Return `Block { kind: Heading { level: 1 }, ... }`"
+    },
+    {
+      "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",
+      "line": 823,
+      "title": "Step 3: extract_inlines() - Finding Bold/Italic/Links",
+      "description": "## Extracting Inline Elements\n\nThis function walks the node's children looking for formatting:\n\n```rust\nmatch node.kind() {\n    SyntaxKind::STRONG => {\n        // **text** - skip 2 markers on each side\n        let content = (range.start + 2)..(range.end - 2);\n        Some(InlineKind::Strong { content })\n    }\n    SyntaxKind::EMPHASIS => { ... }\n    SyntaxKind::WIKILINK => { ... }\n    SyntaxKind::LINK => { ... }\n}\n```\n\nFor `**world**` at bytes 8..17, this returns:\n`InlineKind::Strong { content: 10..15 }` (\"world\")"
+    },
+    {
+      "file": "crates/markdown-neuraxis-cli/src/main.rs",
+      "line": 156,
+      "title": "Step 4a: CLI Rendering (ratatui)",
+      "description": "## CLI: render_document_content()\n\nThe CLI uses ratatui for terminal UI. This function converts the snapshot to displayable lines.\n\nFor headings, it reconstructs the markdown:\n```rust\nBlockKind::Heading { level } => {\n    let prefix = \"#\".repeat(*level as usize);\n    lines.push(format!(\"{} {}\", prefix, content));\n}\n```\n\nOutput: `\"# Hello **world**\"`\n\n**Note**: CLI currently shows raw syntax; inline formatting is preserved but not styled."
+    },
+    {
+      "file": "crates/markdown-neuraxis-cli/src/main.rs",
+      "line": 163,
+      "title": "Step 4a: CLI - Content Extraction",
+      "description": "## Extracting Content from Block\n\nThe key pattern used everywhere:\n\n```rust\nlet content: String = block\n    .lines\n    .iter()\n    .map(|line| &source[line.content.clone()])\n    .collect::<Vec<_>>()\n    .join(\"\\n\");\n```\n\nThis slices the original source using `LineInfo::content` ranges.\nFor our heading: `source[2..16]` = \"Hello **world**\""
+    },
+    {
+      "file": "crates/markdown-neuraxis-dioxus/src/ui/app.rs",
+      "line": 218,
+      "title": "Step 4b: Dioxus - Document Loading",
+      "description": "## Dioxus Desktop: Loading Documents\n\nWhen a file is selected:\n1. `io::read_file()` gets the content\n2. `Document::from_bytes()` parses it\n3. `document.create_anchors_from_tree()` creates stable IDs\n4. `document.snapshot()` creates the UI-ready snapshot\n5. Both document and snapshot are stored in signals"
+    },
+    {
+      "file": "crates/markdown-neuraxis-dioxus/src/ui/components/document_content.rs",
+      "line": 9,
+      "title": "Step 4b: Dioxus - DocumentContent Component",
+      "description": "## DocumentContent Component\n\nRenders all blocks from the snapshot:\n\n```rust\nrsx! {\n    div {\n        class: \"document-content\",\n        for block in snapshot.blocks.iter() {\n            BlockRenderer {\n                block: block.clone(),\n                source: source.clone(),\n                ...\n            }\n        }\n    }\n}\n```"
+    },
+    {
+      "file": "crates/markdown-neuraxis-dioxus/src/ui/components/block.rs",
+      "line": 6,
+      "title": "Step 4b: Dioxus - extract_content()",
+      "description": "## Content Extraction Helper\n\nSame pattern as CLI - slices source using LineInfo ranges:\n\n```rust\npub fn extract_content(block: &EngineBlock, source: &str) -> String {\n    block\n        .lines\n        .iter()\n        .map(|line| &source[line.content.clone()])\n        .collect::<Vec<_>>()\n        .join(\"\\n\")\n}\n```"
+    },
+    {
+      "file": "crates/markdown-neuraxis-dioxus/src/ui/components/block.rs",
+      "line": 47,
+      "title": "Step 4b: Dioxus - Heading Rendering",
+      "description": "## Rendering a Heading\n\n```rust\nBlockKind::Heading { level } => {\n    let class = format!(\"heading heading-{}\", level);\n    rsx! {\n        div {\n            class: \"{class}\",\n            \"{content}\"  // \"Hello **world**\"\n        }\n    }\n}\n```\n\nHTML output: `<div class=\"heading heading-1\">Hello **world**</div>`\n\n**Note**: The `inlines` field with Strong info is available but not yet used for rich text."
+    },
+    {
+      "file": "crates/markdown-neuraxis-ffi/src/lib.rs",
+      "line": 41,
+      "title": "Step 4c: FFI - DocumentHandle::from_string()",
+      "description": "## UniFFI Bridge to Kotlin\n\nThe FFI layer wraps Document for mobile:\n\n```rust\n#[uniffi::constructor]\npub fn from_string(content: String) -> Result<Self, FfiError> {\n    let mut doc = Document::from_bytes(content.as_bytes())?;\n    doc.create_anchors_from_tree();\n    Ok(Self { inner: Mutex::new(doc) })\n}\n```\n\nKotlin calls this to parse markdown content."
+    },
+    {
+      "file": "crates/markdown-neuraxis-ffi/src/lib.rs",
+      "line": 61,
+      "title": "Step 4c: FFI - get_snapshot()",
+      "description": "## Getting Snapshot via FFI\n\n```rust\npub fn get_snapshot(&self) -> SnapshotDto {\n    let doc = self.inner.lock().unwrap();\n    let source = doc.text();\n    let snapshot = doc.snapshot();\n    SnapshotDto::from_engine(snapshot, &source)\n}\n```\n\nConverts to DTO format suitable for mobile rendering."
+    },
+    {
+      "file": "crates/markdown-neuraxis-ffi/src/lib.rs",
+      "line": 93,
+      "title": "Step 4c: FFI - flatten_blocks()",
+      "description": "## Flattening for Mobile\n\nMobile UIs work better with flat lists + depth field:\n\n```rust\nfn flatten_blocks(blocks: &[Block], source: &str, out: &mut Vec<RenderBlockDto>, depth: u32) {\n    for block in blocks {\n        let content = /* extract from line ranges */;\n        let segments = /* convert inlines to TextSegmentDto */;\n        \n        out.push(RenderBlockDto {\n            kind: \"heading\",\n            heading_level: 1,\n            content: \"Hello **world**\",\n            segments: [TextSegmentDto { kind: \"strong\", content: \"world\" }],\n            ...\n        });\n    }\n}\n```"
+    },
+    {
+      "file": "crates/markdown-neuraxis-ffi/src/lib.rs",
+      "line": 178,
+      "title": "Step 4c: FFI - TextSegmentDto::from_inline()",
+      "description": "## Converting Inlines to Segments\n\n```rust\nfn from_inline(inline: &InlineElement, source: &str) -> Option<Self> {\n    match &inline.kind {\n        InlineKind::Strong { content } => Some(Self {\n            kind: \"strong\".to_string(),\n            content: source[content.clone()].to_string(),  // \"world\"\n        }),\n        InlineKind::WikiLink { target, .. } => Some(Self {\n            kind: \"wiki_link\".to_string(),\n            content: source[target.clone()].to_string(),\n        }),\n        // ...\n    }\n}\n```"
+    },
+    {
+      "file": "android/app/src/main/java/co/rustworkshop/markdownneuraxis/ui/screens/FileViewScreen.kt",
+      "line": 246,
+      "title": "Step 4c: Kotlin - parseDocument()",
+      "description": "## Kotlin: Calling into Rust\n\n```kotlin\nprivate fun parseDocument(content: String): List<RenderBlockDto>? {\n    return try {\n        val doc = DocumentHandle.fromString(content)  // FFI call\n        doc.getSnapshot().blocks\n    } catch (e: Exception) {\n        null\n    }\n}\n```\n\nThis crosses the JNI boundary to Rust and back."
+    },
+    {
+      "file": "android/app/src/main/java/co/rustworkshop/markdownneuraxis/ui/screens/FileViewScreen.kt",
+      "line": 160,
+      "title": "Step 4c: Kotlin - RenderBlock()",
+      "description": "## Kotlin: Block Rendering\n\n```kotlin\nwhen (block.kind) {\n    \"heading\" -> {\n        val style = when (block.headingLevel.toInt()) {\n            1 -> MaterialTheme.typography.headlineLarge\n            // ...\n        }\n        RenderSegments(\n            segments = block.segments,\n            content = block.content,\n            style = style.copy(fontWeight = FontWeight.Bold),\n            onWikiLinkClick = onWikiLinkClick\n        )\n    }\n}\n```"
+    },
+    {
+      "file": "android/app/src/main/java/co/rustworkshop/markdownneuraxis/ui/screens/FileViewScreen.kt",
+      "line": 98,
+      "title": "Step 4c: Kotlin - RenderSegments() with Rich Text",
+      "description": "## Kotlin: Rich Text Rendering\n\nUnlike CLI/Dioxus, Android renders **bold** properly:\n\n```kotlin\nval annotatedText = buildAnnotatedString {\n    for (segment in segments) {\n        when (segment.kind) {\n            \"strong\" -> {\n                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {\n                    append(segment.content)  // \"world\" in bold\n                }\n            }\n            \"wiki_link\" -> {\n                pushStringAnnotation(tag = \"wiki_link\", annotation = segment.content)\n                withStyle(SpanStyle(color = linkColor)) {\n                    append(segment.content)\n                }\n                pop()\n            }\n        }\n    }\n}\n```\n\nOutput: \"Hello \" + **world** (with actual bold styling)"
+    },
+    {
+      "title": "Summary: Key Architectural Patterns",
+      "description": "# Summary\n\n## Data Flow\n\n| Step | Layer | Output |\n|------|-------|--------|\n| 1 | File I/O | `\"# Hello **world**\\n\"` |\n| 2 | Document | `Document { buffer: Rope, tree: CST }` |\n| 3 | Snapshot | `Block { kind: Heading, inlines: [Strong] }` |\n| 4a | CLI | Plain text: `\"# Hello **world**\"` |\n| 4b | Dioxus | HTML: `<div class=\"heading-1\">...</div>` |\n| 4c | Kotlin | Compose: styled `AnnotatedString` |\n\n## Key Patterns\n\n1. **Byte-range semantics**: All primitives reference source via `Range<usize>`\n2. **Lossless round-trip**: xi-rope preserves exact bytes\n3. **Stable block IDs**: `AnchorId` survives edits\n4. **Hierarchical → flat**: Android uses `flatten_blocks()` with depth field\n5. **Inline extraction**: `InlineElement` separates formatting from structure"
+    }
+  ]
+}

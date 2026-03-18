@@ -1,4 +1,4 @@
-use crate::ui::components::content_group::ContentGroup;
+use crate::ui::components::block::BlockRenderer;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, Snapshot};
 use std::path::PathBuf;
@@ -8,6 +8,7 @@ use std::sync::Arc;
 #[component]
 pub fn DocumentContent(
     snapshot: Snapshot,
+    source: String,
     notes_path: PathBuf,
     document: Arc<Document>,
     focused_anchor_id: Signal<Option<AnchorId>>,
@@ -15,20 +16,15 @@ pub fn DocumentContent(
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
-    let grouped_content = &snapshot.content_groups;
-
     rsx! {
         div {
             class: "document-content",
-            for (group_index, group) in grouped_content.iter().enumerate() {
-                ContentGroup {
-                    key: "{group_index}",
-                    group: group.clone(),
-                    group_index,
-                    notes_path: notes_path.clone(),
-                    document: document.clone(),
+            for (block_index, block) in snapshot.blocks.iter().enumerate() {
+                BlockRenderer {
+                    key: "{block_index}",
+                    block: block.clone(),
+                    source: source.clone(),
                     focused_anchor_id,
-                    on_file_select,
                     on_command,
                     on_wikilink_click
                 }

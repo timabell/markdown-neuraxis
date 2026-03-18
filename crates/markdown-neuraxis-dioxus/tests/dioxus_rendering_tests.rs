@@ -1,6 +1,9 @@
 //! Dioxus Component Rendering Tests - Testing actual UI component behavior
 
+mod test_helpers;
+
 use markdown_neuraxis_engine::editing::Document;
+use test_helpers::flatten_blocks;
 
 /// Test helper to create nested list document
 fn create_nested_list_doc() -> Document {
@@ -17,13 +20,14 @@ mod dioxus_component_tests {
     #[test]
     fn test_dioxus_list_rendering_textarea_count() {
         let doc = create_nested_list_doc();
+        let source = doc.text();
         let snapshot = doc.snapshot();
+        let blocks = flatten_blocks(&snapshot.blocks, &source);
 
-        // Find nested items
-        let nested_items: Vec<_> = snapshot
-            .blocks
+        // Find nested items (items that aren't at root level by looking at content patterns)
+        let nested_items: Vec<_> = blocks
             .iter()
-            .filter(|block| block.depth > 0)
+            .filter(|block| block.content.contains("nested"))
             .collect();
 
         assert!(
@@ -46,8 +50,7 @@ mod dioxus_component_tests {
             // But we can test the core rendering logic
 
             // Count how many blocks would render textareas
-            let textarea_rendering_count = snapshot
-                .blocks
+            let textarea_rendering_count = blocks
                 .iter()
                 .map(|block| {
                     // This is the exact logic from RenderListItem
@@ -69,11 +72,12 @@ mod dioxus_component_tests {
     fn test_actual_component_focus_state() {
         // This test tries to get closer to the actual Dioxus component behavior
         let doc = create_nested_list_doc();
+        let source = doc.text();
         let snapshot = doc.snapshot();
+        let blocks = flatten_blocks(&snapshot.blocks, &source);
 
         // Get a nested item to test
-        let nested_item = snapshot
-            .blocks
+        let nested_item = blocks
             .iter()
             .find(|b| b.content.contains("nested 1.1"))
             .expect("Should have nested 1.1 item");
@@ -88,7 +92,7 @@ mod dioxus_component_tests {
         let simulated_focused_signal = Some(nested_item.id);
 
         // Test each block's focus calculation
-        for block in &snapshot.blocks {
+        for block in &blocks {
             let is_focused = simulated_focused_signal.as_ref() == Some(&block.id);
             println!(
                 "Block '{}' (id={:?}) -> is_focused={}",
@@ -109,7 +113,9 @@ mod dioxus_component_tests {
     fn test_signal_behavior_simulation() {
         // This test simulates signal behavior that might cause the bug
         let doc = create_nested_list_doc();
+        let source = doc.text();
         let snapshot = doc.snapshot();
+        let blocks = flatten_blocks(&snapshot.blocks, &source);
 
         println!("Testing signal behavior simulation");
 
@@ -117,22 +123,15 @@ mod dioxus_component_tests {
         let test_sequence = vec![
             (
                 "nested 1.1",
-                snapshot
-                    .blocks
-                    .iter()
-                    .find(|b| b.content.contains("nested 1.1")),
+                blocks.iter().find(|b| b.content.contains("nested 1.1")),
             ),
             (
                 "nested 1.2",
-                snapshot
-                    .blocks
-                    .iter()
-                    .find(|b| b.content.contains("nested 1.2")),
+                blocks.iter().find(|b| b.content.contains("nested 1.2")),
             ),
             (
                 "deeply nested 1.2.1",
-                snapshot
-                    .blocks
+                blocks
                     .iter()
                     .find(|b| b.content.contains("deeply nested 1.2.1")),
             ),
@@ -146,8 +145,7 @@ mod dioxus_component_tests {
                 let new_focused_state = Some(clicked_block.id);
 
                 // Check if any other blocks incorrectly think they're focused
-                let incorrect_focus: Vec<_> = snapshot
-                    .blocks
+                let incorrect_focus: Vec<_> = blocks
                     .iter()
                     .filter(|block| {
                         let thinks_focused = new_focused_state.as_ref() == Some(&block.id);
@@ -167,8 +165,7 @@ mod dioxus_component_tests {
                 }
 
                 // Verify only the target block is focused
-                let correctly_focused: Vec<_> = snapshot
-                    .blocks
+                let correctly_focused: Vec<_> = blocks
                     .iter()
                     .filter(|block| new_focused_state.as_ref() == Some(&block.id))
                     .collect();
@@ -202,16 +199,15 @@ mod dioxus_component_tests {
     fn test_potential_dioxus_state_bug() {
         // This test looks for potential Dioxus-specific issues
         let doc = create_nested_list_doc();
+        let source = doc.text();
         let snapshot = doc.snapshot();
+        let blocks = flatten_blocks(&snapshot.blocks, &source);
 
         println!("Analyzing potential Dioxus state management issues");
 
         // Look for any patterns that might cause multiple components to render textareas
-        let anchor_to_content: std::collections::HashMap<_, _> = snapshot
-            .blocks
-            .iter()
-            .map(|b| (b.id, b.content.clone()))
-            .collect();
+        let anchor_to_content: std::collections::HashMap<_, _> =
+            blocks.iter().map(|b| (b.id, b.content.clone())).collect();
 
         println!("Anchor ID to content mapping:");
         for (id, content) in &anchor_to_content {
@@ -219,12 +215,12 @@ mod dioxus_component_tests {
         }
 
         // Check if there are any anchor ID patterns that could confuse components
-        let anchor_ids: Vec<_> = snapshot.blocks.iter().map(|b| b.id).collect();
+        let anchor_ids: Vec<_> = blocks.iter().map(|b| b.id).collect();
 
         // Look for suspiciously similar anchor IDs (potential collision source)
         for (i, &id1) in anchor_ids.iter().enumerate() {
             for &id2 in anchor_ids.iter().skip(i + 1) {
-                let id1_val = id1.0; // Extract the u64 value
+                let id1_val = id1.0; // Extract the u128 value
                 let id2_val = id2.0;
 
                 // Check for potential bit patterns that could cause confusion

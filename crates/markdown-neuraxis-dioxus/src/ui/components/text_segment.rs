@@ -1,39 +1,47 @@
 use dioxus::prelude::*;
-use markdown_neuraxis_engine::editing::snapshot::TextSegment;
-use std::path::PathBuf;
+use markdown_neuraxis_engine::editing::{InlineSegment, SegmentKind};
 
-/// Props for text segment rendering
-#[derive(Props, Clone, PartialEq)]
-pub struct TextSegmentProps {
-    /// The text segments to render
-    pub segments: Vec<TextSegment>,
-    /// The notes directory path for resolving wikilinks
-    pub notes_path: PathBuf,
-    /// Callback for wikilink navigation
-    pub on_wikilink_click: Callback<String>,
-}
-
-/// Renders a list of TextSegments with wikilink support
+/// Renders a list of InlineSegments
 #[component]
-pub fn TextSegments(props: TextSegmentProps) -> Element {
-    let segments = props.segments;
-    let on_wikilink_click = props.on_wikilink_click;
-
+pub fn InlineSegments(
+    segments: Vec<InlineSegment>,
+    on_wikilink_click: Callback<String>,
+) -> Element {
     rsx! {
-        for segment in segments.into_iter() {
-            {render_segment(segment, on_wikilink_click)}
+        for (i, segment) in segments.iter().enumerate() {
+            {render_segment(segment.clone(), i, on_wikilink_click)}
         }
     }
 }
 
-/// Render a single TextSegment
-fn render_segment(segment: TextSegment, on_wikilink_click: Callback<String>) -> Element {
-    match segment {
-        TextSegment::Text(text) => rsx! { span { "{text}" } },
-        TextSegment::WikiLink { target } => {
+/// Render a single InlineSegment
+fn render_segment(
+    segment: InlineSegment,
+    key: usize,
+    on_wikilink_click: Callback<String>,
+) -> Element {
+    match segment.kind {
+        SegmentKind::Text(text) => rsx! {
+            span { key: "{key}", "{text}" }
+        },
+        SegmentKind::Strong(text) => rsx! {
+            strong { key: "{key}", "{text}" }
+        },
+        SegmentKind::Emphasis(text) => rsx! {
+            em { key: "{key}", "{text}" }
+        },
+        SegmentKind::Code(text) => rsx! {
+            code { key: "{key}", class: "inline-code", "{text}" }
+        },
+        SegmentKind::Strikethrough(text) => rsx! {
+            del { key: "{key}", "{text}" }
+        },
+        SegmentKind::WikiLink { target, alias } => {
+            let display_text = alias.unwrap_or_else(|| target.clone());
             let target_clone = target.clone();
             rsx! {
                 a {
+                    key: "{key}",
                     class: "wikilink",
                     href: "#",
                     onclick: move |evt: MouseEvent| {
@@ -41,52 +49,36 @@ fn render_segment(segment: TextSegment, on_wikilink_click: Callback<String>) -> 
                         evt.stop_propagation();
                         on_wikilink_click.call(target_clone.clone());
                     },
-                    "{target}"
+                    "{display_text}"
                 }
             }
         }
-        TextSegment::Url { href } => {
-            let href_clone = href.clone();
+        SegmentKind::Link { text, url } => {
+            let url_clone = url.clone();
             rsx! {
                 a {
+                    key: "{key}",
                     class: "external-link",
-                    href: "{href}",
+                    href: "{url}",
                     target: "_blank",
                     rel: "noopener noreferrer",
                     onclick: move |evt: MouseEvent| {
                         evt.prevent_default();
                         evt.stop_propagation();
-                        // Use system's default browser to open the URL
-                        if let Err(e) = open_url(&href_clone) {
-                            eprintln!("Failed to open URL {}: {}", href_clone, e);
+                        if let Err(e) = open_url(&url_clone) {
+                            eprintln!("Failed to open URL {}: {}", url_clone, e);
                         }
                     },
-                    "{href}",
-                    span { class: "external-link-icon", " ↗" }
+                    "{text}"
                 }
             }
         }
-    }
-}
-
-/// Renders content with wikilink support, falling back to plain text if no segments
-#[component]
-pub fn ContentWithWikiLinks(
-    content: String,
-    segments: Option<Vec<TextSegment>>,
-    notes_path: PathBuf,
-    on_wikilink_click: Callback<String>,
-) -> Element {
-    if let Some(segments) = segments {
-        rsx! {
-            TextSegments {
-                segments,
-                notes_path,
-                on_wikilink_click
-            }
-        }
-    } else {
-        rsx! { span { "{content}" } }
+        SegmentKind::Image { alt, url } => rsx! {
+            img { key: "{key}", alt: "{alt}", src: "{url}" }
+        },
+        SegmentKind::HardBreak => rsx! {
+            br { key: "{key}" }
+        },
     }
 }
 

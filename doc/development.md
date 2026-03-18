@@ -97,6 +97,10 @@ The goal is comprehensive end-to-end coverage where tests verify complete featur
 | `criterion` | Performance benchmarking |
 | `dioxus-ssr` | Server-side rendering for component testing |
 
+## Code Tours
+
+Interactive walkthroughs of the codebase are available in [`doc/tours/`](tours/).
+
 ## Conventional Commits
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/) for changelog generation via [git-cliff](https://git-cliff.org/).

@@ -1,0 +1,10 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "format_tree(&tree, 0)"
+---
+ROOT@0..8
+  HEADING@0..8
+    HASH@0..1 "#"
+    WHITESPACE@1..2 " "
+    TEXT@2..7 "Hello"
+    NEWLINE@7..8 "\\n"

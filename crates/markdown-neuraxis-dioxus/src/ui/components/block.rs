@@ -1,71 +1,196 @@
 use crate::ui::components::{
-    block_quote::BlockQuote, code_fence::CodeFence, heading::Heading, html_block::HtmlBlock,
-    paragraph::Paragraph, thematic_break::ThematicBreak, unhandled_markdown::UnhandledMarkdown,
+    block_quote::BlockQuote, code_fence::CodeFence, editor_block::EditorBlock, heading::Heading,
+    paragraph::Paragraph, text_segment::InlineSegments, thematic_break::ThematicBreak,
 };
 use dioxus::prelude::*;
-use markdown_neuraxis_engine::editing::{BlockKind, RenderBlock};
-use std::path::PathBuf;
+use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, BlockKind, Cmd};
 
 #[component]
-pub fn Block(
-    block: RenderBlock,
-    notes_path: PathBuf,
-    on_file_select: Option<Callback<PathBuf>>,
-    on_focus: Callback<()>,
+pub fn BlockRenderer(
+    block: Block,
+    source: String,
+    focused_anchor_id: Signal<Option<AnchorId>>,
+    on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
+    let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
+
     match &block.kind {
+        BlockKind::Root => {
+            // Container: render children
+            if let BlockContent::Children(children) = &block.content {
+                rsx! {
+                    for (i, child) in children.iter().enumerate() {
+                        BlockRenderer {
+                            key: "{i}",
+                            block: child.clone(),
+                            source: source.clone(),
+                            focused_anchor_id,
+                            on_command,
+                            on_wikilink_click
+                        }
+                    }
+                }
+            } else {
+                rsx! {}
+            }
+        }
+        BlockKind::List { ordered } => {
+            // Container: render list items
+            if let BlockContent::Children(children) = &block.content {
+                if *ordered {
+                    rsx! {
+                        ol {
+                            class: "list",
+                            for (i, child) in children.iter().enumerate() {
+                                BlockRenderer {
+                                    key: "{i}",
+                                    block: child.clone(),
+                                    source: source.clone(),
+                                    focused_anchor_id,
+                                    on_command,
+                                    on_wikilink_click
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    rsx! {
+                        ul {
+                            class: "list",
+                            for (i, child) in children.iter().enumerate() {
+                                BlockRenderer {
+                                    key: "{i}",
+                                    block: child.clone(),
+                                    source: source.clone(),
+                                    focused_anchor_id,
+                                    on_command,
+                                    on_wikilink_click
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                rsx! {}
+            }
+        }
+        BlockKind::ListItem { .. } => {
+            if is_focused {
+                // Use first line only - node_range includes nested children
+                let content_text = block
+                    .lines
+                    .first()
+                    .and_then(|line| source.get(line.full.clone()))
+                    .unwrap_or("")
+                    .trim_end()
+                    .to_string();
+                let block_clone = block.clone();
+                rsx! {
+                    li {
+                        class: "list-item",
+                        EditorBlock {
+                            block: block_clone,
+                            content_text,
+                            on_command,
+                            on_cancel: {
+                                let mut focused_anchor_id = focused_anchor_id;
+                                move |_| focused_anchor_id.set(None)
+                            }
+                        }
+                        // Still render nested children below the editor
+                        if let BlockContent::Children(children) = &block.content {
+                            for (i, child) in children.iter().enumerate() {
+                                BlockRenderer {
+                                    key: "{i}",
+                                    block: child.clone(),
+                                    source: source.clone(),
+                                    focused_anchor_id,
+                                    on_command,
+                                    on_wikilink_click
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                let segments = block.segments.clone();
+                let block_id = block.id;
+                rsx! {
+                    li {
+                        class: "list-item",
+                        onclick: {
+                            let mut focused_anchor_id = focused_anchor_id;
+                            move |evt| {
+                                evt.stop_propagation();
+                                focused_anchor_id.set(Some(block_id))
+                            }
+                        },
+                        InlineSegments {
+                            segments,
+                            on_wikilink_click
+                        }
+                        // Render nested children (nested lists)
+                        if let BlockContent::Children(children) = &block.content {
+                            for (i, child) in children.iter().enumerate() {
+                                BlockRenderer {
+                                    key: "{i}",
+                                    block: child.clone(),
+                                    source: source.clone(),
+                                    focused_anchor_id,
+                                    on_command,
+                                    on_wikilink_click
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         BlockKind::Heading { level } => rsx! {
             Heading {
                 block: block.clone(),
-                level: (*level).into(),
-                notes_path,
-                on_focus,
+                source: source.clone(),
+                level: *level,
+                focused_anchor_id,
+                on_command,
                 on_wikilink_click
             }
         },
         BlockKind::Paragraph => rsx! {
             Paragraph {
                 block: block.clone(),
-                notes_path,
-                on_focus,
+                source: source.clone(),
+                focused_anchor_id,
+                on_command,
                 on_wikilink_click
             }
         },
-        BlockKind::ListItem { .. } => {
-            panic!(
-                "ListItem blocks should be grouped into proper ul/ol structure, not rendered individually"
-            )
-        }
-        BlockKind::CodeFence { lang } => rsx! {
+        BlockKind::FencedCode { language } => rsx! {
             CodeFence {
                 block: block.clone(),
-                lang: lang.clone(),
-                on_focus
-            }
-        },
-        BlockKind::ThematicBreak => rsx! {
-            ThematicBreak {
-                block: block.clone(),
-                on_focus
+                source: source.clone(),
+                lang: language.clone(),
+                focused_anchor_id,
+                on_command,
+                on_wikilink_click
             }
         },
         BlockKind::BlockQuote => rsx! {
             BlockQuote {
                 block: block.clone(),
-                on_focus
+                source: source.clone(),
+                focused_anchor_id,
+                on_command,
+                on_wikilink_click
             }
         },
-        BlockKind::HtmlBlock => rsx! {
-            HtmlBlock {
+        BlockKind::ThematicBreak => rsx! {
+            ThematicBreak {
                 block: block.clone(),
-                on_focus
-            }
-        },
-        BlockKind::UnhandledMarkdown => rsx! {
-            UnhandledMarkdown {
-                block: block.clone(),
-                on_focus
+                source: source.clone(),
+                focused_anchor_id,
+                on_command
             }
         },
     }

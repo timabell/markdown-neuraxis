@@ -1,0 +1,32 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..201]
+  children:
+    ListItem { marker: "- " } [0..21]
+      root_range: 0..201
+      lines:
+        full:0..21 prefix:0..2"- " content:2..20"Normal bullet item"
+      segments:
+        Text [2..20] "Normal bullet item"
+    ListItem { marker: "- " } [21..95]
+      root_range: 0..201
+      lines:
+        full:21..47 prefix:21..23"- " content:23..46"This line has hard wrap"
+      segments:
+        Text [23..46] "This line has hard wrap"
+    ListItem { marker: "- " } [95..170]
+      root_range: 0..201
+      lines:
+        full:95..129 prefix:95..97"- " content:97..128"This line has forced newlines  "
+      segments:
+        Text [97..126] "This line has forced newlines"
+        HardBreak [126..129]
+    ListItem { marker: "- " } [170..201]
+      root_range: 0..201
+      lines:
+        full:170..201 prefix:170..172"- " content:172..200"Bullet with trailing space  "
+      segments:
+        Text [172..198] "Bullet with trailing space"
+        HardBreak [198..201]

@@ -3,14 +3,17 @@
 //! This test demonstrates the bug where Document::clone() creates a new tree
 //! but keeps old anchors that reference stale node IDs, causing corruption.
 
+mod test_helpers;
+
 use markdown_neuraxis_engine::editing::Document;
+use test_helpers::flatten_blocks;
 
 #[test]
 fn test_document_clone_should_have_valid_anchor_node_references() {
     // This test should FAIL initially, demonstrating the clone bug
 
     let markdown = r#"- item 1
-  - item 1.1  
+  - item 1.1
   - item 1.2
 - item 2"#;
 
@@ -99,25 +102,26 @@ fn test_document_clone_anchor_content_integrity() {
 
     let mut original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     original_doc.create_anchors_from_tree();
+    let original_source = original_doc.text();
     let original_snapshot = original_doc.snapshot();
+    let original_blocks = flatten_blocks(&original_snapshot.blocks, &original_source);
 
     let cloned_doc = original_doc.clone();
+    let cloned_source = cloned_doc.text();
     let cloned_snapshot = cloned_doc.snapshot();
+    let cloned_blocks = flatten_blocks(&cloned_snapshot.blocks, &cloned_source);
 
     println!("=== SNAPSHOT COMPARISON ===");
-    println!(
-        "Original snapshot blocks: {}",
-        original_snapshot.blocks.len()
-    );
-    for (i, block) in original_snapshot.blocks.iter().enumerate() {
+    println!("Original snapshot blocks: {}", original_blocks.len());
+    for (i, block) in original_blocks.iter().enumerate() {
         println!(
             "  Orig [{}] '{}' anchor_id={}",
             i, block.content, block.id.0
         );
     }
 
-    println!("Cloned snapshot blocks: {}", cloned_snapshot.blocks.len());
-    for (i, block) in cloned_snapshot.blocks.iter().enumerate() {
+    println!("Cloned snapshot blocks: {}", cloned_blocks.len());
+    for (i, block) in cloned_blocks.iter().enumerate() {
         println!(
             "  Clone [{}] '{}' anchor_id={}",
             i, block.content, block.id.0
@@ -126,28 +130,19 @@ fn test_document_clone_anchor_content_integrity() {
 
     // TEST: Same number of blocks
     assert_eq!(
-        original_snapshot.blocks.len(),
-        cloned_snapshot.blocks.len(),
+        original_blocks.len(),
+        cloned_blocks.len(),
         "Original and cloned snapshots should have same number of blocks"
     );
 
     // TEST: Same content in same order
-    for (i, (orig_block, clone_block)) in original_snapshot
-        .blocks
-        .iter()
-        .zip(cloned_snapshot.blocks.iter())
-        .enumerate()
+    for (i, (orig_block, clone_block)) in
+        original_blocks.iter().zip(cloned_blocks.iter()).enumerate()
     {
         assert_eq!(
             orig_block.content, clone_block.content,
             "Block [{}] content should match: '{}' vs '{}'",
             i, orig_block.content, clone_block.content
-        );
-
-        assert_eq!(
-            orig_block.depth, clone_block.depth,
-            "Block [{}] depth should match: {} vs {}",
-            i, orig_block.depth, clone_block.depth
         );
 
         // NOTE: Anchor IDs may be different due to regeneration, that's OK
@@ -156,7 +151,7 @@ fn test_document_clone_anchor_content_integrity() {
 
     // TEST: No duplicate anchor IDs in cloned snapshot
     let mut seen_ids = std::collections::HashSet::new();
-    for (i, block) in cloned_snapshot.blocks.iter().enumerate() {
+    for (i, block) in cloned_blocks.iter().enumerate() {
         assert!(
             seen_ids.insert(block.id),
             "DUPLICATE ANCHOR ID: Block [{}] '{}' has duplicate anchor_id {}",
@@ -188,22 +183,23 @@ fn test_document_clone_preserves_functionality() {
     };
 
     let _patch = cloned_doc.apply(edit_cmd);
+    let modified_source = cloned_doc.text();
     let modified_snapshot = cloned_doc.snapshot();
+    let modified_blocks = flatten_blocks(&modified_snapshot.blocks, &modified_source);
 
     println!("=== FUNCTIONALITY TEST ===");
-    for (i, block) in modified_snapshot.blocks.iter().enumerate() {
+    for (i, block) in modified_blocks.iter().enumerate() {
         println!("  Modified [{}] '{}'", i, block.content);
     }
 
     // TEST: The edit should work without crashing
     assert!(
-        !modified_snapshot.blocks.is_empty(),
+        !modified_blocks.is_empty(),
         "Modified document should have blocks"
     );
 
     // TEST: The modification should be present
-    let has_modification = modified_snapshot
-        .blocks
+    let has_modification = modified_blocks
         .iter()
         .any(|block| block.content.contains("MODIFIED"));
 

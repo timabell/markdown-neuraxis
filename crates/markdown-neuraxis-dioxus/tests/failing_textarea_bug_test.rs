@@ -1,6 +1,9 @@
 //! Failing test that reproduces the exact multiple textarea bug
 
+mod test_helpers;
+
 use markdown_neuraxis_engine::editing::Document;
+use test_helpers::flatten_blocks;
 
 #[cfg(test)]
 mod failing_bug_reproduction {
@@ -15,36 +18,31 @@ mod failing_bug_reproduction {
         let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
         doc.create_anchors_from_tree();
 
+        let source = doc.text();
         let snapshot = doc.snapshot();
+        let blocks = flatten_blocks(&snapshot.blocks, &source);
 
         // Find the exact problematic items from the screenshot
-        let indented_1_items: Vec<_> = snapshot
-            .blocks
+        // In the new hierarchical model, we identify root items by looking at content patterns
+        let indented_1_items: Vec<_> = blocks
             .iter()
-            .filter(|b| b.content == "indented 1" && b.depth == 0)
+            .filter(|b| b.content == "indented 1")
             .collect();
 
-        let indented_1_2_items: Vec<_> = snapshot
-            .blocks
+        let indented_1_2_items: Vec<_> = blocks
             .iter()
-            .filter(|b| b.content == "indented 1.2" && b.depth > 0)
+            .filter(|b| b.content == "indented 1.2")
             .collect();
 
         println!("=== REPRODUCING MULTIPLE TEXTAREA BUG ===");
         println!("Found {} 'indented 1' items:", indented_1_items.len());
         for (i, item) in indented_1_items.iter().enumerate() {
-            println!(
-                "  [{}] '{}' -> anchor_id={} depth={}",
-                i, item.content, item.id.0, item.depth
-            );
+            println!("  [{}] '{}' -> anchor_id={}", i, item.content, item.id.0);
         }
 
         println!("Found {} 'indented 1.2' items:", indented_1_2_items.len());
         for (i, item) in indented_1_2_items.iter().enumerate() {
-            println!(
-                "  [{}] '{}' -> anchor_id={} depth={}",
-                i, item.content, item.id.0, item.depth
-            );
+            println!("  [{}] '{}' -> anchor_id={}", i, item.content, item.id.0);
         }
 
         // Test the bug scenario: when one of these items is clicked,
@@ -66,20 +64,20 @@ mod failing_bug_reproduction {
             // Check all "indented 1" items
             for item in &indented_1_items {
                 if item.id == focused_anchor_id {
-                    textarea_items.push(("indented 1", item.id.0, item.depth));
+                    textarea_items.push(("indented 1", item.id.0));
                 }
             }
 
             // Check all "indented 1.2" items
             for item in &indented_1_2_items {
                 if item.id == focused_anchor_id {
-                    textarea_items.push(("indented 1.2", item.id.0, item.depth));
+                    textarea_items.push(("indented 1.2", item.id.0));
                 }
             }
 
             println!("Items that would render textareas:");
-            for (content, id, depth) in &textarea_items {
-                println!("  TEXTAREA: '{}' id={} depth={}", content, id, depth);
+            for (content, id) in &textarea_items {
+                println!("  TEXTAREA: '{}' id={}", content, id);
             }
 
             // THE BUG: This should fail because multiple items have the same anchor ID
@@ -95,7 +93,7 @@ mod failing_bug_reproduction {
             );
 
             // Additional check: verify the content matches what we clicked
-            if let Some((textarea_content, _, _)) = textarea_items.first() {
+            if let Some((textarea_content, _)) = textarea_items.first() {
                 assert_eq!(
                     *textarea_content, clicked_item.content,
                     "WRONG CONTENT BUG: Clicked '{}' but textarea shows '{}'",
@@ -118,19 +116,18 @@ mod failing_bug_reproduction {
 
         for iteration in 0..3 {
             doc.create_anchors_from_tree();
+            let source = doc.text();
             let snapshot = doc.snapshot();
+            let blocks = flatten_blocks(&snapshot.blocks, &source);
 
             println!("\n=== ANCHOR GENERATION ITERATION {} ===", iteration);
 
             let mut iteration_map = std::collections::HashMap::new();
 
-            for block in &snapshot.blocks {
+            for block in &blocks {
                 // Look specifically for prefix-related content
                 if block.content.starts_with("indented 1") {
-                    println!(
-                        "  '{}' (depth={}) -> anchor_id={}",
-                        block.content, block.depth, block.id.0
-                    );
+                    println!("  '{}' -> anchor_id={}", block.content, block.id.0);
                     iteration_map.insert(block.content.clone(), block.id.0);
                 }
             }
@@ -201,13 +198,14 @@ mod failing_bug_reproduction {
         let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
         doc.create_anchors_from_tree();
 
+        let source = doc.text();
         let snapshot = doc.snapshot();
+        let blocks = flatten_blocks(&snapshot.blocks, &source);
 
         // Look for the specific collision: same anchor ID for different content
         let target_anchor_id = 10032346120884770342u128;
 
-        let blocks_with_target_id: Vec<_> = snapshot
-            .blocks
+        let blocks_with_target_id: Vec<_> = blocks
             .iter()
             .filter(|b| b.id.0 == target_anchor_id)
             .collect();
@@ -220,10 +218,7 @@ mod failing_bug_reproduction {
         );
 
         for (i, block) in blocks_with_target_id.iter().enumerate() {
-            println!(
-                "  [{}] '{}' depth={} id={}",
-                i, block.content, block.depth, block.id.0
-            );
+            println!("  [{}] '{}' id={}", i, block.content, block.id.0);
         }
 
         if blocks_with_target_id.len() > 1 {
@@ -251,7 +246,7 @@ mod failing_bug_reproduction {
             // Still test for any collisions in the current data
             let mut anchor_to_blocks = std::collections::HashMap::new();
 
-            for block in &snapshot.blocks {
+            for block in &blocks {
                 anchor_to_blocks
                     .entry(block.id.0)
                     .or_insert_with(Vec::new)

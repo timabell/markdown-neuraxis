@@ -1,0 +1,47 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..70]
+  children:
+    ListItem { marker: "- " } [0..70]
+      lines:
+        full:0..10 prefix:0..2"- " content:2..9"Level 1"
+      segments:
+        Text [2..9] "Level 1"
+      children:
+        List { ordered: false } [12..70]
+          children:
+            ListItem { marker: "- " } [12..70]
+              root_range: 0..70
+              lines:
+                full:12..22 prefix:12..14"- " content:14..21"Level 2"
+              segments:
+                Text [14..21] "Level 2"
+              children:
+                List { ordered: false } [26..70]
+                  children:
+                    ListItem { marker: "- " } [26..70]
+                      root_range: 0..70
+                      lines:
+                        full:26..36 prefix:26..28"- " content:28..35"Level 3"
+                      segments:
+                        Text [28..35] "Level 3"
+                      children:
+                        List { ordered: false } [42..70]
+                          children:
+                            ListItem { marker: "- " } [42..70]
+                              root_range: 0..70
+                              lines:
+                                full:42..52 prefix:42..44"- " content:44..51"Level 4"
+                              segments:
+                                Text [44..51] "Level 4"
+                              children:
+                                List { ordered: false } [60..70]
+                                  children:
+                                    ListItem { marker: "- " } [60..70]
+                                      root_range: 0..70
+                                      lines:
+                                        full:60..70 prefix:60..62"- " content:62..69"Level 5"
+                                      segments:
+                                        Text [62..69] "Level 5"

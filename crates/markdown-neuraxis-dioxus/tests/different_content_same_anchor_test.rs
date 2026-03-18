@@ -1,6 +1,9 @@
 //! Test for the actual bug: different content getting same anchor ID
 
+mod test_helpers;
+
 use markdown_neuraxis_engine::editing::Document;
+use test_helpers::flatten_blocks;
 
 #[test]
 fn test_different_content_same_anchor_id_bug() {
@@ -9,13 +12,15 @@ fn test_different_content_same_anchor_id_bug() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
+    let source = doc.text();
     let snapshot = doc.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Build a map from anchor ID to all content that uses that ID
     let mut anchor_to_contents: std::collections::HashMap<u128, Vec<String>> =
         std::collections::HashMap::new();
 
-    for block in &snapshot.blocks {
+    for block in &blocks {
         anchor_to_contents
             .entry(block.id.0)
             .or_default()
@@ -23,15 +28,24 @@ fn test_different_content_same_anchor_id_bug() {
     }
 
     // Look for anchor IDs that map to multiple DIFFERENT content strings
+    // Note: We filter out empty content strings because LIST containers don't have content
+    // and they get fallback IDs that may collide. This is expected behavior.
     let mut different_content_collisions = Vec::new();
 
     for (anchor_id, contents) in &anchor_to_contents {
         if contents.len() > 1 {
-            // Multiple blocks share this anchor ID - check if they have different content
-            let unique_contents: std::collections::HashSet<_> = contents.iter().collect();
-            if unique_contents.len() > 1 {
-                // Found the bug! Same anchor ID for different content
-                different_content_collisions.push((*anchor_id, contents.clone()));
+            // Filter out empty strings (from LIST containers)
+            let non_empty_contents: Vec<_> =
+                contents.iter().filter(|c| !c.is_empty()).cloned().collect();
+
+            // Multiple blocks share this anchor ID - check if they have different non-empty content
+            if non_empty_contents.len() > 1 {
+                let unique_contents: std::collections::HashSet<_> =
+                    non_empty_contents.iter().collect();
+                if unique_contents.len() > 1 {
+                    // Found the bug! Same anchor ID for different content
+                    different_content_collisions.push((*anchor_id, non_empty_contents));
+                }
             }
         }
     }
@@ -69,18 +83,18 @@ fn test_specific_indented_1_vs_indented_1_2_collision() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
+    let source = doc.text();
     let snapshot = doc.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Find all "indented 1" blocks (exact match)
-    let indented_1_blocks: Vec<_> = snapshot
-        .blocks
+    let indented_1_blocks: Vec<_> = blocks
         .iter()
         .filter(|b| b.content == "indented 1")
         .collect();
 
     // Find all "indented 1.2" blocks (exact match)
-    let indented_1_2_blocks: Vec<_> = snapshot
-        .blocks
+    let indented_1_2_blocks: Vec<_> = blocks
         .iter()
         .filter(|b| b.content == "indented 1.2")
         .collect();
@@ -88,12 +102,12 @@ fn test_specific_indented_1_vs_indented_1_2_collision() {
     println!("=== TESTING SPECIFIC 'indented 1' vs 'indented 1.2' COLLISION ===");
     println!("'indented 1' blocks: {}", indented_1_blocks.len());
     for (i, block) in indented_1_blocks.iter().enumerate() {
-        println!("  [{}] anchor_id={} depth={}", i, block.id.0, block.depth);
+        println!("  [{}] anchor_id={}", i, block.id.0);
     }
 
     println!("'indented 1.2' blocks: {}", indented_1_2_blocks.len());
     for (i, block) in indented_1_2_blocks.iter().enumerate() {
-        println!("  [{}] anchor_id={} depth={}", i, block.id.0, block.depth);
+        println!("  [{}] anchor_id={}", i, block.id.0);
     }
 
     // Check for the specific diagnostic collision

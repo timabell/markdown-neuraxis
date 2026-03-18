@@ -16,6 +16,7 @@ xi-rope = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-md = { workspace = true }
 regex = { workspace = true }
+markdown-neuraxis-syntax = { path = "../markdown-neuraxis-syntax" }
 
 [dev-dependencies]
 rstest = { workspace = true }

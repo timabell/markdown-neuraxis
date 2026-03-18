@@ -36,7 +36,7 @@ use crate::editing::Document;
 ///
 /// let snapshot = doc.snapshot();
 /// for block in &snapshot.blocks {
-///     println!("Block {} has stable ID: {:?}", block.content, block.id);
+///     println!("Block {:?} has stable ID: {:?}", block.kind, block.id);
 ///     // ID remains same after edits to this block
 /// }
 /// ```

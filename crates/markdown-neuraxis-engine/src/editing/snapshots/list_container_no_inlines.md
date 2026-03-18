@@ -1,0 +1,3 @@
+- *emphasis* in first item
+- **strong** in second item
+- `code` in third item

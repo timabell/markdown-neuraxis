@@ -1,0 +1,20 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+BlockQuote [0..41]
+  lines:
+    full:0..41 prefix:0..2"> " content:2..40"Quote with *emphasis* and [link](url)."
+  segments:
+    Text [2..13] "Quote with "
+    Emphasis [13..23] "emphasis"
+    Text [23..28] " and "
+    Link [28..39] text:"link" url:"url"
+    Text [39..40] "."
+BlockQuote [41..68]
+  lines:
+    full:41..68 prefix:41..43"> " content:43..67"Second line with `code`."
+  segments:
+    Text [43..60] "Second line with "
+    Code [60..66] "code"
+    Text [66..67] "."

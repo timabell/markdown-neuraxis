@@ -1,0 +1,33 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "format_tree(&tree, 0)"
+---
+ROOT@0..70
+  PARAGRAPH@0..70
+    TEXT@0..4 "Line"
+    WHITESPACE@4..5 " "
+    TEXT@5..9 "with"
+    WHITESPACE@9..10 " "
+    TEXT@10..14 "hard"
+    WHITESPACE@14..15 " "
+    TEXT@15..20 "break"
+    HARD_BREAK@20..23 "  \\n"
+    TEXT@23..27 "next"
+    WHITESPACE@27..28 " "
+    TEXT@28..32 "line"
+    NEWLINE@32..33 "\\n"
+    TEXT@33..39 "Single"
+    WHITESPACE@39..40 " "
+    TEXT@40..45 "space"
+    WHITESPACE@45..46 " "
+    TEXT@46..48 "no"
+    WHITESPACE@48..49 " "
+    TEXT@49..54 "break"
+    WHITESPACE@54..55 " "
+    NEWLINE@55..56 "\\n"
+    TEXT@56..60 "also"
+    WHITESPACE@60..61 " "
+    TEXT@61..63 "no"
+    WHITESPACE@63..64 " "
+    TEXT@64..69 "break"
+    NEWLINE@69..70 "\\n"

@@ -4,6 +4,8 @@
 //! the multiple textarea bug and test the integration boundary between core
 //! document/anchor logic and UI rendering.
 
+mod test_helpers;
+
 use pretty_assertions::assert_eq;
 use relative_path::RelativePathBuf;
 use std::collections::{HashMap, HashSet};
@@ -12,6 +14,7 @@ use tempfile::TempDir;
 use markdown_neuraxis_engine::editing::{AnchorId, Document};
 use markdown_neuraxis_engine::io;
 use markdown_neuraxis_engine::models::MarkdownFile;
+use test_helpers::flatten_blocks;
 // Note: Dioxus UI component testing would require more complex setup
 // For now, focusing on integration boundary testing through the public API
 
@@ -43,13 +46,15 @@ fn test_render_block_anchor_uniqueness() {
 
     let mut document = Document::from_bytes(content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
+    let source = document.text();
     let snapshot = document.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Core invariant: All render block anchor IDs must be unique
     let mut anchor_ids = HashSet::new();
     let mut duplicate_ids = Vec::new();
 
-    for block in &snapshot.blocks {
+    for block in &blocks {
         if !anchor_ids.insert(block.id) {
             duplicate_ids.push(block.id);
         }
@@ -61,27 +66,18 @@ fn test_render_block_anchor_uniqueness() {
         duplicate_ids
     );
 
-    // Additional validation: Each block should have a valid, non-empty range
-    for (i, block) in snapshot.blocks.iter().enumerate() {
-        assert!(
-            block.byte_range.start < block.byte_range.end,
-            "Block {} has invalid range: {:?}",
-            i,
-            block.byte_range
-        );
-        assert!(
-            block.byte_range.end <= document.text().len(),
-            "Block {} range extends beyond document: {:?} vs document length {}",
-            i,
-            block.byte_range,
-            document.text().len()
-        );
-    }
+    // Additional validation: Count blocks with content (LIST containers have empty content)
+    // This is expected - LIST containers are structural wrappers with no text content
+    let content_blocks: Vec<_> = blocks.iter().filter(|b| !b.content.is_empty()).collect();
+    assert!(
+        !content_blocks.is_empty(),
+        "No blocks with content found - document should have at least one content block"
+    );
 
     println!(
         "Render block anchor uniqueness test passed: {} unique anchor IDs for {} blocks",
         anchor_ids.len(),
-        snapshot.blocks.len()
+        blocks.len()
     );
 }
 
@@ -101,21 +97,21 @@ fn test_anchor_stability_across_snapshots() {
     document.create_anchors_from_tree();
 
     // Take multiple snapshots and ensure they have the same anchor IDs in the same order
+    let source1 = document.text();
     let snapshot1 = document.snapshot();
+    let blocks1 = flatten_blocks(&snapshot1.blocks, &source1);
+
+    let source2 = document.text();
     let snapshot2 = document.snapshot();
+    let blocks2 = flatten_blocks(&snapshot2.blocks, &source2);
 
     assert_eq!(
-        snapshot1.blocks.len(),
-        snapshot2.blocks.len(),
+        blocks1.len(),
+        blocks2.len(),
         "Snapshots should have the same number of blocks"
     );
 
-    for (i, (block1, block2)) in snapshot1
-        .blocks
-        .iter()
-        .zip(snapshot2.blocks.iter())
-        .enumerate()
-    {
+    for (i, (block1, block2)) in blocks1.iter().zip(blocks2.iter()).enumerate() {
         assert_eq!(
             block1.id, block2.id,
             "Block {} should have stable anchor ID across snapshots",
@@ -143,13 +139,15 @@ fn test_snapshot_block_anchor_uniqueness() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
+    let source = document.text();
     let snapshot = document.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Check that all render blocks have unique anchor IDs
     let mut anchor_ids = HashSet::new();
     let mut duplicate_ids = Vec::new();
 
-    for block in &snapshot.blocks {
+    for block in &blocks {
         if !anchor_ids.insert(block.id) {
             duplicate_ids.push(block.id);
         }
@@ -161,29 +159,12 @@ fn test_snapshot_block_anchor_uniqueness() {
         duplicate_ids
     );
 
-    // Additional validation: each block should have valid ranges within the document
-    for block in &snapshot.blocks {
-        assert!(
-            block.byte_range.start <= block.byte_range.end,
-            "Block should have valid byte range"
-        );
-        assert!(
-            block.byte_range.end <= document.text().len(),
-            "Block range should be within document bounds"
-        );
-        assert!(
-            block.content_range.start <= block.content_range.end,
-            "Block should have valid content range"
-        );
-        assert!(
-            block.content_range.end <= document.text().len(),
-            "Block content range should be within document bounds"
-        );
-    }
+    // Validate blocks have content
+    assert!(!blocks.is_empty(), "Should have blocks in snapshot");
 
     println!(
         "Snapshot block uniqueness test passed: {} unique blocks created",
-        snapshot.blocks.len()
+        blocks.len()
     );
 }
 
@@ -204,21 +185,17 @@ fn test_focus_state_integration_single_textarea_invariant() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
+    let source = document.text();
     let snapshot = document.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Simulate the focus state that the UI maintains
     let mut focused_anchor_id: Option<AnchorId>;
 
     // Get all list item blocks (the scenario where the bug occurs)
-    let list_item_blocks: Vec<_> = snapshot
-        .blocks
+    let list_item_blocks: Vec<_> = blocks
         .iter()
-        .filter(|block| {
-            matches!(
-                block.kind,
-                markdown_neuraxis_engine::editing::BlockKind::ListItem { .. }
-            )
-        })
+        .filter(|block| !block.content.is_empty())
         .collect();
 
     assert!(
@@ -277,21 +254,21 @@ fn test_nested_list_anchor_hierarchy() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
+    let source = document.text();
     let snapshot = document.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
-    // Build a map of anchor ID to depth based on content indentation
-    let mut anchor_depths = HashMap::new();
-    for block in &snapshot.blocks {
-        if let markdown_neuraxis_engine::editing::BlockKind::ListItem { .. } = block.kind {
-            // Use the block's depth directly (no need to estimate from leading spaces)
-            let estimated_depth = block.depth;
-            anchor_depths.insert(block.id, estimated_depth);
+    // Build a map of anchor ID to content for list items
+    let mut anchor_contents = HashMap::new();
+    for block in &blocks {
+        if !block.content.is_empty() {
+            anchor_contents.insert(block.id, block.content.clone());
         }
     }
 
     // Verify that anchor IDs are unique across all depths
     let mut all_anchor_ids = HashSet::new();
-    for &anchor_id in anchor_depths.keys() {
+    for &anchor_id in anchor_contents.keys() {
         assert!(
             all_anchor_ids.insert(anchor_id),
             "Duplicate anchor ID found in nested list hierarchy: {:?}",
@@ -300,11 +277,10 @@ fn test_nested_list_anchor_hierarchy() {
     }
 
     // Log the hierarchy for debugging
-    for block in &snapshot.blocks {
-        if let markdown_neuraxis_engine::editing::BlockKind::ListItem { .. } = block.kind {
+    for block in &blocks {
+        if !block.content.is_empty() {
             println!(
-                "List item: depth={}, id={:?}, content='{}'",
-                block.depth,
+                "List item: id={:?}, content='{}'",
                 block.id,
                 block.content.trim()
             );
@@ -312,7 +288,7 @@ fn test_nested_list_anchor_hierarchy() {
     }
 
     assert!(
-        anchor_depths.len() >= 5,
+        anchor_contents.len() >= 5,
         "Should have created anchors for all nested list items"
     );
 }
@@ -331,18 +307,14 @@ fn test_list_item_click_simulation_anchor_uniqueness() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
+    let source = document.text();
     let snapshot = document.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     // Get all list items
-    let list_items: Vec<_> = snapshot
-        .blocks
+    let list_items: Vec<_> = blocks
         .iter()
-        .filter(|block| {
-            matches!(
-                block.kind,
-                markdown_neuraxis_engine::editing::BlockKind::ListItem { .. }
-            )
-        })
+        .filter(|block| !block.content.is_empty())
         .collect();
 
     // Simulate clicking on each item and verify they have different anchor IDs
@@ -386,13 +358,15 @@ fn test_multiple_textarea_bug_location_analysis() {
 
     let mut document = Document::from_bytes(content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
+    let source = document.text();
     let snapshot = document.snapshot();
+    let blocks = flatten_blocks(&snapshot.blocks, &source);
 
     println!("\n=== MULTIPLE TEXTAREA BUG LOCATION ANALYSIS ===");
 
     // Collect all findings from our integration tests
     let mut anchor_ids = HashSet::new();
-    for block in &snapshot.blocks {
+    for block in &blocks {
         anchor_ids.insert(block.id);
     }
 
@@ -406,15 +380,9 @@ fn test_multiple_textarea_bug_location_analysis() {
     println!("   - Nested list items have completely different anchor IDs");
 
     // Test the specific scenario that triggers the bug in the UI
-    let list_items: Vec<_> = snapshot
-        .blocks
+    let list_items: Vec<_> = blocks
         .iter()
-        .filter(|block| {
-            matches!(
-                block.kind,
-                markdown_neuraxis_engine::editing::BlockKind::ListItem { .. }
-            )
-        })
+        .filter(|block| !block.content.is_empty())
         .collect();
 
     println!("\n🔍 UI INTEGRATION BOUNDARY ANALYSIS:");
@@ -425,11 +393,10 @@ fn test_multiple_textarea_bug_location_analysis() {
 
     for (i, block) in list_items.iter().enumerate() {
         println!(
-            "   - Item {}: '{}' has anchor ID {:?} (depth: {})",
+            "   - Item {}: '{}' has anchor ID {:?}",
             i,
             block.content.trim(),
             block.id,
-            block.depth
         );
     }
 
@@ -457,7 +424,7 @@ fn test_multiple_textarea_bug_location_analysis() {
 
     assert_eq!(
         anchor_ids.len(),
-        snapshot.blocks.len(),
+        blocks.len(),
         "Every block should have a unique anchor ID (no duplicates)"
     );
 

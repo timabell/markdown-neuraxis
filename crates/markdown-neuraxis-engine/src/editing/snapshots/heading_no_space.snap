@@ -1,0 +1,9 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Heading { level: 1 } [0..20]
+  lines:
+    full:0..20 prefix:0..2"#N" content:2..19"oSpace after hash"
+  segments:
+    Text [2..19] "oSpace after hash"
