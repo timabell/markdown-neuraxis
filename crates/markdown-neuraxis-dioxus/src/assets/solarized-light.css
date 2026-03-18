@@ -245,15 +245,6 @@ hr {
     line-height: 1.5;
 }
 
-.list-marker {
-    color: var(--blue);
-    font-weight: 500;
-}
-
-.list-content {
-    color: var(--base01);
-}
-
 /* Code block styles */
 .code-block {
     margin: 16px 0;

@@ -19,9 +19,9 @@
  * - Commands are applied immediately on every input event for authoritative model updates
  * - Supports undo/redo through Delta history (future enhancement)
  *
- * ### 3. Incremental Parsing with Tree-sitter
- * - Uses **Tree-sitter Markdown** for incremental parsing over the rope buffer
- * - Feeds edits via `tree.edit()`, then re-parses to update only changed regions
+ * ### 3. Parsing with Rowan
+ * - Uses **Rowan** (rust-analyzer's syntax tree library) for lossless parsing
+ * - Custom lexer and recursive descent parser produce a concrete syntax tree (CST)
  * - Provides structured access to document elements while preserving round-trip fidelity
  *
  * ### 4. Stable Block IDs via Anchors
@@ -32,16 +32,16 @@
  *
  * ### 5. Read API: Immutable Snapshots
  * - The core exposes **Snapshots** describing how to render without exposing rope directly
- * - Snapshots contain **RenderBlocks** with stable AnchorIds, content ranges, and metadata
+ * - Snapshots contain **Blocks** with stable AnchorIds, content ranges, and metadata
  * - UI renders from snapshots and never directly mutates the rope
  * - Supports both "pretty" rendering and raw Markdown editing of focused blocks
  *
  * ## Module Structure
  *
- * - **`document`**: Core `Document` type with xi-rope buffer and Tree-sitter integration
+ * - **`document`**: Core `Document` type with xi-rope buffer and Rowan parsing
  * - **`commands`**: `Cmd` enum and delta compilation logic for all edit operations
  * - **`anchors`**: Stable block ID system with range transformation and rebinding
- * - **`snapshot`**: Immutable view generation with `RenderBlock`s for UI consumption
+ * - **`snapshot`**: Immutable view generation with `Block`s for UI consumption
  * - **`patch`**: Edit result metadata including changed ranges and new selection
  *
  * ## Usage Pattern
