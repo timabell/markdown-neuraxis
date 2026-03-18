@@ -1,5 +1,5 @@
 ---
-source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 FencedCode { language: None } [0..33]
@@ -8,3 +8,5 @@ FencedCode { language: None } [0..33]
     full:4..19 prefix:4..4"" content:4..18"some code here"
     full:19..29 prefix:19..19"" content:19..28"more code"
     full:29..33 prefix:29..29"" content:29..32"```"
+  segments:
+    Text [4..28] "some code here\nmore code"

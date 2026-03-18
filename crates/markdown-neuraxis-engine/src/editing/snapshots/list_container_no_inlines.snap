@@ -8,17 +8,20 @@ List [0..78]
       root_range: 0..78
       lines:
         full:0..27 prefix:0..2"- " content:2..26"*emphasis* in first item"
-      inlines:
-        Emphasis [2..12] content:3..11 "emphasis"
+      segments:
+        Emphasis [2..12] "emphasis"
+        Text [12..26] " in first item"
     ListItem { marker: "- " } [27..55]
       root_range: 0..78
       lines:
         full:27..55 prefix:27..29"- " content:29..54"**strong** in second item"
-      inlines:
-        Strong [29..39] content:31..37 "strong"
+      segments:
+        Strong [29..39] "strong"
+        Text [39..54] " in second item"
     ListItem { marker: "- " } [55..78]
       root_range: 0..78
       lines:
         full:55..78 prefix:55..57"- " content:57..77"`code` in third item"
-      inlines:
-        Code [57..63] content:58..62 "code"
+      segments:
+        Code [57..63] "code"
+        Text [63..77] " in third item"

@@ -8,6 +8,8 @@ List [0..112]
       root_range: 0..112
       lines:
         full:0..14 prefix:0..2"- " content:2..13"Parent item"
+      segments:
+        Text [2..13] "Parent item"
       children:
         List [16..95]
           children:
@@ -15,6 +17,8 @@ List [0..112]
               root_range: 0..112
               lines:
                 full:16..33 prefix:16..18"- " content:18..32"Child item one"
+              segments:
+                Text [18..32] "Child item one"
               children:
                 List [35..95]
                   children:
@@ -22,6 +26,8 @@ List [0..112]
                       root_range: 0..112
                       lines:
                         full:35..52 prefix:35..37"- " content:37..51"Child item two"
+                      segments:
+                        Text [37..51] "Child item two"
                       children:
                         List [56..95]
                           children:
@@ -29,6 +35,8 @@ List [0..112]
                               root_range: 0..112
                               lines:
                                 full:56..74 prefix:56..58"- " content:58..73"Grandchild item"
+                              segments:
+                                Text [58..73] "Grandchild item"
                               children:
                                 List [76..95]
                                   children:
@@ -36,7 +44,11 @@ List [0..112]
                                       root_range: 0..112
                                       lines:
                                         full:76..95 prefix:76..78"- " content:78..94"Child item three"
+                                      segments:
+                                        Text [78..94] "Child item three"
     ListItem { marker: "- " } [95..112]
       root_range: 0..112
       lines:
         full:95..112 prefix:95..97"- " content:97..111"Another parent"
+      segments:
+        Text [97..111] "Another parent"

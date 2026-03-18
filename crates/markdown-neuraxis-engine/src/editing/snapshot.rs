@@ -52,43 +52,40 @@ pub enum BlockContent {
     Children(Vec<Block>),
 }
 
-/// An inline element within a block (emphasis, links, hard breaks, etc.)
+/// A segment of inline content ready for UI rendering.
+/// UIs can iterate directly over segments to render all text.
 #[derive(Debug, Clone, PartialEq)]
-pub struct InlineElement {
-    /// What kind of inline this is
-    pub kind: InlineKind,
-    /// Byte range in source
+pub struct InlineSegment {
+    /// The kind of segment with its content
+    pub kind: SegmentKind,
+    /// Byte range in source (for verification/debugging)
     pub range: Range<usize>,
 }
 
-/// The kind of inline element with ranges for display-relevant parts
+/// The kind of inline segment
 #[derive(Debug, Clone, PartialEq)]
-pub enum InlineKind {
-    /// Hard line break (two+ trailing spaces before newline)
-    HardBreak,
-    /// Emphasis (*text* or _text_) - content is the text without markers
-    Emphasis { content: Range<usize> },
-    /// Strong emphasis (**text** or __text__) - content is the text without markers
-    Strong { content: Range<usize> },
-    /// Inline code (`code`) - content is the code without backticks
-    Code { content: Range<usize> },
-    /// Link [text](url) - separate ranges for display text and URL
-    Link {
-        text: Range<usize>,
-        url: Range<usize>,
-    },
+pub enum SegmentKind {
+    /// Plain text content
+    Text(String),
+    /// Strong emphasis (**text**)
+    Strong(String),
+    /// Emphasis (*text*)
+    Emphasis(String),
+    /// Inline code (`code`)
+    Code(String),
+    /// Strikethrough (~~text~~)
+    Strikethrough(String),
     /// Wiki link [[target]] or [[target|alias]]
     WikiLink {
-        target: Range<usize>,
-        alias: Option<Range<usize>>,
+        target: String,
+        alias: Option<String>,
     },
-    /// Image ![alt](url) - separate ranges for alt text and URL
-    Image {
-        alt: Range<usize>,
-        url: Range<usize>,
-    },
-    /// Strikethrough ~~text~~ - content is the text without markers
-    Strikethrough { content: Range<usize> },
+    /// Standard markdown link [text](url)
+    Link { text: String, url: String },
+    /// Image ![alt](url)
+    Image { alt: String, url: String },
+    /// Hard line break
+    HardBreak,
 }
 
 /// The kind of block
@@ -125,8 +122,9 @@ pub struct Block {
     pub root_range: Range<usize>,
     /// Per-line breakdown with prefix/content ranges
     pub lines: Vec<LineInfo>,
-    /// Inline elements within this block (emphasis, links, hard breaks, etc.)
-    pub inlines: Vec<InlineElement>,
+    /// Flat list of inline segments for UI rendering.
+    /// Includes Text segments for gaps between formatted inlines.
+    pub segments: Vec<InlineSegment>,
     /// Block content (text or children)
     pub content: BlockContent,
 }
@@ -185,11 +183,11 @@ fn format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
         }
     }
 
-    // Inlines
-    if !block.inlines.is_empty() {
-        writeln!(out, "{}  inlines:", prefix).unwrap();
-        for inline in &block.inlines {
-            format_inline(out, inline, source, &prefix);
+    // Segments
+    if !block.segments.is_empty() {
+        writeln!(out, "{}  segments:", prefix).unwrap();
+        for segment in &block.segments {
+            format_segment(out, segment, &prefix);
         }
     }
 
@@ -207,96 +205,89 @@ fn format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
     }
 }
 
-fn format_inline(out: &mut String, inline: &InlineElement, source: &str, prefix: &str) {
+fn format_segment(out: &mut String, segment: &InlineSegment, prefix: &str) {
     use std::fmt::Write;
 
-    match &inline.kind {
-        InlineKind::HardBreak => {
+    let range = &segment.range;
+    match &segment.kind {
+        SegmentKind::Text(text) => {
             writeln!(
                 out,
-                "{}    HardBreak [{}..{}]",
-                prefix, inline.range.start, inline.range.end
+                "{}    Text [{}..{}] {:?}",
+                prefix, range.start, range.end, text
             )
             .unwrap();
         }
-        InlineKind::Emphasis { content } => {
-            let text = &source[content.clone()];
+        SegmentKind::Strong(text) => {
             writeln!(
                 out,
-                "{}    Emphasis [{}..{}] content:{:?} {:?}",
-                prefix, inline.range.start, inline.range.end, content, text
+                "{}    Strong [{}..{}] {:?}",
+                prefix, range.start, range.end, text
             )
             .unwrap();
         }
-        InlineKind::Strong { content } => {
-            let text = &source[content.clone()];
+        SegmentKind::Emphasis(text) => {
             writeln!(
                 out,
-                "{}    Strong [{}..{}] content:{:?} {:?}",
-                prefix, inline.range.start, inline.range.end, content, text
+                "{}    Emphasis [{}..{}] {:?}",
+                prefix, range.start, range.end, text
             )
             .unwrap();
         }
-        InlineKind::Code { content } => {
-            let text = &source[content.clone()];
+        SegmentKind::Code(text) => {
             writeln!(
                 out,
-                "{}    Code [{}..{}] content:{:?} {:?}",
-                prefix, inline.range.start, inline.range.end, content, text
+                "{}    Code [{}..{}] {:?}",
+                prefix, range.start, range.end, text
             )
             .unwrap();
         }
-        InlineKind::Link { text, url } => {
-            let text_str = &source[text.clone()];
-            let url_str = &source[url.clone()];
+        SegmentKind::Strikethrough(text) => {
             writeln!(
                 out,
-                "{}    Link [{}..{}] text:{:?} {:?} url:{:?} {:?}",
-                prefix, inline.range.start, inline.range.end, text, text_str, url, url_str
+                "{}    Strikethrough [{}..{}] {:?}",
+                prefix, range.start, range.end, text
             )
             .unwrap();
         }
-        InlineKind::WikiLink { target, alias } => {
-            let target_str = &source[target.clone()];
-            if let Some(alias_range) = alias {
-                let alias_str = &source[alias_range.clone()];
+        SegmentKind::WikiLink { target, alias } => {
+            if let Some(alias) = alias {
                 writeln!(
                     out,
-                    "{}    WikiLink [{}..{}] target:{:?} {:?} alias:{:?} {:?}",
-                    prefix,
-                    inline.range.start,
-                    inline.range.end,
-                    target,
-                    target_str,
-                    alias_range,
-                    alias_str
+                    "{}    WikiLink [{}..{}] target:{:?} alias:{:?}",
+                    prefix, range.start, range.end, target, alias
                 )
                 .unwrap();
             } else {
                 writeln!(
                     out,
-                    "{}    WikiLink [{}..{}] target:{:?} {:?}",
-                    prefix, inline.range.start, inline.range.end, target, target_str
+                    "{}    WikiLink [{}..{}] target:{:?}",
+                    prefix, range.start, range.end, target
                 )
                 .unwrap();
             }
         }
-        InlineKind::Image { alt, url } => {
-            let alt_str = &source[alt.clone()];
-            let url_str = &source[url.clone()];
+        SegmentKind::Link { text, url } => {
             writeln!(
                 out,
-                "{}    Image [{}..{}] alt:{:?} {:?} url:{:?} {:?}",
-                prefix, inline.range.start, inline.range.end, alt, alt_str, url, url_str
+                "{}    Link [{}..{}] text:{:?} url:{:?}",
+                prefix, range.start, range.end, text, url
             )
             .unwrap();
         }
-        InlineKind::Strikethrough { content } => {
-            let text = &source[content.clone()];
+        SegmentKind::Image { alt, url } => {
             writeln!(
                 out,
-                "{}    Strikethrough [{}..{}] content:{:?} {:?}",
-                prefix, inline.range.start, inline.range.end, content, text
+                "{}    Image [{}..{}] alt:{:?} url:{:?}",
+                prefix, range.start, range.end, alt, url
+            )
+            .unwrap();
+        }
+        SegmentKind::HardBreak => {
+            writeln!(
+                out,
+                "{}    HardBreak [{}..{}]",
+                prefix, range.start, range.end
             )
             .unwrap();
         }
@@ -420,8 +411,8 @@ fn process_list(
         kind: BlockKind::List,
         node_range: node_range.clone(),
         root_range: node_range,
-        lines: vec![], // List container has no lines of its own
-        inlines: vec![],
+        lines: vec![],    // List container has no lines of its own
+        segments: vec![], // List containers have no segments
         content: BlockContent::Children(children),
     })
 }
@@ -484,21 +475,35 @@ fn process_list_item(
     // Look up anchor ID for this list item
     let id = find_anchor_for_range(anchors, &node_range);
 
-    // Extract inline elements from the list item's content
+    // Extract segments from the list item's content
     // We look in the PARAGRAPH child (if present) since that's where inlines live
-    let inlines = node
+    let lines_vec = vec![first_line_info];
+    let content_range = compute_content_range(&lines_vec);
+    let segments = node
         .children()
         .find(|c| c.kind() == SyntaxKind::PARAGRAPH)
-        .map(|para| extract_inlines(&para, source))
-        .unwrap_or_default();
+        .map(|para| extract_segments(&para, source, content_range.clone()))
+        .unwrap_or_else(|| {
+            // No paragraph child, create a single Text segment for the content
+            if !content_range.is_empty() {
+                let text = &source[content_range.clone()];
+                if !text.is_empty() {
+                    return vec![InlineSegment {
+                        kind: SegmentKind::Text(text.to_string()),
+                        range: content_range.clone(),
+                    }];
+                }
+            }
+            vec![]
+        });
 
     Some(Block {
         id,
         kind: BlockKind::ListItem { marker },
         node_range,
         root_range,
-        lines: vec![first_line_info],
-        inlines,
+        lines: lines_vec,
+        segments,
         content,
     })
 }
@@ -537,8 +542,9 @@ fn process_paragraph(
         pos = line_end;
     }
 
-    // Extract inline elements
-    let inlines = extract_inlines(&node, source);
+    // Extract segments from inline content
+    let content_range = compute_content_range(&lines);
+    let segments = extract_segments(&node, source, content_range);
 
     // Paragraphs don't have their own anchors in the current model,
     // so we generate a fallback ID from the range
@@ -550,7 +556,7 @@ fn process_paragraph(
         node_range,
         root_range,
         lines,
-        inlines,
+        segments,
         content: BlockContent::Leaf,
     })
 }
@@ -623,13 +629,17 @@ fn process_block_quote(
     // so we generate a fallback ID from the range
     let id = find_anchor_for_range(anchors, &node_range);
 
+    // Extract segments from inline content
+    let content_range = compute_content_range(&lines);
+    let segments = extract_segments(&node, source, content_range);
+
     Some(Block {
         id,
         kind: BlockKind::BlockQuote,
         node_range,
         root_range,
         lines,
-        inlines: extract_inlines(&node, source),
+        segments,
         content,
     })
 }
@@ -664,13 +674,18 @@ fn process_heading(
     // Look up anchor ID for this heading
     let id = find_anchor_for_range(anchors, &node_range);
 
+    // Extract segments from inline content
+    let lines_vec = vec![line_info];
+    let content_range = compute_content_range(&lines_vec);
+    let segments = extract_segments(&node, source, content_range);
+
     Some(Block {
         id,
         kind: BlockKind::Heading { level },
         node_range,
         root_range,
-        lines: vec![line_info],
-        inlines: extract_inlines(&node, source),
+        lines: lines_vec,
+        segments,
         content: BlockContent::Leaf,
     })
 }
@@ -723,13 +738,31 @@ fn process_fenced_code(
     // Look up anchor ID for this fenced code block
     let id = find_anchor_for_range(anchors, &node_range);
 
+    // Generate a single Text segment with the code content (middle lines, excluding fences)
+    let segments = if lines.len() > 2 {
+        // Skip first line (opening fence) and last line (closing fence)
+        let content_start = lines[1].content.start;
+        let content_end = lines[lines.len() - 2].content.end;
+        let code_text = &source[content_start..content_end];
+        if !code_text.is_empty() {
+            vec![InlineSegment {
+                kind: SegmentKind::Text(code_text.to_string()),
+                range: content_start..content_end,
+            }]
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
     Some(Block {
         id,
         kind: BlockKind::FencedCode { language },
         node_range,
         root_range,
         lines,
-        inlines: vec![], // Code blocks don't have inline formatting
+        segments,
         content: BlockContent::Leaf,
     })
 }
@@ -753,7 +786,7 @@ fn process_thematic_break(
         node_range,
         root_range,
         lines: vec![],
-        inlines: vec![],
+        segments: vec![],
         content: BlockContent::Leaf,
     })
 }
@@ -818,10 +851,26 @@ fn find_line_start(source: &str, pos: usize) -> usize {
     }
 }
 
-/// Extract inline elements from a node's children.
-/// Returns interesting inlines: HARD_BREAK, EMPHASIS, STRONG, CODE_SPAN, LINK, etc.
-fn extract_inlines(node: &SyntaxNode, source: &str) -> Vec<InlineElement> {
-    let mut inlines = Vec::new();
+/// Intermediate inline info during extraction (position and how to create segment)
+struct InlineInfo {
+    range: Range<usize>,
+    make_segment: Box<dyn Fn(&str) -> SegmentKind>,
+}
+
+/// Extract segments from a node, producing a flat list ready for UI rendering.
+/// Handles inline formatting (emphasis, strong, code, links, etc.) and fills
+/// gaps with Text segments so the entire content is covered.
+fn extract_segments(
+    node: &SyntaxNode,
+    source: &str,
+    content_range: Range<usize>,
+) -> Vec<InlineSegment> {
+    if content_range.is_empty() {
+        return vec![];
+    }
+
+    // Collect inline elements with their ranges and segment constructors
+    let mut inlines: Vec<InlineInfo> = Vec::new();
 
     for child in node.children_with_tokens() {
         let range: Range<usize> = {
@@ -830,113 +879,188 @@ fn extract_inlines(node: &SyntaxNode, source: &str) -> Vec<InlineElement> {
         };
         let text = &source[range.clone()];
 
-        let kind = match &child {
+        let info: Option<InlineInfo> = match &child {
             SyntaxElement::Token(token) => match token.kind() {
-                SyntaxKind::HARD_BREAK => Some(InlineKind::HardBreak),
+                SyntaxKind::HARD_BREAK => Some(InlineInfo {
+                    range: range.clone(),
+                    make_segment: Box::new(|_| SegmentKind::HardBreak),
+                }),
                 _ => None,
             },
             SyntaxElement::Node(node) => match node.kind() {
                 SyntaxKind::EMPHASIS => {
                     // *text* or _text_ - skip marker on each side
                     let content = (range.start + 1)..(range.end - 1);
-                    Some(InlineKind::Emphasis { content })
+                    let content_text = source[content].to_string();
+                    Some(InlineInfo {
+                        range: range.clone(),
+                        make_segment: Box::new(move |_| {
+                            SegmentKind::Emphasis(content_text.clone())
+                        }),
+                    })
                 }
                 SyntaxKind::STRONG => {
                     // **text** or __text__ - skip 2 markers on each side
                     let content = (range.start + 2)..(range.end - 2);
-                    Some(InlineKind::Strong { content })
+                    let content_text = source[content].to_string();
+                    Some(InlineInfo {
+                        range: range.clone(),
+                        make_segment: Box::new(move |_| SegmentKind::Strong(content_text.clone())),
+                    })
                 }
                 SyntaxKind::CODE_SPAN => {
                     // `code` - skip backtick on each side
                     let content = (range.start + 1)..(range.end - 1);
-                    Some(InlineKind::Code { content })
+                    let content_text = source[content].to_string();
+                    Some(InlineInfo {
+                        range: range.clone(),
+                        make_segment: Box::new(move |_| SegmentKind::Code(content_text.clone())),
+                    })
                 }
-                SyntaxKind::LINK => {
-                    // [text](url) - find the ] and ( positions
-                    parse_link_ranges(text, range.start)
-                }
-                SyntaxKind::WIKILINK => {
-                    // [[target]] or [[target|alias]]
-                    parse_wikilink_ranges(text, range.start)
-                }
-                SyntaxKind::IMAGE => {
-                    // ![alt](url) - similar to link but starts with !
-                    parse_image_ranges(text, range.start)
-                }
+                SyntaxKind::LINK => parse_link(text).map(|(link_text, url)| InlineInfo {
+                    range: range.clone(),
+                    make_segment: Box::new(move |_| SegmentKind::Link {
+                        text: link_text.clone(),
+                        url: url.clone(),
+                    }),
+                }),
+                SyntaxKind::WIKILINK => parse_wikilink(text).map(|(target, alias)| InlineInfo {
+                    range: range.clone(),
+                    make_segment: Box::new(move |_| SegmentKind::WikiLink {
+                        target: target.clone(),
+                        alias: alias.clone(),
+                    }),
+                }),
+                SyntaxKind::IMAGE => parse_image(text).map(|(alt, url)| InlineInfo {
+                    range: range.clone(),
+                    make_segment: Box::new(move |_| SegmentKind::Image {
+                        alt: alt.clone(),
+                        url: url.clone(),
+                    }),
+                }),
                 SyntaxKind::STRIKETHROUGH => {
                     // ~~text~~ - skip 2 markers on each side
                     let content = (range.start + 2)..(range.end - 2);
-                    Some(InlineKind::Strikethrough { content })
+                    let content_text = source[content].to_string();
+                    Some(InlineInfo {
+                        range: range.clone(),
+                        make_segment: Box::new(move |_| {
+                            SegmentKind::Strikethrough(content_text.clone())
+                        }),
+                    })
                 }
                 _ => None,
             },
         };
 
-        if let Some(kind) = kind {
-            inlines.push(InlineElement { kind, range });
+        if let Some(info) = info {
+            inlines.push(info);
         }
     }
 
-    inlines
+    // Sort inlines by start position
+    inlines.sort_by_key(|i| i.range.start);
+
+    // Build segments, filling gaps with Text
+    let mut segments = Vec::new();
+    let mut cursor = content_range.start;
+
+    for inline in &inlines {
+        // Skip inlines outside content range
+        if inline.range.end <= content_range.start || inline.range.start >= content_range.end {
+            continue;
+        }
+
+        // Add Text segment for gap before this inline
+        if inline.range.start > cursor {
+            let text_end = inline.range.start.min(content_range.end);
+            let text = &source[cursor..text_end];
+            if !text.is_empty() {
+                segments.push(InlineSegment {
+                    kind: SegmentKind::Text(text.to_string()),
+                    range: cursor..text_end,
+                });
+            }
+        }
+
+        // Add the inline segment
+        segments.push(InlineSegment {
+            kind: (inline.make_segment)(source),
+            range: inline.range.clone(),
+        });
+
+        cursor = inline.range.end.max(cursor);
+    }
+
+    // Add trailing Text segment
+    if cursor < content_range.end {
+        let text = &source[cursor..content_range.end];
+        if !text.is_empty() {
+            segments.push(InlineSegment {
+                kind: SegmentKind::Text(text.to_string()),
+                range: cursor..content_range.end,
+            });
+        }
+    }
+
+    // If no inlines found, entire content is plain text
+    if segments.is_empty() && !content_range.is_empty() {
+        let text = &source[content_range.clone()];
+        if !text.is_empty() {
+            segments.push(InlineSegment {
+                kind: SegmentKind::Text(text.to_string()),
+                range: content_range,
+            });
+        }
+    }
+
+    segments
 }
 
-/// Parse [text](url) into separate ranges
-fn parse_link_ranges(text: &str, offset: usize) -> Option<InlineKind> {
-    // Format: [text](url)
+/// Parse [text](url) into (text, url) strings
+fn parse_link(text: &str) -> Option<(String, String)> {
     let close_bracket = text.find(']')?;
     let open_paren = text[close_bracket..].find('(')? + close_bracket;
     let close_paren = text.rfind(')')?;
 
-    let text_range = (offset + 1)..(offset + close_bracket);
-    let url_range = (offset + open_paren + 1)..(offset + close_paren);
-
-    Some(InlineKind::Link {
-        text: text_range,
-        url: url_range,
-    })
+    let link_text = text[1..close_bracket].to_string();
+    let url = text[open_paren + 1..close_paren].to_string();
+    Some((link_text, url))
 }
 
-/// Parse [[target]] or [[target|alias]] into separate ranges
-fn parse_wikilink_ranges(text: &str, offset: usize) -> Option<InlineKind> {
-    // Format: [[target]] or [[target|alias]]
-    // Skip opening [[ and closing ]]
-    let inner_start = 2;
-    let inner_end = text.len() - 2;
-    let inner = &text[inner_start..inner_end];
-
+/// Parse [[target]] or [[target|alias]] into (target, Option<alias>) strings
+fn parse_wikilink(text: &str) -> Option<(String, Option<String>)> {
+    let inner = &text[2..text.len() - 2];
     if let Some(pipe_pos) = inner.find('|') {
-        // [[target|alias]]
-        let target = (offset + inner_start)..(offset + inner_start + pipe_pos);
-        let alias = (offset + inner_start + pipe_pos + 1)..(offset + inner_end);
-        Some(InlineKind::WikiLink {
-            target,
-            alias: Some(alias),
-        })
+        Some((
+            inner[..pipe_pos].to_string(),
+            Some(inner[pipe_pos + 1..].to_string()),
+        ))
     } else {
-        // [[target]]
-        let target = (offset + inner_start)..(offset + inner_end);
-        Some(InlineKind::WikiLink {
-            target,
-            alias: None,
-        })
+        Some((inner.to_string(), None))
     }
 }
 
-/// Parse ![alt](url) into separate ranges
-fn parse_image_ranges(text: &str, offset: usize) -> Option<InlineKind> {
-    // Format: ![alt](url)
+/// Parse ![alt](url) into (alt, url) strings
+fn parse_image(text: &str) -> Option<(String, String)> {
     let close_bracket = text.find(']')?;
     let open_paren = text[close_bracket..].find('(')? + close_bracket;
     let close_paren = text.rfind(')')?;
 
-    // Skip the leading ! for alt text start
-    let alt_range = (offset + 2)..(offset + close_bracket);
-    let url_range = (offset + open_paren + 1)..(offset + close_paren);
+    let alt = text[2..close_bracket].to_string();
+    let url = text[open_paren + 1..close_paren].to_string();
+    Some((alt, url))
+}
 
-    Some(InlineKind::Image {
-        alt: alt_range,
-        url: url_range,
-    })
+/// Helper to compute content range from lines for segment generation.
+/// For blocks with multiple lines, joins them as a single range.
+fn compute_content_range(lines: &[LineInfo]) -> Range<usize> {
+    if lines.is_empty() {
+        return 0..0;
+    }
+    let start = lines.first().unwrap().content.start;
+    let end = lines.last().unwrap().content.end;
+    start..end
 }
 
 #[cfg(test)]
@@ -1178,21 +1302,21 @@ mod tests {
         doc.create_anchors_from_tree();
         let snapshot = doc.snapshot();
 
-        // Should have a paragraph with wiki-link inline
+        // Should have a paragraph with wiki-link segment
         assert_eq!(snapshot.blocks.len(), 1);
         let block = &snapshot.blocks[0];
         assert_eq!(block.kind, BlockKind::Paragraph);
 
-        // Find wiki-link inline
+        // Find wiki-link segment
         let wikilinks: Vec<_> = block
-            .inlines
+            .segments
             .iter()
-            .filter(|i| matches!(i.kind, InlineKind::WikiLink { .. }))
+            .filter(|s| matches!(s.kind, SegmentKind::WikiLink { .. }))
             .collect();
         assert_eq!(wikilinks.len(), 1, "Should have 1 wiki-link");
 
-        if let InlineKind::WikiLink { target, alias } = &wikilinks[0].kind {
-            assert_eq!(&text[target.clone()], "Page Name");
+        if let SegmentKind::WikiLink { target, alias } = &wikilinks[0].kind {
+            assert_eq!(target, "Page Name");
             assert!(alias.is_none());
         }
     }
@@ -1206,16 +1330,16 @@ mod tests {
 
         let block = &snapshot.blocks[0];
         let wikilinks: Vec<_> = block
-            .inlines
+            .segments
             .iter()
-            .filter(|i| matches!(i.kind, InlineKind::WikiLink { .. }))
+            .filter(|s| matches!(s.kind, SegmentKind::WikiLink { .. }))
             .collect();
         assert_eq!(wikilinks.len(), 1);
 
-        if let InlineKind::WikiLink { target, alias } = &wikilinks[0].kind {
-            assert_eq!(&text[target.clone()], "target");
+        if let SegmentKind::WikiLink { target, alias } = &wikilinks[0].kind {
+            assert_eq!(target, "target");
             assert!(alias.is_some());
-            assert_eq!(&text[alias.clone().unwrap()], "display text");
+            assert_eq!(alias.as_ref().unwrap(), "display text");
         }
     }
 
@@ -1228,9 +1352,9 @@ mod tests {
 
         let block = &snapshot.blocks[0];
         let wikilinks: Vec<_> = block
-            .inlines
+            .segments
             .iter()
-            .filter(|i| matches!(i.kind, InlineKind::WikiLink { .. }))
+            .filter(|s| matches!(s.kind, SegmentKind::WikiLink { .. }))
             .collect();
         assert_eq!(wikilinks.len(), 3, "Should have 3 wiki-links");
     }
@@ -1244,19 +1368,19 @@ mod tests {
 
         let block = &snapshot.blocks[0];
         let links: Vec<_> = block
-            .inlines
+            .segments
             .iter()
-            .filter(|i| matches!(i.kind, InlineKind::Link { .. }))
+            .filter(|s| matches!(s.kind, SegmentKind::Link { .. }))
             .collect();
         assert_eq!(links.len(), 1, "Should have 1 link");
 
-        if let InlineKind::Link {
-            text: text_range,
+        if let SegmentKind::Link {
+            text: link_text,
             url,
         } = &links[0].kind
         {
-            assert_eq!(&text[text_range.clone()], "here");
-            assert_eq!(&text[url.clone()], "https://example.com");
+            assert_eq!(link_text, "here");
+            assert_eq!(url, "https://example.com");
         }
     }
 
@@ -1269,14 +1393,14 @@ mod tests {
 
         let block = &snapshot.blocks[0];
         let emphasis: Vec<_> = block
-            .inlines
+            .segments
             .iter()
-            .filter(|i| matches!(i.kind, InlineKind::Emphasis { .. }))
+            .filter(|s| matches!(s.kind, SegmentKind::Emphasis(_)))
             .collect();
         assert_eq!(emphasis.len(), 1, "Should have 1 emphasis");
 
-        if let InlineKind::Emphasis { content } = &emphasis[0].kind {
-            assert_eq!(&text[content.clone()], "emphasized");
+        if let SegmentKind::Emphasis(content) = &emphasis[0].kind {
+            assert_eq!(content, "emphasized");
         }
     }
 
@@ -1289,14 +1413,14 @@ mod tests {
 
         let block = &snapshot.blocks[0];
         let strong: Vec<_> = block
-            .inlines
+            .segments
             .iter()
-            .filter(|i| matches!(i.kind, InlineKind::Strong { .. }))
+            .filter(|s| matches!(s.kind, SegmentKind::Strong(_)))
             .collect();
         assert_eq!(strong.len(), 1, "Should have 1 strong");
 
-        if let InlineKind::Strong { content } = &strong[0].kind {
-            assert_eq!(&text[content.clone()], "strong");
+        if let SegmentKind::Strong(content) = &strong[0].kind {
+            assert_eq!(content, "strong");
         }
     }
 
@@ -1309,14 +1433,14 @@ mod tests {
 
         let block = &snapshot.blocks[0];
         let code: Vec<_> = block
-            .inlines
+            .segments
             .iter()
-            .filter(|i| matches!(i.kind, InlineKind::Code { .. }))
+            .filter(|s| matches!(s.kind, SegmentKind::Code(_)))
             .collect();
         assert_eq!(code.len(), 1, "Should have 1 code span");
 
-        if let InlineKind::Code { content } = &code[0].kind {
-            assert_eq!(&text[content.clone()], "code");
+        if let SegmentKind::Code(content) = &code[0].kind {
+            assert_eq!(content, "code");
         }
     }
 
@@ -1540,5 +1664,354 @@ mod tests {
                 let _content = &source[line.content.clone()];
             }
         }
+    }
+
+    // ============ InlineSegment tests ============
+
+    #[test]
+    fn test_segments_plain_text_paragraph() {
+        // Plain text paragraph -> single Text segment
+        let text = "Hello world";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Text("Hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_strong_emphasis() {
+        // **bold** -> Strong segment with "bold" content
+        let text = "**bold**";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Strong("bold".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_emphasis() {
+        // *italic* -> Emphasis segment
+        let text = "*italic*";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Emphasis("italic".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_mixed_text_and_strong() {
+        // Hello **world** -> [Text("Hello "), Strong("world")]
+        let text = "Hello **world**";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 2);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Text("Hello ".to_string())
+        );
+        assert_eq!(
+            block.segments[1].kind,
+            SegmentKind::Strong("world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_wikilink() {
+        // [[Page]] -> WikiLink segment
+        let text = "[[Page]]";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::WikiLink {
+                target: "Page".to_string(),
+                alias: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_segments_wikilink_with_alias() {
+        // [[target|display]] -> WikiLink segment with alias
+        let text = "[[target|display]]";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::WikiLink {
+                target: "target".to_string(),
+                alias: Some("display".to_string())
+            }
+        );
+    }
+
+    #[test]
+    fn test_segments_complex_mixed() {
+        // See [[link]] and **bold** text
+        let text = "See [[link]] and **bold** text";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        // Should be: [Text("See "), WikiLink, Text(" and "), Strong, Text(" text")]
+        assert_eq!(block.segments.len(), 5);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Text("See ".to_string())
+        );
+        assert_eq!(
+            block.segments[1].kind,
+            SegmentKind::WikiLink {
+                target: "link".to_string(),
+                alias: None
+            }
+        );
+        assert_eq!(
+            block.segments[2].kind,
+            SegmentKind::Text(" and ".to_string())
+        );
+        assert_eq!(
+            block.segments[3].kind,
+            SegmentKind::Strong("bold".to_string())
+        );
+        assert_eq!(
+            block.segments[4].kind,
+            SegmentKind::Text(" text".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_code_span() {
+        // Use `code` inline
+        let text = "Use `code` inline";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 3);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Text("Use ".to_string())
+        );
+        assert_eq!(
+            block.segments[1].kind,
+            SegmentKind::Code("code".to_string())
+        );
+        assert_eq!(
+            block.segments[2].kind,
+            SegmentKind::Text(" inline".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_link() {
+        // [text](url)
+        let text = "[click here](https://example.com)";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Link {
+                text: "click here".to_string(),
+                url: "https://example.com".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_segments_image() {
+        // ![alt](url)
+        let text = "![image alt](https://example.com/img.png)";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Image {
+                alt: "image alt".to_string(),
+                url: "https://example.com/img.png".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_segments_list_item() {
+        // List items should also have segments
+        let text = "- Item with **bold**";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Find the list item
+        fn find_list_item(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if matches!(block.kind, BlockKind::ListItem { .. }) {
+                    return Some(block);
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_list_item(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let item = find_list_item(&snapshot.blocks).expect("Should have list item");
+        assert_eq!(item.segments.len(), 2);
+        assert_eq!(
+            item.segments[0].kind,
+            SegmentKind::Text("Item with ".to_string())
+        );
+        assert_eq!(
+            item.segments[1].kind,
+            SegmentKind::Strong("bold".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_heading() {
+        // Headings should have segments
+        let text = "# Heading with *emphasis*";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 2);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Text("Heading with ".to_string())
+        );
+        assert_eq!(
+            block.segments[1].kind,
+            SegmentKind::Emphasis("emphasis".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_code_block() {
+        // Code blocks have a single Text segment with the raw content
+        let text = "```\ncode\n```";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        // Code blocks have a Text segment with the code content
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Text("code".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_strikethrough() {
+        // ~~strikethrough~~
+        let text = "~~struck~~";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            SegmentKind::Strikethrough("struck".to_string())
+        );
+    }
+
+    #[test]
+    fn test_segments_hard_break() {
+        // Hard break with trailing spaces
+        let text = "Line one  \nLine two";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Find any block with HardBreak segment
+        let has_hard_break = snapshot.blocks.iter().any(|b| {
+            b.segments
+                .iter()
+                .any(|s| matches!(s.kind, SegmentKind::HardBreak))
+        });
+        assert!(has_hard_break, "Should have HardBreak segment");
+    }
+
+    #[test]
+    fn test_segments_adjacent_formatting() {
+        // Adjacent formatting: **bold***italic*
+        let text = "**bold***italic*";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        // Should have Strong and Emphasis segments
+        assert!(
+            block
+                .segments
+                .iter()
+                .any(|s| matches!(s.kind, SegmentKind::Strong(_)))
+        );
+        assert!(
+            block
+                .segments
+                .iter()
+                .any(|s| matches!(s.kind, SegmentKind::Emphasis(_)))
+        );
     }
 }

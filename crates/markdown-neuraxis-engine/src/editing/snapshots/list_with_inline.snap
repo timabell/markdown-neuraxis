@@ -8,23 +8,27 @@ List [0..91]
       root_range: 0..91
       lines:
         full:0..23 prefix:0..2"- " content:2..22"Item with *emphasis*"
-      inlines:
-        Emphasis [12..22] content:13..21 "emphasis"
+      segments:
+        Text [2..12] "Item with "
+        Emphasis [12..22] "emphasis"
     ListItem { marker: "- " } [23..47]
       root_range: 0..91
       lines:
         full:23..47 prefix:23..25"- " content:25..46"Item with [link](url)"
-      inlines:
-        Link [35..46] text:36..40 "link" url:42..45 "url"
+      segments:
+        Text [25..35] "Item with "
+        Link [35..46] text:"link" url:"url"
     ListItem { marker: "- " } [47..66]
       root_range: 0..91
       lines:
         full:47..66 prefix:47..49"- " content:49..65"Item with `code`"
-      inlines:
-        Code [59..65] content:60..64 "code"
+      segments:
+        Text [49..59] "Item with "
+        Code [59..65] "code"
     ListItem { marker: "- " } [66..91]
       root_range: 0..91
       lines:
         full:66..91 prefix:66..68"- " content:68..90"Item with [[wikilink]]"
-      inlines:
-        WikiLink [78..90] target:80..88 "wikilink"
+      segments:
+        Text [68..78] "Item with "
+        WikiLink [78..90] target:"wikilink"

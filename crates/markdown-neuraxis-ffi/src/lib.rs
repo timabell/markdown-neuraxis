@@ -7,7 +7,7 @@
 
 use markdown_neuraxis_engine::Document;
 use markdown_neuraxis_engine::editing::snapshot::{
-    Block, BlockContent, BlockKind, InlineElement, InlineKind, Snapshot,
+    Block, BlockContent, BlockKind, InlineSegment, SegmentKind, Snapshot,
 };
 use std::sync::Mutex;
 
@@ -132,11 +132,11 @@ fn convert_block_into(block: &Block, source: &str, result: &mut Vec<BlockDto>) {
         BlockKind::BlockQuote => ("block_quote".to_string(), 0, None),
     };
 
-    // Convert inline elements to segments
+    // Convert engine segments to DTOs (engine now provides flat segments)
     let segments: Vec<TextSegmentDto> = block
-        .inlines
+        .segments
         .iter()
-        .filter_map(|inline| TextSegmentDto::from_inline(inline, source))
+        .map(TextSegmentDto::from_segment)
         .collect();
 
     // Process children recursively
@@ -186,33 +186,45 @@ pub struct TextSegmentDto {
 }
 
 impl TextSegmentDto {
-    fn from_inline(inline: &InlineElement, source: &str) -> Option<Self> {
-        match &inline.kind {
-            InlineKind::WikiLink { target, .. } => Some(Self {
+    fn from_segment(segment: &InlineSegment) -> Self {
+        match &segment.kind {
+            SegmentKind::Text(text) => Self {
+                kind: "text".to_string(),
+                content: text.clone(),
+            },
+            SegmentKind::WikiLink { target, alias } => Self {
                 kind: "wiki_link".to_string(),
-                content: source[target.clone()].to_string(),
-            }),
-            InlineKind::Link { url, .. } => Some(Self {
-                kind: "url".to_string(),
-                content: source[url.clone()].to_string(),
-            }),
-            InlineKind::Emphasis { content } => Some(Self {
+                // Use alias if present, otherwise target (for display)
+                content: alias.as_ref().unwrap_or(target).clone(),
+            },
+            SegmentKind::Link { text, url } => Self {
+                kind: "link".to_string(),
+                content: format!("{}|{}", text, url),
+            },
+            SegmentKind::Emphasis(text) => Self {
                 kind: "emphasis".to_string(),
-                content: source[content.clone()].to_string(),
-            }),
-            InlineKind::Strong { content } => Some(Self {
+                content: text.clone(),
+            },
+            SegmentKind::Strong(text) => Self {
                 kind: "strong".to_string(),
-                content: source[content.clone()].to_string(),
-            }),
-            InlineKind::Code { content } => Some(Self {
+                content: text.clone(),
+            },
+            SegmentKind::Code(text) => Self {
                 kind: "code".to_string(),
-                content: source[content.clone()].to_string(),
-            }),
-            InlineKind::Image { alt, url } => Some(Self {
+                content: text.clone(),
+            },
+            SegmentKind::Image { alt, url } => Self {
                 kind: "image".to_string(),
-                content: format!("{}|{}", &source[alt.clone()], &source[url.clone()]),
-            }),
-            InlineKind::HardBreak | InlineKind::Strikethrough { .. } => None,
+                content: format!("{}|{}", alt, url),
+            },
+            SegmentKind::Strikethrough(text) => Self {
+                kind: "strikethrough".to_string(),
+                content: text.clone(),
+            },
+            SegmentKind::HardBreak => Self {
+                kind: "hard_break".to_string(),
+                content: String::new(),
+            },
         }
     }
 }

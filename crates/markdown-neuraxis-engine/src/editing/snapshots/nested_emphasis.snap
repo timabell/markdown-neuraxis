@@ -1,16 +1,20 @@
 ---
-source: crates/markdown-neuraxis-engine/src/editing/snapshot_v2.rs
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Paragraph [0..51]
   lines:
     full:0..51 prefix:0..0"" content:0..50"This has **strong with *nested emphasis* inside**."
-  inlines:
-    Strong [9..49] content:11..47 "strong with *nested emphasis* inside"
+  segments:
+    Text [0..9] "This has "
+    Strong [9..49] "strong with *nested emphasis* inside"
+    Text [49..50] "."
 Paragraph [52..98]
   lines:
     full:52..98 prefix:52..52"" content:52..97"And *emphasis with **nested strong** inside*."
-  inlines:
-    Emphasis [56..72] content:57..71 "emphasis with "
-    Emphasis [72..87] content:73..86 "nested strong"
-    Emphasis [87..96] content:88..95 " inside"
+  segments:
+    Text [52..56] "And "
+    Emphasis [56..72] "emphasis with "
+    Emphasis [72..87] "nested strong"
+    Emphasis [87..96] " inside"
+    Text [96..97] "."

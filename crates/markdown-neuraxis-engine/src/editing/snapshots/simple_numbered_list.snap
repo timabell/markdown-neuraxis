@@ -8,11 +8,17 @@ List [0..43]
       root_range: 0..43
       lines:
         full:0..14 prefix:0..3"1. " content:3..13"First item"
+      segments:
+        Text [3..13] "First item"
     ListItem { marker: "2. " } [14..29]
       root_range: 0..43
       lines:
         full:14..29 prefix:14..17"2. " content:17..28"Second item"
+      segments:
+        Text [17..28] "Second item"
     ListItem { marker: "3. " } [29..43]
       root_range: 0..43
       lines:
         full:29..43 prefix:29..32"3. " content:32..42"Third item"
+      segments:
+        Text [32..42] "Third item"
