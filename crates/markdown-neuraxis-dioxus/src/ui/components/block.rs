@@ -77,10 +77,13 @@ pub fn BlockRenderer(
         }
         BlockKind::ListItem { .. } => {
             if is_focused {
-                // Use source directly via node_range
-                let content_text = source
-                    .get(block.node_range.clone())
+                // Use first line only - node_range includes nested children
+                let content_text = block
+                    .lines
+                    .first()
+                    .and_then(|line| source.get(line.full.clone()))
                     .unwrap_or("")
+                    .trim_end()
                     .to_string();
                 let block_clone = block.clone();
                 rsx! {
@@ -93,6 +96,19 @@ pub fn BlockRenderer(
                             on_cancel: {
                                 let mut focused_anchor_id = focused_anchor_id;
                                 move |_| focused_anchor_id.set(None)
+                            }
+                        }
+                        // Still render nested children below the editor
+                        if let BlockContent::Children(children) = &block.content {
+                            for (i, child) in children.iter().enumerate() {
+                                BlockRenderer {
+                                    key: "{i}",
+                                    block: child.clone(),
+                                    source: source.clone(),
+                                    focused_anchor_id,
+                                    on_command,
+                                    on_wikilink_click
+                                }
                             }
                         }
                     }
