@@ -34,11 +34,12 @@ pub fn MainPanel(
                     handle_document_keydown(event, &mut focused_anchor_id, &snapshot_for_keydown, &mut navigate_to_block);
                 }
             },
-            h1 { "📝 {display_name}" }
+            h1 { "{display_name}" }
             hr {}
             if !snapshot.blocks.is_empty() {
                 DocumentContent {
                     snapshot: snapshot_for_content,
+                    source: document.text(),
                     notes_path,
                     document,
                     focused_anchor_id,

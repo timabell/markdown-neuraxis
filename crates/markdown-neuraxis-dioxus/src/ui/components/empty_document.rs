@@ -6,7 +6,7 @@ pub fn EmptyDocument(on_command: Callback<Cmd>) -> Element {
     rsx! {
         div {
             class: "empty-document",
-            p { "This document appears to be empty." }
+            p { "This document is empty." }
             button {
                 class: "add-block-button",
                 onclick: move |_| {

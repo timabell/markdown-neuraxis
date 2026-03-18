@@ -1,9 +1,16 @@
 pub mod block;
+pub mod block_quote;
+pub mod code_fence;
 pub mod document_content;
+pub mod editor_block;
 pub mod empty_document;
 pub mod error_screen;
+pub mod heading;
 pub mod main_panel;
+pub mod paragraph;
 pub mod setup_screen;
+pub mod text_segment;
+pub mod thematic_break;
 pub mod tree_view;
 pub mod tree_view_item;
 

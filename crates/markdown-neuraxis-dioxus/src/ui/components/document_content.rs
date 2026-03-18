@@ -8,6 +8,7 @@ use std::sync::Arc;
 #[component]
 pub fn DocumentContent(
     snapshot: Snapshot,
+    source: String,
     notes_path: PathBuf,
     document: Arc<Document>,
     focused_anchor_id: Signal<Option<AnchorId>>,
@@ -15,8 +16,6 @@ pub fn DocumentContent(
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
-    let source = document.text();
-
     rsx! {
         div {
             class: "document-content",
@@ -25,9 +24,8 @@ pub fn DocumentContent(
                     key: "{block_index}",
                     block: block.clone(),
                     source: source.clone(),
-                    depth: 0,
-                    notes_path: notes_path.clone(),
-                    on_focus: Callback::new(move |_| {}),
+                    focused_anchor_id,
+                    on_command,
                     on_wikilink_click
                 }
             }
