@@ -2172,4 +2172,37 @@ mod tests {
             panic!("Expected Strong, got {:?}", block.segments[0].kind);
         }
     }
+
+    #[test]
+    fn test_wikilink_inside_strong() {
+        // **bold [[link]]** -> Strong containing [Text("bold "), WikiLink]
+        let text = "**bold [[link]]**";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+        assert_eq!(block.segments.len(), 1);
+
+        // Should be Strong([Text("bold "), WikiLink])
+        if let InlineNode::Strong(children) = &block.segments[0].kind {
+            assert_eq!(
+                children.len(),
+                2,
+                "Strong should have 2 children: {:?}",
+                children
+            );
+            assert_eq!(children[0], InlineNode::Text("bold ".to_string()));
+            assert_eq!(
+                children[1],
+                InlineNode::WikiLink {
+                    target: "link".to_string(),
+                    alias: None
+                }
+            );
+        } else {
+            panic!("Expected Strong, got {:?}", block.segments[0].kind);
+        }
+    }
 }

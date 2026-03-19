@@ -316,7 +316,8 @@ fn emphasis_or_strong(p: &mut Parser<'_, '_>, delimiter: SyntaxKind) {
                 }
             }
         } else {
-            p.bump();
+            // Parse other inline elements (wikilinks, code, links, etc.)
+            inline_element(p);
             has_content = true;
         }
     }
@@ -861,5 +862,14 @@ mod tests {
         let strong = find_node(&tree, SyntaxKind::STRONG).expect("Should have STRONG");
         let em = find_node(&strong, SyntaxKind::EMPHASIS);
         assert!(em.is_some(), "STRONG should contain nested EMPHASIS");
+    }
+
+    #[test]
+    fn parse_wikilink_inside_strong() {
+        // **bold [[link]]** - strong should contain wikilink
+        let tree = parse("**bold [[link]]**\n");
+        let strong = find_node(&tree, SyntaxKind::STRONG).expect("Should have STRONG");
+        let wikilink = find_node(&strong, SyntaxKind::WIKILINK);
+        assert!(wikilink.is_some(), "STRONG should contain nested WIKILINK");
     }
 }
