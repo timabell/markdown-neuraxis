@@ -229,6 +229,37 @@ fn code_span(p: &mut Parser<'_, '_>) {
     }
 }
 
+/// Look ahead to see if there's a matching close for a nested construct.
+/// Used to decide whether `ahead_count` delimiters start a nested construct
+/// or should be used to close the current one.
+fn has_matching_close(p: &Parser<'_, '_>, delimiter: SyntaxKind, ahead_count: usize) -> bool {
+    // We want to nest with `ahead_count` delimiters. But we can only consume
+    // up to 2 (max for strong). So the nested construct would use min(ahead_count, 2).
+    let nested_count = ahead_count.min(2);
+
+    // Scan ahead (past the current delimiter run) looking for a matching close
+    let mut offset = ahead_count; // Start after the delimiter run
+    loop {
+        let token = p.nth(offset);
+        if token == SyntaxKind::NEWLINE || token == SyntaxKind::EOF {
+            return false; // No matching close found
+        }
+        if token == delimiter {
+            // Count consecutive delimiters at this position
+            let mut count = 0;
+            while p.nth(offset + count) == delimiter {
+                count += 1;
+            }
+            if count >= nested_count {
+                return true; // Found matching close
+            }
+            offset += count;
+        } else {
+            offset += 1;
+        }
+    }
+}
+
 /// Parse emphasis *text* or strong **text** (or underscore variants).
 fn emphasis_or_strong(p: &mut Parser<'_, '_>, delimiter: SyntaxKind) {
     let m = p.start();
@@ -252,23 +283,37 @@ fn emphasis_or_strong(p: &mut Parser<'_, '_>, delimiter: SyntaxKind) {
     // Parse content until matching delimiters
     while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
         if p.at(delimiter) {
-            // Count consecutive delimiters
-            let mut close_count = 0;
-            while p.nth(close_count) == delimiter && close_count < open_count {
-                close_count += 1;
+            // Count all consecutive delimiters ahead
+            let mut ahead_count = 0;
+            while p.nth(ahead_count) == delimiter {
+                ahead_count += 1;
             }
 
-            if close_count >= open_count {
-                // Matching close
+            if ahead_count < open_count {
+                // Fewer delimiters - definitely nested (emphasis inside strong)
+                emphasis_or_strong(p, delimiter);
+                has_content = true;
+            } else if ahead_count == open_count {
+                // Exact match - close
                 for _ in 0..open_count {
                     p.bump();
                 }
                 found_close = true;
                 break;
             } else {
-                // Not enough delimiters - consume and continue
-                p.bump();
-                has_content = true;
+                // More delimiters - look ahead for matching close
+                // If we find a matching close for nested, nest. Otherwise close.
+                if has_matching_close(p, delimiter, ahead_count) {
+                    emphasis_or_strong(p, delimiter);
+                    has_content = true;
+                } else {
+                    // No matching close for nested - close current with open_count
+                    for _ in 0..open_count {
+                        p.bump();
+                    }
+                    found_close = true;
+                    break;
+                }
             }
         } else {
             p.bump();
@@ -775,5 +820,46 @@ mod tests {
             "Unclosed ~~text should NOT produce STRIKETHROUGH node"
         );
         assert_eq!(tree.text().to_string(), "~~unclosed\n");
+    }
+
+    // === Nested inline support ===
+
+    #[test]
+    fn parse_nested_emphasis_in_strong() {
+        // **bold with *nested* text**
+        let tree = parse("**bold with *nested* text**\n");
+        let strong = find_node(&tree, SyntaxKind::STRONG).unwrap();
+        let em = find_node(&strong, SyntaxKind::EMPHASIS);
+        assert!(em.is_some(), "STRONG should contain nested EMPHASIS");
+    }
+
+    #[test]
+    fn parse_nested_strong_in_emphasis() {
+        // *italic with **nested** text*
+        let tree = parse("*italic with **nested** text*\n");
+        let em = find_node(&tree, SyntaxKind::EMPHASIS).unwrap();
+        let strong = find_node(&em, SyntaxKind::STRONG);
+        assert!(strong.is_some(), "EMPHASIS should contain nested STRONG");
+    }
+
+    #[test]
+    fn parse_adjacent_strong_emphasis() {
+        // **bold***italic* - three stars in middle should close strong, start emphasis
+        let tree = parse("**bold***italic*\n");
+        assert_eq!(tree.text().to_string(), "**bold***italic*\n");
+        let strong = find_node(&tree, SyntaxKind::STRONG);
+        let em = find_node(&tree, SyntaxKind::EMPHASIS);
+        assert!(strong.is_some(), "Should have STRONG");
+        assert!(em.is_some(), "Should have EMPHASIS");
+    }
+
+    #[test]
+    fn parse_triple_delimiter() {
+        // ***text*** - should be strong containing emphasis
+        let tree = parse("***text***\n");
+        assert_eq!(tree.text().to_string(), "***text***\n");
+        let strong = find_node(&tree, SyntaxKind::STRONG).expect("Should have STRONG");
+        let em = find_node(&strong, SyntaxKind::EMPHASIS);
+        assert!(em.is_some(), "STRONG should contain nested EMPHASIS");
     }
 }
