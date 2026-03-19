@@ -87,7 +87,7 @@ pub use commands::Cmd;
 pub use document::{Document, Marker};
 pub use patch::Patch;
 pub use snapshot::{
-    Block, BlockContent, BlockKind, InlineSegment, LineInfo, SegmentKind, Snapshot,
+    Block, BlockContent, BlockKind, InlineNode, InlineSegment, LineInfo, SegmentKind, Snapshot,
 };
 
 /// Point description for ADR-0004 selection/caret transformation

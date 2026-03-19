@@ -7,7 +7,7 @@
 
 use markdown_neuraxis_engine::Document;
 use markdown_neuraxis_engine::editing::snapshot::{
-    Block, BlockContent, BlockKind, InlineSegment, SegmentKind, Snapshot,
+    Block, BlockContent, BlockKind, InlineNode, InlineSegment, Snapshot,
 };
 use std::sync::Mutex;
 
@@ -177,53 +177,69 @@ pub struct BlockDto {
 }
 
 /// A segment of inline content within a block.
+/// Supports recursive structure for nested formatting (ADR-0013).
 #[derive(uniffi::Record)]
 pub struct TextSegmentDto {
     /// Segment type: "text", "wiki_link", "url", "emphasis", "strong", "code", "link", "image"
     pub kind: String,
-    /// The text content or link target
+    /// The text content or link target (for leaf nodes like text, code, etc.)
     pub content: String,
+    /// Child segments for container nodes (emphasis, strong)
+    pub children: Vec<TextSegmentDto>,
 }
 
 impl TextSegmentDto {
     fn from_segment(segment: &InlineSegment) -> Self {
-        match &segment.kind {
-            SegmentKind::Text(text) => Self {
+        Self::from_inline_node(&segment.kind)
+    }
+
+    fn from_inline_node(node: &InlineNode) -> Self {
+        match node {
+            InlineNode::Text(text) => Self {
                 kind: "text".to_string(),
                 content: text.clone(),
+                children: vec![],
             },
-            SegmentKind::WikiLink { target, alias } => Self {
+            InlineNode::WikiLink { target, alias } => Self {
                 kind: "wiki_link".to_string(),
                 // Use alias if present, otherwise target (for display)
                 content: alias.as_ref().unwrap_or(target).clone(),
+                children: vec![],
             },
-            SegmentKind::Link { text, url } => Self {
+            InlineNode::Link { text, url } => Self {
                 kind: "link".to_string(),
                 content: format!("{}|{}", text, url),
+                children: vec![],
             },
-            SegmentKind::Emphasis(text) => Self {
+            InlineNode::Emphasis(children) => Self {
                 kind: "emphasis".to_string(),
-                content: text.clone(),
+                content: String::new(),
+                children: children.iter().map(Self::from_inline_node).collect(),
             },
-            SegmentKind::Strong(text) => Self {
+            InlineNode::Strong(children) => Self {
                 kind: "strong".to_string(),
-                content: text.clone(),
+                content: String::new(),
+                children: children.iter().map(Self::from_inline_node).collect(),
             },
-            SegmentKind::Code(text) => Self {
+            InlineNode::Code(text) => Self {
                 kind: "code".to_string(),
                 content: text.clone(),
+                children: vec![],
             },
-            SegmentKind::Image { alt, url } => Self {
+            InlineNode::Image { alt, url } => Self {
                 kind: "image".to_string(),
                 content: format!("{}|{}", alt, url),
+                children: vec![],
             },
-            SegmentKind::Strikethrough(text) => Self {
+            InlineNode::Strikethrough(text) => Self {
                 kind: "strikethrough".to_string(),
                 content: text.clone(),
+                children: vec![],
             },
-            SegmentKind::HardBreak => Self {
+            InlineNode::HardBreak => Self {
                 kind: "hard_break".to_string(),
                 content: String::new(),
+                children: vec![],
             },
         }
     }

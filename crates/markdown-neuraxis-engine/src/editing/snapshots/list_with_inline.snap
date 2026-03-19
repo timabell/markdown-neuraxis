@@ -10,7 +10,8 @@ List { ordered: false } [0..91]
         full:0..23 prefix:0..2"- " content:2..22"Item with *emphasis*"
       segments:
         Text [2..12] "Item with "
-        Emphasis [12..22] "emphasis"
+        Emphasis [12..22]
+          Text "emphasis"
     ListItem { marker: "- " } [23..47]
       root_range: 0..91
       lines:
