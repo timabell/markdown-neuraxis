@@ -57,7 +57,7 @@ pub enum BlockContent {
 #[derive(Debug, Clone, PartialEq)]
 pub struct InlineSegment {
     /// The kind of segment with its content
-    pub kind: SegmentKind,
+    pub kind: InlineNode,
     /// Byte range in source (for verification/debugging)
     pub range: Range<usize>,
 }
@@ -87,9 +87,6 @@ pub enum InlineNode {
     /// Hard line break
     HardBreak,
 }
-
-/// Backwards compatibility alias
-pub type SegmentKind = InlineNode;
 
 /// The kind of block
 #[derive(Debug, Clone, PartialEq)]
@@ -566,7 +563,7 @@ fn process_list_item(
                 let text = &source[content_range.clone()];
                 if !text.is_empty() {
                     return vec![InlineSegment {
-                        kind: SegmentKind::Text(text.to_string()),
+                        kind: InlineNode::Text(text.to_string()),
                         range: content_range.clone(),
                     }];
                 }
@@ -823,7 +820,7 @@ fn process_fenced_code(
         let code_text = &source[content_start..content_end];
         if !code_text.is_empty() {
             vec![InlineSegment {
-                kind: SegmentKind::Text(code_text.to_string()),
+                kind: InlineNode::Text(code_text.to_string()),
                 range: content_start..content_end,
             }]
         } else {
@@ -1451,11 +1448,11 @@ mod tests {
         let wikilinks: Vec<_> = block
             .segments
             .iter()
-            .filter(|s| matches!(s.kind, SegmentKind::WikiLink { .. }))
+            .filter(|s| matches!(s.kind, InlineNode::WikiLink { .. }))
             .collect();
         assert_eq!(wikilinks.len(), 1, "Should have 1 wiki-link");
 
-        if let SegmentKind::WikiLink { target, alias } = &wikilinks[0].kind {
+        if let InlineNode::WikiLink { target, alias } = &wikilinks[0].kind {
             assert_eq!(target, "Page Name");
             assert!(alias.is_none());
         }
@@ -1472,11 +1469,11 @@ mod tests {
         let wikilinks: Vec<_> = block
             .segments
             .iter()
-            .filter(|s| matches!(s.kind, SegmentKind::WikiLink { .. }))
+            .filter(|s| matches!(s.kind, InlineNode::WikiLink { .. }))
             .collect();
         assert_eq!(wikilinks.len(), 1);
 
-        if let SegmentKind::WikiLink { target, alias } = &wikilinks[0].kind {
+        if let InlineNode::WikiLink { target, alias } = &wikilinks[0].kind {
             assert_eq!(target, "target");
             assert!(alias.is_some());
             assert_eq!(alias.as_ref().unwrap(), "display text");
@@ -1494,7 +1491,7 @@ mod tests {
         let wikilinks: Vec<_> = block
             .segments
             .iter()
-            .filter(|s| matches!(s.kind, SegmentKind::WikiLink { .. }))
+            .filter(|s| matches!(s.kind, InlineNode::WikiLink { .. }))
             .collect();
         assert_eq!(wikilinks.len(), 3, "Should have 3 wiki-links");
     }
@@ -1510,11 +1507,11 @@ mod tests {
         let links: Vec<_> = block
             .segments
             .iter()
-            .filter(|s| matches!(s.kind, SegmentKind::Link { .. }))
+            .filter(|s| matches!(s.kind, InlineNode::Link { .. }))
             .collect();
         assert_eq!(links.len(), 1, "Should have 1 link");
 
-        if let SegmentKind::Link {
+        if let InlineNode::Link {
             text: link_text,
             url,
         } = &links[0].kind
@@ -1585,11 +1582,11 @@ mod tests {
         let code: Vec<_> = block
             .segments
             .iter()
-            .filter(|s| matches!(s.kind, SegmentKind::Code(_)))
+            .filter(|s| matches!(s.kind, InlineNode::Code(_)))
             .collect();
         assert_eq!(code.len(), 1, "Should have 1 code span");
 
-        if let SegmentKind::Code(content) = &code[0].kind {
+        if let InlineNode::Code(content) = &code[0].kind {
             assert_eq!(content, "code");
         }
     }
@@ -1831,7 +1828,7 @@ mod tests {
         assert_eq!(block.segments.len(), 1);
         assert_eq!(
             block.segments[0].kind,
-            SegmentKind::Text("Hello world".to_string())
+            InlineNode::Text("Hello world".to_string())
         );
     }
 
@@ -1903,7 +1900,7 @@ mod tests {
         assert_eq!(block.segments.len(), 1);
         assert_eq!(
             block.segments[0].kind,
-            SegmentKind::WikiLink {
+            InlineNode::WikiLink {
                 target: "Page".to_string(),
                 alias: None
             }
@@ -1923,7 +1920,7 @@ mod tests {
         assert_eq!(block.segments.len(), 1);
         assert_eq!(
             block.segments[0].kind,
-            SegmentKind::WikiLink {
+            InlineNode::WikiLink {
                 target: "target".to_string(),
                 alias: Some("display".to_string())
             }
@@ -1975,17 +1972,11 @@ mod tests {
         assert_eq!(snapshot.blocks.len(), 1);
         let block = &snapshot.blocks[0];
         assert_eq!(block.segments.len(), 3);
-        assert_eq!(
-            block.segments[0].kind,
-            SegmentKind::Text("Use ".to_string())
-        );
-        assert_eq!(
-            block.segments[1].kind,
-            SegmentKind::Code("code".to_string())
-        );
+        assert_eq!(block.segments[0].kind, InlineNode::Text("Use ".to_string()));
+        assert_eq!(block.segments[1].kind, InlineNode::Code("code".to_string()));
         assert_eq!(
             block.segments[2].kind,
-            SegmentKind::Text(" inline".to_string())
+            InlineNode::Text(" inline".to_string())
         );
     }
 
@@ -2002,7 +1993,7 @@ mod tests {
         assert_eq!(block.segments.len(), 1);
         assert_eq!(
             block.segments[0].kind,
-            SegmentKind::Link {
+            InlineNode::Link {
                 text: "click here".to_string(),
                 url: "https://example.com".to_string()
             }
@@ -2022,7 +2013,7 @@ mod tests {
         assert_eq!(block.segments.len(), 1);
         assert_eq!(
             block.segments[0].kind,
-            SegmentKind::Image {
+            InlineNode::Image {
                 alt: "image alt".to_string(),
                 url: "https://example.com/img.png".to_string()
             }
