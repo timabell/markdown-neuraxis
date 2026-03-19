@@ -37,7 +37,7 @@ Here are the basic text formatting options:
 - `Inline code` using backticks
 - Regular text with no formatting
 
-You can combine these: **Bold with *nested italic* text** and `**bold code**`.
+You can combine these: **Bold with *nested italic* text** and **some bold with `code` inside**.
 
 Line breaks can be created with two spaces at the end  
 Like this line break.
