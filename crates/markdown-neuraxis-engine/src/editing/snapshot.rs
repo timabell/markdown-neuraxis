@@ -136,236 +136,6 @@ pub struct Snapshot {
     pub blocks: Vec<Block>,
 }
 
-/// Format a snapshot as a readable string for snapshot testing
-pub fn format_snapshot(snapshot: &Snapshot, source: &str) -> String {
-    let mut result = String::new();
-    for block in &snapshot.blocks {
-        format_block(&mut result, block, source, 0);
-    }
-    result
-}
-
-fn format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
-    use std::fmt::Write;
-
-    let prefix = "  ".repeat(indent);
-
-    // Block header
-    writeln!(
-        out,
-        "{}{:?} [{}..{}]",
-        prefix, block.kind, block.node_range.start, block.node_range.end
-    )
-    .unwrap();
-
-    // Root range (if different)
-    if block.root_range != block.node_range {
-        writeln!(out, "{}  root_range: {:?}", prefix, block.root_range).unwrap();
-    }
-
-    // Lines
-    if !block.lines.is_empty() {
-        writeln!(out, "{}  lines:", prefix).unwrap();
-        for line in &block.lines {
-            let prefix_text = &source[line.prefix.clone()];
-            let content_text = &source[line.content.clone()];
-            writeln!(
-                out,
-                "{}    full:{:?} prefix:{:?}{:?} content:{:?}{:?}",
-                prefix,
-                line.full,
-                line.prefix,
-                prefix_text.replace('\n', "\\n"),
-                line.content,
-                content_text.replace('\n', "\\n")
-            )
-            .unwrap();
-        }
-    }
-
-    // Segments
-    if !block.segments.is_empty() {
-        writeln!(out, "{}  segments:", prefix).unwrap();
-        for segment in &block.segments {
-            format_segment(out, segment, &prefix);
-        }
-    }
-
-    // Content
-    match &block.content {
-        BlockContent::Leaf => {
-            // Text extracted via lines[].content ranges - no separate field needed
-        }
-        BlockContent::Children(children) => {
-            writeln!(out, "{}  children:", prefix).unwrap();
-            for child in children {
-                format_block(out, child, source, indent + 2);
-            }
-        }
-    }
-}
-
-fn format_segment(out: &mut String, segment: &InlineSegment, prefix: &str) {
-    format_segment_with_indent(out, segment, prefix, 4);
-}
-
-fn format_segment_with_indent(
-    out: &mut String,
-    segment: &InlineSegment,
-    prefix: &str,
-    indent: usize,
-) {
-    use std::fmt::Write;
-
-    let spaces = " ".repeat(indent);
-    let range = &segment.range;
-    match &segment.kind {
-        InlineNode::Text(text) => {
-            writeln!(
-                out,
-                "{}{}Text [{}..{}] {:?}",
-                prefix, spaces, range.start, range.end, text
-            )
-            .unwrap();
-        }
-        InlineNode::Strong(children) => {
-            writeln!(
-                out,
-                "{}{}Strong [{}..{}]",
-                prefix, spaces, range.start, range.end
-            )
-            .unwrap();
-            for child in children {
-                format_inline_node(out, child, prefix, indent + 2);
-            }
-        }
-        InlineNode::Emphasis(children) => {
-            writeln!(
-                out,
-                "{}{}Emphasis [{}..{}]",
-                prefix, spaces, range.start, range.end
-            )
-            .unwrap();
-            for child in children {
-                format_inline_node(out, child, prefix, indent + 2);
-            }
-        }
-        InlineNode::Code(text) => {
-            writeln!(
-                out,
-                "{}{}Code [{}..{}] {:?}",
-                prefix, spaces, range.start, range.end, text
-            )
-            .unwrap();
-        }
-        InlineNode::Strikethrough(text) => {
-            writeln!(
-                out,
-                "{}{}Strikethrough [{}..{}] {:?}",
-                prefix, spaces, range.start, range.end, text
-            )
-            .unwrap();
-        }
-        InlineNode::WikiLink { target, alias } => {
-            if let Some(alias) = alias {
-                writeln!(
-                    out,
-                    "{}{}WikiLink [{}..{}] target:{:?} alias:{:?}",
-                    prefix, spaces, range.start, range.end, target, alias
-                )
-                .unwrap();
-            } else {
-                writeln!(
-                    out,
-                    "{}{}WikiLink [{}..{}] target:{:?}",
-                    prefix, spaces, range.start, range.end, target
-                )
-                .unwrap();
-            }
-        }
-        InlineNode::Link { text, url } => {
-            writeln!(
-                out,
-                "{}{}Link [{}..{}] text:{:?} url:{:?}",
-                prefix, spaces, range.start, range.end, text, url
-            )
-            .unwrap();
-        }
-        InlineNode::Image { alt, url } => {
-            writeln!(
-                out,
-                "{}{}Image [{}..{}] alt:{:?} url:{:?}",
-                prefix, spaces, range.start, range.end, alt, url
-            )
-            .unwrap();
-        }
-        InlineNode::HardBreak => {
-            writeln!(
-                out,
-                "{}{}HardBreak [{}..{}]",
-                prefix, spaces, range.start, range.end
-            )
-            .unwrap();
-        }
-    }
-}
-
-/// Format an InlineNode (used for nested children without range)
-fn format_inline_node(out: &mut String, node: &InlineNode, prefix: &str, indent: usize) {
-    use std::fmt::Write;
-
-    let spaces = " ".repeat(indent);
-    match node {
-        InlineNode::Text(text) => {
-            writeln!(out, "{}{}Text {:?}", prefix, spaces, text).unwrap();
-        }
-        InlineNode::Strong(children) => {
-            writeln!(out, "{}{}Strong", prefix, spaces).unwrap();
-            for child in children {
-                format_inline_node(out, child, prefix, indent + 2);
-            }
-        }
-        InlineNode::Emphasis(children) => {
-            writeln!(out, "{}{}Emphasis", prefix, spaces).unwrap();
-            for child in children {
-                format_inline_node(out, child, prefix, indent + 2);
-            }
-        }
-        InlineNode::Code(text) => {
-            writeln!(out, "{}{}Code {:?}", prefix, spaces, text).unwrap();
-        }
-        InlineNode::Strikethrough(text) => {
-            writeln!(out, "{}{}Strikethrough {:?}", prefix, spaces, text).unwrap();
-        }
-        InlineNode::WikiLink { target, alias } => {
-            if let Some(alias) = alias {
-                writeln!(
-                    out,
-                    "{}{}WikiLink target:{:?} alias:{:?}",
-                    prefix, spaces, target, alias
-                )
-                .unwrap();
-            } else {
-                writeln!(out, "{}{}WikiLink target:{:?}", prefix, spaces, target).unwrap();
-            }
-        }
-        InlineNode::Link { text, url } => {
-            writeln!(
-                out,
-                "{}{}Link text:{:?} url:{:?}",
-                prefix, spaces, text, url
-            )
-            .unwrap();
-        }
-        InlineNode::Image { alt, url } => {
-            writeln!(out, "{}{}Image alt:{:?} url:{:?}", prefix, spaces, alt, url).unwrap();
-        }
-        InlineNode::HardBreak => {
-            writeln!(out, "{}{}HardBreak", prefix, spaces).unwrap();
-        }
-    }
-}
-
 /// Create a snapshot from a document
 pub fn create_snapshot(doc: &crate::editing::Document) -> Snapshot {
     let source = doc.text();
@@ -1205,6 +975,230 @@ mod tests {
     use super::*;
     use crate::editing::Document;
 
+    // ============ Snapshot formatting (test-only) ============
+
+    /// Format a snapshot as a readable string for snapshot testing.
+    fn insta_format_snapshot(snapshot: &Snapshot, source: &str) -> String {
+        let mut result = String::new();
+        for block in &snapshot.blocks {
+            insta_format_block(&mut result, block, source, 0);
+        }
+        result
+    }
+
+    fn insta_format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
+        use std::fmt::Write;
+
+        let prefix = "  ".repeat(indent);
+
+        // Block header
+        writeln!(
+            out,
+            "{}{:?} [{}..{}]",
+            prefix, block.kind, block.node_range.start, block.node_range.end
+        )
+        .unwrap();
+
+        // Root range (if different)
+        if block.root_range != block.node_range {
+            writeln!(out, "{}  root_range: {:?}", prefix, block.root_range).unwrap();
+        }
+
+        // Lines
+        if !block.lines.is_empty() {
+            writeln!(out, "{}  lines:", prefix).unwrap();
+            for line in &block.lines {
+                let prefix_text = &source[line.prefix.clone()];
+                let content_text = &source[line.content.clone()];
+                writeln!(
+                    out,
+                    "{}    full:{:?} prefix:{:?}{:?} content:{:?}{:?}",
+                    prefix,
+                    line.full,
+                    line.prefix,
+                    prefix_text.replace('\n', "\\n"),
+                    line.content,
+                    content_text.replace('\n', "\\n")
+                )
+                .unwrap();
+            }
+        }
+
+        // Segments
+        if !block.segments.is_empty() {
+            writeln!(out, "{}  segments:", prefix).unwrap();
+            for segment in &block.segments {
+                insta_format_segment(out, segment, &prefix);
+            }
+        }
+
+        // Content
+        match &block.content {
+            BlockContent::Leaf => {
+                // Text extracted via lines[].content ranges - no separate field needed
+            }
+            BlockContent::Children(children) => {
+                writeln!(out, "{}  children:", prefix).unwrap();
+                for child in children {
+                    insta_format_block(out, child, source, indent + 2);
+                }
+            }
+        }
+    }
+
+    fn insta_format_segment(out: &mut String, segment: &InlineSegment, prefix: &str) {
+        use std::fmt::Write;
+
+        let spaces = "    ";
+        let range = &segment.range;
+        match &segment.kind {
+            InlineNode::Text(text) => {
+                writeln!(
+                    out,
+                    "{}{}Text [{}..{}] {:?}",
+                    prefix, spaces, range.start, range.end, text
+                )
+                .unwrap();
+            }
+            InlineNode::Strong(children) => {
+                writeln!(
+                    out,
+                    "{}{}Strong [{}..{}]",
+                    prefix, spaces, range.start, range.end
+                )
+                .unwrap();
+                for child in children {
+                    insta_format_inline_node(out, child, prefix, 6);
+                }
+            }
+            InlineNode::Emphasis(children) => {
+                writeln!(
+                    out,
+                    "{}{}Emphasis [{}..{}]",
+                    prefix, spaces, range.start, range.end
+                )
+                .unwrap();
+                for child in children {
+                    insta_format_inline_node(out, child, prefix, 6);
+                }
+            }
+            InlineNode::Code(text) => {
+                writeln!(
+                    out,
+                    "{}{}Code [{}..{}] {:?}",
+                    prefix, spaces, range.start, range.end, text
+                )
+                .unwrap();
+            }
+            InlineNode::Strikethrough(text) => {
+                writeln!(
+                    out,
+                    "{}{}Strikethrough [{}..{}] {:?}",
+                    prefix, spaces, range.start, range.end, text
+                )
+                .unwrap();
+            }
+            InlineNode::WikiLink { target, alias } => {
+                if let Some(alias) = alias {
+                    writeln!(
+                        out,
+                        "{}{}WikiLink [{}..{}] target:{:?} alias:{:?}",
+                        prefix, spaces, range.start, range.end, target, alias
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(
+                        out,
+                        "{}{}WikiLink [{}..{}] target:{:?}",
+                        prefix, spaces, range.start, range.end, target
+                    )
+                    .unwrap();
+                }
+            }
+            InlineNode::Link { text, url } => {
+                writeln!(
+                    out,
+                    "{}{}Link [{}..{}] text:{:?} url:{:?}",
+                    prefix, spaces, range.start, range.end, text, url
+                )
+                .unwrap();
+            }
+            InlineNode::Image { alt, url } => {
+                writeln!(
+                    out,
+                    "{}{}Image [{}..{}] alt:{:?} url:{:?}",
+                    prefix, spaces, range.start, range.end, alt, url
+                )
+                .unwrap();
+            }
+            InlineNode::HardBreak => {
+                writeln!(
+                    out,
+                    "{}{}HardBreak [{}..{}]",
+                    prefix, spaces, range.start, range.end
+                )
+                .unwrap();
+            }
+        }
+    }
+
+    fn insta_format_inline_node(out: &mut String, node: &InlineNode, prefix: &str, indent: usize) {
+        use std::fmt::Write;
+
+        let spaces = " ".repeat(indent);
+        match node {
+            InlineNode::Text(text) => {
+                writeln!(out, "{}{}Text {:?}", prefix, spaces, text).unwrap();
+            }
+            InlineNode::Strong(children) => {
+                writeln!(out, "{}{}Strong", prefix, spaces).unwrap();
+                for child in children {
+                    insta_format_inline_node(out, child, prefix, indent + 2);
+                }
+            }
+            InlineNode::Emphasis(children) => {
+                writeln!(out, "{}{}Emphasis", prefix, spaces).unwrap();
+                for child in children {
+                    insta_format_inline_node(out, child, prefix, indent + 2);
+                }
+            }
+            InlineNode::Code(text) => {
+                writeln!(out, "{}{}Code {:?}", prefix, spaces, text).unwrap();
+            }
+            InlineNode::Strikethrough(text) => {
+                writeln!(out, "{}{}Strikethrough {:?}", prefix, spaces, text).unwrap();
+            }
+            InlineNode::WikiLink { target, alias } => {
+                if let Some(alias) = alias {
+                    writeln!(
+                        out,
+                        "{}{}WikiLink target:{:?} alias:{:?}",
+                        prefix, spaces, target, alias
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(out, "{}{}WikiLink target:{:?}", prefix, spaces, target).unwrap();
+                }
+            }
+            InlineNode::Link { text, url } => {
+                writeln!(
+                    out,
+                    "{}{}Link text:{:?} url:{:?}",
+                    prefix, spaces, text, url
+                )
+                .unwrap();
+            }
+            InlineNode::Image { alt, url } => {
+                writeln!(out, "{}{}Image alt:{:?} url:{:?}", prefix, spaces, alt, url).unwrap();
+            }
+            InlineNode::HardBreak => {
+                writeln!(out, "{}{}HardBreak", prefix, spaces).unwrap();
+            }
+        }
+    }
+
+    // ============ Snapshot tests ============
+
     /// Run a snapshot test for a given .md file.
     /// Called by generated test functions (see build.rs).
     fn snapshot_test(name: &str) {
@@ -1217,7 +1211,7 @@ mod tests {
         doc.create_anchors_from_tree();
 
         let snapshot = create_snapshot(&doc);
-        let formatted = format_snapshot(&snapshot, &input);
+        let formatted = insta_format_snapshot(&snapshot, &input);
 
         let mut settings = insta::Settings::clone_current();
         settings.set_prepend_module_to_snapshot(false);
