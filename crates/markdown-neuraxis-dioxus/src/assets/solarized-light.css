@@ -102,7 +102,7 @@ body {
     color: var(--base01);
 }
 
-.tree-item.file.selected {
+.tree-item.selected {
     background-color: var(--blue);
     color: var(--base3);
 }
@@ -123,7 +123,7 @@ body {
     color: var(--base02);
 }
 
-.tree-item.file.selected.focused {
+.tree-item.selected.focused {
     background-color: var(--blue);
     color: var(--base3);
     outline: 2px solid var(--yellow);

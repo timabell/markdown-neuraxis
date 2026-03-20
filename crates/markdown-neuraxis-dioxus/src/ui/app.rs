@@ -59,6 +59,7 @@ pub fn App(notes_path: PathBuf) -> Element {
     let selected_file = use_signal(|| None::<MarkdownFile>);
     let current_document = use_signal(|| None::<Arc<Document>>);
     let current_snapshot = use_signal(|| None::<Snapshot>);
+    let focused_folder = use_signal(|| None::<RelativePathBuf>);
 
     // Mobile navigation state - tracks whether file tree is shown on mobile
     let mut mobile_nav_open = use_signal(|| false);
@@ -71,6 +72,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
         let mut mobile_nav_open = mobile_nav_open;
+        let mut focused_folder = focused_folder;
         move |markdown_file: MarkdownFile| {
             load_existing_document(
                 &markdown_file,
@@ -80,6 +82,8 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut current_snapshot,
                 &mut error_state,
             );
+            // Clear any folder focus when a file is selected
+            focused_folder.set(None);
             // Close mobile nav when file is selected
             mobile_nav_open.set(false);
         }
@@ -109,8 +113,33 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
+        let mut file_tree = file_tree;
+        let mut focused_folder = focused_folder;
         move |target: String| {
+            // First check if target matches a folder
+            let folder_path = file_tree.read().find_folder(&target);
+            if let Some(folder_path) = folder_path {
+                // Expand the folder and all its ancestors
+                file_tree.write().expand_to_folder(&folder_path);
+                // Clear the current file selection and focus the folder
+                selected_file.set(None);
+                current_document.set(None);
+                current_snapshot.set(None);
+                focused_folder.set(Some(folder_path));
+                return;
+            }
+
+            // Not a folder, resolve as file - clear any folder focus
+            focused_folder.set(None);
             let markdown_file = resolve_wikilink(&target, &notes_path);
+            // Expand parent folders so the file is visible in the tree
+            if let Some(parent) = markdown_file.relative_path().parent()
+                && !parent.as_str().is_empty()
+            {
+                file_tree
+                    .write()
+                    .expand_to_folder(&parent.to_relative_path_buf());
+            }
             load_document(
                 markdown_file,
                 &notes_path,
@@ -157,6 +186,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 super::components::TreeView {
                     tree: ReadSignal::from(file_tree),
                     selected_file: selected_file.read().clone(),
+                    focused_folder: focused_folder.read().clone(),
                     on_file_select: on_sidebar_file_select,
                     on_folder_toggle: move |relative_path: RelativePathBuf| {
                         file_tree.write().toggle_folder(&relative_path);

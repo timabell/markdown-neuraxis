@@ -121,6 +121,35 @@ impl FileTreeNode {
         false
     }
 
+    /// Find a folder by target name or path (case-insensitive).
+    /// Matches against full relative path or final folder name.
+    pub fn find_folder_recursive(&self, target: &str) -> Option<RelativePathBuf> {
+        // Normalize: trim whitespace and trailing slashes
+        let target_normalized = target.trim().trim_end_matches('/');
+        let target_lower = target_normalized.to_lowercase();
+
+        for child in self.children.values() {
+            if child.is_folder {
+                // Check if full path matches (case-insensitive)
+                if child.relative_path.as_str().to_lowercase() == target_lower {
+                    return Some(child.relative_path.clone());
+                }
+
+                // Check if final folder name matches (case-insensitive)
+                let folder_name_lower = child.name.to_lowercase();
+                if folder_name_lower == target_lower {
+                    return Some(child.relative_path.clone());
+                }
+
+                // Recurse into child folders
+                if let Some(found) = child.find_folder_recursive(target) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+
     pub fn get_flattened_items(&self, depth: usize) -> Vec<FileTreeItem> {
         let mut items = Vec::new();
 
@@ -208,6 +237,24 @@ impl FileTree {
 
     pub fn collapse_folder(&mut self, relative_path: &RelativePath) {
         self.root.collapse(relative_path);
+    }
+
+    /// Find a folder by target name or path (case-insensitive).
+    /// Matches against:
+    /// 1. Full relative path (e.g., "1_Projects/active")
+    /// 2. Final folder name only (e.g., "Projects" matches "1_Projects")
+    pub fn find_folder(&self, target: &str) -> Option<RelativePathBuf> {
+        self.root.find_folder_recursive(target)
+    }
+
+    /// Expand all folders along a path (all ancestors and the target folder).
+    pub fn expand_to_folder(&mut self, relative_path: &RelativePath) {
+        // Expand each ancestor folder from root down to the target
+        let mut current_path = RelativePathBuf::new();
+        for component in relative_path.iter() {
+            current_path.push(component);
+            self.root.expand(&current_path);
+        }
     }
 
     /// Add a new file to the tree
@@ -408,5 +455,102 @@ mod tests {
 
         // Should have no items (empty directory, no root shown)
         assert_eq!(items.len(), 0);
+    }
+
+    #[test]
+    fn test_find_folder_by_full_path() {
+        let root_path = PathBuf::from("/test/notes");
+        let files = vec![
+            PathBuf::from("/test/notes/1_Projects/active/task.md"),
+            PathBuf::from("/test/notes/2_Areas/work.md"),
+        ];
+
+        let tree = FileTree::build_from_files(root_path, &files);
+
+        // Find by full path
+        let result = tree.find_folder("1_Projects/active");
+        assert_eq!(result, Some(RelativePathBuf::from("1_Projects/active")));
+
+        // Find top-level folder
+        let result = tree.find_folder("2_Areas");
+        assert_eq!(result, Some(RelativePathBuf::from("2_Areas")));
+    }
+
+    #[test]
+    fn test_find_folder_by_name_case_insensitive() {
+        let root_path = PathBuf::from("/test/notes");
+        let files = vec![PathBuf::from("/test/notes/Projects/task.md")];
+
+        let tree = FileTree::build_from_files(root_path, &files);
+
+        // Case insensitive match on folder name
+        let result = tree.find_folder("projects");
+        assert_eq!(result, Some(RelativePathBuf::from("Projects")));
+
+        let result = tree.find_folder("PROJECTS");
+        assert_eq!(result, Some(RelativePathBuf::from("Projects")));
+    }
+
+    #[test]
+    fn test_find_folder_returns_none_for_files() {
+        let root_path = PathBuf::from("/test/notes");
+        let files = vec![PathBuf::from("/test/notes/inbox.md")];
+
+        let tree = FileTree::build_from_files(root_path, &files);
+
+        // Should not find files
+        let result = tree.find_folder("inbox");
+        assert_eq!(result, None);
+
+        let result = tree.find_folder("inbox.md");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_folder_returns_none_for_nonexistent() {
+        let root_path = PathBuf::from("/test/notes");
+        let files = vec![PathBuf::from("/test/notes/1_Projects/task.md")];
+
+        let tree = FileTree::build_from_files(root_path, &files);
+
+        let result = tree.find_folder("nonexistent");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_folder_with_trailing_slash() {
+        let root_path = PathBuf::from("/test/notes");
+        let files = vec![PathBuf::from("/test/notes/Projects/task.md")];
+
+        let tree = FileTree::build_from_files(root_path, &files);
+
+        // Should match with trailing slash
+        let result = tree.find_folder("Projects/");
+        assert_eq!(result, Some(RelativePathBuf::from("Projects")));
+    }
+
+    #[test]
+    fn test_expand_to_folder() {
+        let root_path = PathBuf::from("/test/notes");
+        let files = vec![PathBuf::from("/test/notes/1_Projects/active/deep/task.md")];
+
+        let mut tree = FileTree::build_from_files(root_path, &files);
+
+        // Initially only root is expanded
+        let projects = tree.root.children.get("1_Projects").unwrap();
+        assert!(!projects.is_expanded);
+
+        // Expand to deep folder
+        tree.expand_to_folder(&RelativePathBuf::from("1_Projects/active/deep"));
+
+        // All folders along the path should be expanded
+        let projects = tree.root.children.get("1_Projects").unwrap();
+        assert!(projects.is_expanded);
+
+        let active = projects.children.get("active").unwrap();
+        assert!(active.is_expanded);
+
+        let deep = active.children.get("deep").unwrap();
+        assert!(deep.is_expanded);
     }
 }
