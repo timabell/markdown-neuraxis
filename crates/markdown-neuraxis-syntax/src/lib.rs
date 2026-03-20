@@ -116,7 +116,7 @@ mod tests {
     use super::*;
 
     /// Format a syntax tree for snapshot testing.
-    fn format_tree(node: &SyntaxNode, indent: usize) -> String {
+    fn insta_format_tree(node: &SyntaxNode, indent: usize) -> String {
         let mut result = String::new();
         let prefix = "  ".repeat(indent);
 
@@ -130,7 +130,7 @@ mod tests {
         for child in node.children_with_tokens() {
             match child {
                 rowan::NodeOrToken::Node(n) => {
-                    result.push_str(&format_tree(&n, indent + 1));
+                    result.push_str(&insta_format_tree(&n, indent + 1));
                 }
                 rowan::NodeOrToken::Token(t) => {
                     let text = t.text().replace('\n', "\\n");
@@ -160,7 +160,7 @@ mod tests {
         settings.set_prepend_module_to_snapshot(false);
         settings.set_snapshot_path(&snapshot_dir);
         settings.bind(|| {
-            insta::assert_snapshot!(name, format_tree(&tree, 0));
+            insta::assert_snapshot!(name, insta_format_tree(&tree, 0));
         });
 
         // All parses must preserve input bytes (lossless)

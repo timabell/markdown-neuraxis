@@ -7,7 +7,8 @@ Heading { level: 1 } [0..26]
     full:0..26 prefix:0..2"# " content:2..25"Heading with *emphasis*"
   segments:
     Text [2..15] "Heading with "
-    Emphasis [15..25] "emphasis"
+    Emphasis [15..25]
+      Text "emphasis"
 Heading { level: 2 } [27..55]
   lines:
     full:27..55 prefix:27..30"## " content:30..54"Heading with [link](url)"

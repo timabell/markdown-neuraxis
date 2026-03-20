@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use markdown_neuraxis_engine::editing::{InlineSegment, SegmentKind};
+use markdown_neuraxis_engine::editing::{InlineNode, InlineSegment};
 
 /// Renders a list of InlineSegments
 #[component]
@@ -20,24 +20,41 @@ fn render_segment(
     key: usize,
     on_wikilink_click: Callback<String>,
 ) -> Element {
-    match segment.kind {
-        SegmentKind::Text(text) => rsx! {
+    render_inline_node(&segment.kind, key, on_wikilink_click)
+}
+
+/// Render an InlineNode (recursive for nested formatting)
+fn render_inline_node(
+    node: &InlineNode,
+    key: usize,
+    on_wikilink_click: Callback<String>,
+) -> Element {
+    match node {
+        InlineNode::Text(text) => rsx! {
             span { key: "{key}", "{text}" }
         },
-        SegmentKind::Strong(text) => rsx! {
-            strong { key: "{key}", "{text}" }
+        InlineNode::Strong(children) => rsx! {
+            strong { key: "{key}",
+                for (i, child) in children.iter().enumerate() {
+                    {render_inline_node(child, key * 1000 + i, on_wikilink_click)}
+                }
+            }
         },
-        SegmentKind::Emphasis(text) => rsx! {
-            em { key: "{key}", "{text}" }
+        InlineNode::Emphasis(children) => rsx! {
+            em { key: "{key}",
+                for (i, child) in children.iter().enumerate() {
+                    {render_inline_node(child, key * 1000 + i, on_wikilink_click)}
+                }
+            }
         },
-        SegmentKind::Code(text) => rsx! {
+        InlineNode::Code(text) => rsx! {
             code { key: "{key}", class: "inline-code", "{text}" }
         },
-        SegmentKind::Strikethrough(text) => rsx! {
+        InlineNode::Strikethrough(text) => rsx! {
             del { key: "{key}", "{text}" }
         },
-        SegmentKind::WikiLink { target, alias } => {
-            let display_text = alias.unwrap_or_else(|| target.clone());
+        InlineNode::WikiLink { target, alias } => {
+            let display_text = alias.clone().unwrap_or_else(|| target.clone());
             let target_clone = target.clone();
             rsx! {
                 a {
@@ -53,7 +70,7 @@ fn render_segment(
                 }
             }
         }
-        SegmentKind::Link { text, url } => {
+        InlineNode::Link { text, url } => {
             let url_clone = url.clone();
             rsx! {
                 a {
@@ -73,10 +90,10 @@ fn render_segment(
                 }
             }
         }
-        SegmentKind::Image { alt, url } => rsx! {
+        InlineNode::Image { alt, url } => rsx! {
             img { key: "{key}", alt: "{alt}", src: "{url}" }
         },
-        SegmentKind::HardBreak => rsx! {
+        InlineNode::HardBreak => rsx! {
             br { key: "{key}" }
         },
     }

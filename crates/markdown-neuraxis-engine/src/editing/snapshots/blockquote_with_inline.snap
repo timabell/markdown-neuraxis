@@ -7,7 +7,8 @@ BlockQuote [0..41]
     full:0..41 prefix:0..2"> " content:2..40"Quote with *emphasis* and [link](url)."
   segments:
     Text [2..13] "Quote with "
-    Emphasis [13..23] "emphasis"
+    Emphasis [13..23]
+      Text "emphasis"
     Text [23..28] " and "
     Link [28..39] text:"link" url:"url"
     Text [39..40] "."

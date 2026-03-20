@@ -1,0 +1,56 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..107
+  UNORDERED_LIST@0..26
+    LIST_ITEM@0..25
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..25
+        TEXT@2..7 "First"
+        WHITESPACE@7..8 " "
+        TEXT@8..12 "with"
+        WHITESPACE@12..13 " "
+        TEXT@13..18 "empty"
+        WHITESPACE@18..19 " "
+        TEXT@19..24 "blank"
+        NEWLINE@24..25 "\\n"
+    NEWLINE@25..26 "\\n"
+  UNORDERED_LIST@26..48
+    LIST_ITEM@26..47
+      DASH@26..27 "-"
+      WHITESPACE@27..28 " "
+      PARAGRAPH@28..47
+        TEXT@28..34 "Second"
+        WHITESPACE@34..35 " "
+        TEXT@35..40 "after"
+        WHITESPACE@40..41 " "
+        TEXT@41..46 "empty"
+        NEWLINE@46..47 "\\n"
+    NEWLINE@47..48 "\\n"
+  UNORDERED_LIST@48..81
+    LIST_ITEM@48..78
+      DASH@48..49 "-"
+      WHITESPACE@49..50 " "
+      PARAGRAPH@50..78
+        TEXT@50..55 "Third"
+        WHITESPACE@55..56 " "
+        TEXT@56..60 "with"
+        WHITESPACE@60..61 " "
+        TEXT@61..71 "whitespace"
+        WHITESPACE@71..72 " "
+        TEXT@72..77 "blank"
+        NEWLINE@77..78 "\\n"
+    HARD_BREAK@78..81 "  \\n"
+  UNORDERED_LIST@81..107
+    LIST_ITEM@81..107
+      DASH@81..82 "-"
+      WHITESPACE@82..83 " "
+      PARAGRAPH@83..107
+        TEXT@83..89 "Fourth"
+        WHITESPACE@89..90 " "
+        TEXT@90..95 "after"
+        WHITESPACE@95..96 " "
+        TEXT@96..106 "whitespace"
+        NEWLINE@106..107 "\\n"
