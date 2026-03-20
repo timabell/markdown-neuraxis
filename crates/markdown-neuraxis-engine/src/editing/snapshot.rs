@@ -296,6 +296,40 @@ fn process_list_item(
         content_end,
     );
 
+    // Collect continuation lines from PARAGRAPH child only (not nested blocks)
+    let mut lines_vec = vec![first_line_info];
+    if let Some(para) = node.children().find(|c| c.kind() == SyntaxKind::PARAGRAPH) {
+        let para_range = para.text_range();
+        let para_end: usize = para_range.end().into();
+        let mut pos = line_end_with_newline;
+        while pos < para_end {
+            let remaining = &source[pos..para_end];
+            let line_len = remaining
+                .find('\n')
+                .map(|i| i + 1)
+                .unwrap_or(remaining.len());
+            let line_end = pos + line_len;
+            let line_text = &source[pos..line_end];
+
+            // Find where content starts (skip leading whitespace/indentation)
+            let indent_len = line_text.len() - line_text.trim_start().len();
+            let content_start_pos = pos + indent_len;
+            let content_end_pos = if line_text.ends_with('\n') {
+                line_end - 1
+            } else {
+                line_end
+            };
+
+            lines_vec.push(LineInfo::new(
+                pos..line_end,
+                pos..(pos + indent_len), // indent is the "prefix" for continuation
+                content_start_pos,
+                content_end_pos,
+            ));
+            pos = line_end;
+        }
+    }
+
     // Process children (nested content)
     // Note: Skip PARAGRAPH children since LIST_ITEM already extracts its text from lines.
     // We only want to process nested structural elements like LIST, BLOCK_QUOTE, FENCED_CODE.
@@ -321,20 +355,31 @@ fn process_list_item(
 
     // Extract segments from the list item's content
     // We look in the PARAGRAPH child (if present) since that's where inlines live
-    let lines_vec = vec![first_line_info];
-    let content_range = compute_content_range(&lines_vec);
     let segments = node
         .children()
         .find(|c| c.kind() == SyntaxKind::PARAGRAPH)
-        .map(|para| extract_segments(&para, source, content_range.clone()))
+        .map(|para| {
+            // Use paragraph's range, but start after the list marker
+            // and exclude trailing newline
+            let para_range = para.text_range();
+            let para_start: usize = para_range.start().into();
+            let mut para_end: usize = para_range.end().into();
+            // Strip trailing newline from content range
+            if para_end > para_start && source.as_bytes().get(para_end - 1) == Some(&b'\n') {
+                para_end -= 1;
+            }
+            let content_range = content_start.max(para_start)..para_end;
+            extract_segments(&para, source, content_range)
+        })
         .unwrap_or_else(|| {
-            // No paragraph child, create a single Text segment for the content
-            if !content_range.is_empty() {
-                let text = &source[content_range.clone()];
+            // No paragraph child - use first line content range as fallback
+            let fallback_range = content_start..content_end;
+            if !fallback_range.is_empty() {
+                let text = &source[fallback_range.clone()];
                 if !text.is_empty() {
                     return vec![InlineSegment {
                         kind: InlineNode::Text(text.to_string()),
-                        range: content_range.clone(),
+                        range: fallback_range,
                     }];
                 }
             }
@@ -2047,6 +2092,27 @@ mod tests {
             item.segments[1].kind,
             InlineNode::Strong(vec![InlineNode::Text("bold".to_string())])
         );
+    }
+
+    #[test]
+    fn test_list_item_hanging_indent() {
+        let text = "- First\n  second\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        let list = &snapshot.blocks[0];
+        let item = match &list.content {
+            BlockContent::Children(c) => &c[0],
+            _ => panic!("expected children"),
+        };
+
+        // Check that "second" appears in the segments
+        let has_second = item.segments.iter().any(|s| match &s.kind {
+            InlineNode::Text(t) => t.contains("second"),
+            _ => false,
+        });
+        assert!(has_second, "segments: {:?}", item.segments);
     }
 
     #[test]

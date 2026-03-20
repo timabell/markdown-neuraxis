@@ -14,15 +14,22 @@ List { ordered: false } [0..201]
       root_range: 0..201
       lines:
         full:21..47 prefix:21..23"- " content:23..46"This line has hard wrap"
+        full:47..76 prefix:47..49"  " content:49..75"this continues after break"
+        full:76..95 prefix:76..78"  " content:78..94"and a third line"
       segments:
-        Text [23..46] "This line has hard wrap"
+        Text [23..94] "This line has hard wrap\n  this continues after break\n  and a third line"
     ListItem { marker: "- " } [95..170]
       root_range: 0..201
       lines:
         full:95..129 prefix:95..97"- " content:97..128"This line has forced newlines  "
+        full:129..147 prefix:129..131"  " content:131..146"by adding two  "
+        full:147..170 prefix:147..149"  " content:149..169"trailing whitespaces"
       segments:
         Text [97..126] "This line has forced newlines"
         HardBreak [126..129]
+        Text [129..144] "  by adding two"
+        HardBreak [144..147]
+        Text [147..169] "  trailing whitespaces"
     ListItem { marker: "- " } [170..201]
       root_range: 0..201
       lines:
