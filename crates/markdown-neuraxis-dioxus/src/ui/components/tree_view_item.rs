@@ -12,23 +12,10 @@ pub fn TreeViewItem(
 ) -> Element {
     let node = item.node.clone();
     let depth = item.depth;
-    let classes = if is_selected && !node.is_folder {
-        if is_focused {
-            "tree-item file selected focused"
-        } else {
-            "tree-item file selected"
-        }
-    } else if is_focused {
-        if node.is_folder {
-            "tree-item folder focused"
-        } else {
-            "tree-item file focused"
-        }
-    } else if node.is_folder {
-        "tree-item folder"
-    } else {
-        "tree-item file"
-    };
+    let type_class = if node.is_folder { "folder" } else { "file" };
+    let selected_class = if is_selected { " selected" } else { "" };
+    let focused_class = if is_focused { " focused" } else { "" };
+    let classes = format!("tree-item {type_class}{selected_class}{focused_class}");
 
     rsx! {
         div {

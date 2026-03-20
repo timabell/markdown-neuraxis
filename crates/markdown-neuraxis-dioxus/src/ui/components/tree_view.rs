@@ -7,6 +7,7 @@ use relative_path::RelativePathBuf;
 pub fn TreeView(
     tree: ReadSignal<FileTree>,
     selected_file: Option<MarkdownFile>,
+    focused_folder: Option<RelativePathBuf>,
     on_file_select: EventHandler<MarkdownFile>,
     on_folder_toggle: EventHandler<RelativePathBuf>,
 ) -> Element {
@@ -70,6 +71,8 @@ pub fn TreeView(
                         if let (Some(selected_file), Some(item_markdown_file)) =
                             (selected_file.as_ref(), &item.node.markdown_file) {
                             selected_file.relative_path() == item_markdown_file.relative_path()
+                        } else if item.node.is_folder {
+                            focused_folder.as_ref() == Some(&item.node.relative_path)
                         } else {
                             false
                         }

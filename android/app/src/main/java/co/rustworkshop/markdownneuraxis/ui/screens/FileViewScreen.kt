@@ -38,6 +38,7 @@ fun FileViewScreen(
     fileTree: FileTree,
     notesUri: Uri,
     onNavigateToFile: (DocumentFile) -> Unit,
+    onNavigateToFolder: (String) -> Unit,
     onMissingFile: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -50,16 +51,25 @@ fun FileViewScreen(
     }
 
     val onWikiLinkClick: (String) -> Unit = { linkTarget ->
-        val resolvedPath = resolveWikilink(linkTarget, fileTree.getAllFilePaths())
-        if (resolvedPath != null) {
-            val docFile = resolveDocumentFile(context, notesUri, resolvedPath)
-            if (docFile != null) {
-                onNavigateToFile(docFile)
+        // First check if target matches a folder
+        val folder = fileTree.findFolderByName(linkTarget)
+        if (folder != null) {
+            onNavigateToFolder(folder.relativePath)
+        } else {
+            // Not a folder, resolve as file
+            val resolvedPath = resolveWikilink(linkTarget, fileTree.getAllFilePaths())
+            if (resolvedPath != null) {
+                // Expand parent folders so file is visible
+                fileTree.expandToFile(resolvedPath)
+                val docFile = resolveDocumentFile(context, notesUri, resolvedPath)
+                if (docFile != null) {
+                    onNavigateToFile(docFile)
+                } else {
+                    onMissingFile(linkTarget)
+                }
             } else {
                 onMissingFile(linkTarget)
             }
-        } else {
-            onMissingFile(linkTarget)
         }
     }
 

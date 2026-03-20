@@ -121,6 +121,56 @@ class FileTree {
     fun getFileCount(): Int = fileMap.size
 
     /**
+     * Find a folder by target name or path (case-insensitive).
+     * Matches against:
+     * 1. Full relative path (e.g., "1_Projects/active")
+     * 2. Final folder name only (e.g., "1_Projects")
+     */
+    fun findFolderByName(target: String): FileTreeNode.Folder? {
+        val targetNormalized = target.trim().trimEnd('/')
+        val targetLower = targetNormalized.lowercase()
+
+        for ((path, folder) in folderMap) {
+            // Check if full path matches (case-insensitive)
+            if (path.lowercase() == targetLower) {
+                return folder
+            }
+
+            // Check if final folder name matches (case-insensitive)
+            if (folder.name.lowercase() == targetLower) {
+                return folder
+            }
+        }
+        return null
+    }
+
+    /**
+     * Expand a folder and all its ancestors.
+     */
+    fun expandToFolder(folder: FileTreeNode.Folder) {
+        val segments = folder.relativePath.split("/")
+        var currentPath = ""
+        for (i in segments.indices) {
+            currentPath = if (i == 0) segments[0] else "$currentPath/${segments[i]}"
+            folderMap[currentPath]?.isExpanded = true
+        }
+    }
+
+    /**
+     * Expand parent folders for a file path so the file is visible in the tree.
+     */
+    fun expandToFile(relativePath: String) {
+        val segments = relativePath.split("/")
+        if (segments.size <= 1) return // No parent folders
+
+        var currentPath = ""
+        for (i in 0 until segments.size - 1) {
+            currentPath = if (i == 0) segments[0] else "$currentPath/${segments[i]}"
+            folderMap[currentPath]?.isExpanded = true
+        }
+    }
+
+    /**
      * Remove files that are no longer present (not in scannedPaths).
      * Returns count of removed files.
      */
