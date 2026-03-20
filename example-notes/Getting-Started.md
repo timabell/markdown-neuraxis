@@ -9,7 +9,7 @@ This is an interactive tutorial - feel free to edit this file as you learn!
 Organize your content with different heading levels:
 
 # Heading 1 - Major Sections
-## Heading 2 - Subsections  
+## Heading 2 - Subsections
 ### Heading 3 - Topics
 #### Heading 4 - Subtopics
 
@@ -136,7 +136,7 @@ Or inline properties in bullets:
 - Link related thoughts with [[wiki-links]]
 - Add context with hashtags (#home #work #phone)
 
-### Evening Review  
+### Evening Review
 1. Mark completed tasks as DONE
 2. Move incomplete tasks to tomorrow
 3. Process INBOX items - clarify into actions

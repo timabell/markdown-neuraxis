@@ -42,7 +42,8 @@ ROOT@0..107
         WHITESPACE@71..72 " "
         TEXT@72..77 "blank"
         NEWLINE@77..78 "\\n"
-    HARD_BREAK@78..81 "  \\n"
+    WHITESPACE@78..80 "  "
+    NEWLINE@80..81 "\\n"
   UNORDERED_LIST@81..107
     LIST_ITEM@81..107
       DASH@81..82 "-"

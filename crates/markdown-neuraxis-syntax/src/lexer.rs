@@ -152,11 +152,6 @@ pub enum TokenKind {
     #[token("=")]
     Equals,
 
-    /// Hard line break - two or more trailing spaces followed by newline
-    /// Logos uses longest-match, so this wins over Whitespace+Newline
-    #[regex(r"  +\r?\n")]
-    HardBreak,
-
     /// Plain text - anything not matched by other rules
     #[regex(r"[^\s\[\]()>`*+#|~.<_!:=-]+")]
     Text,
@@ -186,7 +181,6 @@ impl TokenKind {
             TokenKind::Exclaim => SyntaxKind::EXCLAIM,
             TokenKind::Colon => SyntaxKind::COLON,
             TokenKind::Equals => SyntaxKind::EQUALS,
-            TokenKind::HardBreak => SyntaxKind::HARD_BREAK,
             TokenKind::Text => SyntaxKind::TEXT,
         }
     }
@@ -495,31 +489,34 @@ mod tests {
     }
 
     #[test]
-    fn lex_hard_break_two_spaces() {
+    fn lex_trailing_spaces_before_newline() {
+        // Trailing spaces are just WHITESPACE, not a special token
         let tokens = lex("text  \n");
         assert_eq!(
             tokens,
             vec![
                 token(SyntaxKind::TEXT, "text"),
-                token(SyntaxKind::HARD_BREAK, "  \n"),
+                token(SyntaxKind::WHITESPACE, "  "),
+                token(SyntaxKind::NEWLINE, "\n"),
             ]
         );
     }
 
     #[test]
-    fn lex_hard_break_three_spaces() {
+    fn lex_three_trailing_spaces() {
         let tokens = lex("text   \n");
         assert_eq!(
             tokens,
             vec![
                 token(SyntaxKind::TEXT, "text"),
-                token(SyntaxKind::HARD_BREAK, "   \n"),
+                token(SyntaxKind::WHITESPACE, "   "),
+                token(SyntaxKind::NEWLINE, "\n"),
             ]
         );
     }
 
     #[test]
-    fn lex_single_space_not_hard_break() {
+    fn lex_single_trailing_space() {
         let tokens = lex("text \n");
         assert_eq!(
             tokens,
@@ -532,19 +529,20 @@ mod tests {
     }
 
     #[test]
-    fn lex_hard_break_crlf() {
+    fn lex_trailing_spaces_crlf() {
         let tokens = lex("text  \r\n");
         assert_eq!(
             tokens,
             vec![
                 token(SyntaxKind::TEXT, "text"),
-                token(SyntaxKind::HARD_BREAK, "  \r\n"),
+                token(SyntaxKind::WHITESPACE, "  "),
+                token(SyntaxKind::NEWLINE, "\r\n"),
             ]
         );
     }
 
     #[test]
-    fn all_bytes_preserved_with_hard_break() {
+    fn all_bytes_preserved_with_trailing_spaces() {
         let input = "line one  \nline two   \nline three";
         let tokens = lex(input);
         let reconstructed: String = tokens.iter().map(|t| t.text).collect();
@@ -552,15 +550,20 @@ mod tests {
     }
 
     #[test]
-    fn lex_hard_break_at_line_start() {
-        // Just spaces + newline (no preceding text)
+    fn lex_whitespace_only_line() {
+        // Just spaces + newline
         let tokens = lex("  \n");
-        assert_eq!(tokens, vec![token(SyntaxKind::HARD_BREAK, "  \n"),]);
+        assert_eq!(
+            tokens,
+            vec![
+                token(SyntaxKind::WHITESPACE, "  "),
+                token(SyntaxKind::NEWLINE, "\n"),
+            ]
+        );
     }
 
     #[test]
-    fn lex_tab_space_not_hard_break() {
-        // Tab + space + newline is not a hard break (needs 2+ spaces)
+    fn lex_tab_and_spaces() {
         let tokens = lex("text\t \n");
         assert_eq!(
             tokens,
@@ -587,28 +590,31 @@ mod tests {
     }
 
     #[test]
-    fn lex_multiple_hard_breaks() {
+    fn lex_multiple_trailing_spaces() {
         let tokens = lex("a  \nb  \nc");
         assert_eq!(
             tokens,
             vec![
                 token(SyntaxKind::TEXT, "a"),
-                token(SyntaxKind::HARD_BREAK, "  \n"),
+                token(SyntaxKind::WHITESPACE, "  "),
+                token(SyntaxKind::NEWLINE, "\n"),
                 token(SyntaxKind::TEXT, "b"),
-                token(SyntaxKind::HARD_BREAK, "  \n"),
+                token(SyntaxKind::WHITESPACE, "  "),
+                token(SyntaxKind::NEWLINE, "\n"),
                 token(SyntaxKind::TEXT, "c"),
             ]
         );
     }
 
     #[test]
-    fn lex_hard_break_many_spaces() {
+    fn lex_many_trailing_spaces() {
         let tokens = lex("text      \n");
         assert_eq!(
             tokens,
             vec![
                 token(SyntaxKind::TEXT, "text"),
-                token(SyntaxKind::HARD_BREAK, "      \n"),
+                token(SyntaxKind::WHITESPACE, "      "),
+                token(SyntaxKind::NEWLINE, "\n"),
             ]
         );
     }

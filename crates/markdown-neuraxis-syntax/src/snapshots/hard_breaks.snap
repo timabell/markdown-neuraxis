@@ -1,6 +1,6 @@
 ---
 source: crates/markdown-neuraxis-syntax/src/lib.rs
-expression: "format_tree(&tree, 0)"
+expression: "insta_format_tree(&tree, 0)"
 ---
 ROOT@0..70
   PARAGRAPH@0..70
@@ -11,7 +11,8 @@ ROOT@0..70
     TEXT@10..14 "hard"
     WHITESPACE@14..15 " "
     TEXT@15..20 "break"
-    HARD_BREAK@20..23 "  \\n"
+    WHITESPACE@20..22 "  "
+    NEWLINE@22..23 "\\n"
     TEXT@23..27 "next"
     WHITESPACE@27..28 " "
     TEXT@28..32 "line"

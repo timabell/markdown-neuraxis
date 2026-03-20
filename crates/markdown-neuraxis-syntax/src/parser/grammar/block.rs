@@ -42,9 +42,13 @@ use super::inline;
 /// This is the main dispatch function for block parsing. It skips blank lines,
 /// then examines the first token to determine the block type.
 pub fn block(p: &mut Parser<'_, '_>) {
-    // Skip leading blank lines (including HARD_BREAK which is "  \n" tokenized)
+    // Skip blank lines (empty or whitespace-only)
     loop {
-        if p.at(SyntaxKind::NEWLINE) || p.at(SyntaxKind::HARD_BREAK) {
+        if p.at(SyntaxKind::NEWLINE) {
+            p.bump();
+        } else if p.at(SyntaxKind::WHITESPACE) && p.nth(1) == SyntaxKind::NEWLINE {
+            // Whitespace-only line - skip both tokens
+            p.bump();
             p.bump();
         } else {
             break;
@@ -409,12 +413,16 @@ fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
 
     // Continue parsing list items at the same level
     loop {
-        // Skip blank lines within the list - but a blank line followed by non-list ends the list
-        // HARD_BREAK is "  \n" tokenized by lexer - treat as blank line here
+        // Skip blank lines (empty or whitespace-only) within the list
         let mut blank_count = 0;
         loop {
-            if p.at(SyntaxKind::NEWLINE) || p.at(SyntaxKind::HARD_BREAK) {
+            if p.at(SyntaxKind::NEWLINE) {
                 blank_count += 1;
+                p.bump();
+            } else if p.at(SyntaxKind::WHITESPACE) && p.nth(1) == SyntaxKind::NEWLINE {
+                // Whitespace-only line counts as blank
+                blank_count += 1;
+                p.bump();
                 p.bump();
             } else {
                 break;

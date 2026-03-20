@@ -765,23 +765,53 @@ fn extract_segments(
     build_segments_with_gaps(&inlines, source, content_range)
 }
 
-/// Collect inline elements from a node, recursively extracting children for STRONG/EMPHASIS
+/// Collect inline elements from a node, recursively extracting children for STRONG/EMPHASIS.
+/// Hard breaks (trailing spaces + newline) are only detected in block types where they
+/// are semantically meaningful (paragraphs, list items, blockquotes), not in headings.
 fn collect_inlines(node: &SyntaxNode, source: &str) -> Vec<InlineInfo> {
+    // Determine if hard breaks should be detected based on block context
+    let detect_hard_breaks = matches!(
+        node.kind(),
+        SyntaxKind::PARAGRAPH | SyntaxKind::BLOCK_QUOTE | SyntaxKind::LIST_ITEM
+    );
+
     let mut inlines = Vec::new();
 
-    for child in node.children_with_tokens() {
+    // Collect children to allow lookahead for hard break detection
+    let children: Vec<_> = node.children_with_tokens().collect();
+
+    let mut i = 0;
+    while i < children.len() {
+        let child = &children[i];
         let range: Range<usize> = {
             let r = child.text_range();
             (r.start().into())..(r.end().into())
         };
         let text = &source[range.clone()];
 
-        let info: Option<InlineInfo> = match &child {
+        let info: Option<InlineInfo> = match child {
             SyntaxElement::Token(token) => match token.kind() {
-                SyntaxKind::HARD_BREAK => Some(InlineInfo {
-                    range: range.clone(),
-                    node: InlineNode::HardBreak,
-                }),
+                // Detect hard break pattern: WHITESPACE (2+ trailing spaces) + NEWLINE
+                // Only in contexts where hard breaks are semantically meaningful
+                SyntaxKind::WHITESPACE if detect_hard_breaks && text.ends_with("  ") => {
+                    // Check if next token is NEWLINE
+                    if let Some(SyntaxElement::Token(next)) = children.get(i + 1) {
+                        if next.kind() == SyntaxKind::NEWLINE {
+                            // This is a hard break - combine both tokens
+                            let next_range = next.text_range();
+                            let combined_range = range.start..(next_range.end().into());
+                            i += 1; // Skip the NEWLINE token
+                            Some(InlineInfo {
+                                range: combined_range,
+                                node: InlineNode::HardBreak,
+                            })
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
                 _ => None,
             },
             SyntaxElement::Node(child_node) => match child_node.kind() {
@@ -843,6 +873,7 @@ fn collect_inlines(node: &SyntaxNode, source: &str) -> Vec<InlineInfo> {
         if let Some(info) = info {
             inlines.push(info);
         }
+        i += 1;
     }
 
     // Sort inlines by start position
