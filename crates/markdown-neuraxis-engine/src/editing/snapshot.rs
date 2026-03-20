@@ -2271,4 +2271,57 @@ mod tests {
             panic!("Expected Strong, got {:?}", block.segments[0].kind);
         }
     }
+
+    #[test]
+    fn test_list_item_line_full_includes_trailing_newline() {
+        // Verifies that line.full range includes trailing newline, so extracting
+        // source[line.full] and replacing range line.full is a no-op.
+        // This is critical for the editing workflow where focusing/unfocusing
+        // a list item without changes should not modify the document.
+        let text = "- Item 1\n- Item 2\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Find the first list item
+        fn find_first_list_item(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if matches!(block.kind, BlockKind::ListItem { .. }) {
+                    return Some(block);
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_first_list_item(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let item = find_first_list_item(&snapshot.blocks).expect("Should have list item");
+
+        // The first line's full range should capture "- Item 1\n" exactly
+        assert!(
+            !item.lines.is_empty(),
+            "List item should have at least one line"
+        );
+        let first_line = &item.lines[0];
+
+        // Extract content using line.full (what the UI does for editing)
+        let extracted = &text[first_line.full.clone()];
+
+        // Verify it includes the trailing newline
+        assert_eq!(
+            extracted, "- Item 1\n",
+            "line.full should include trailing newline"
+        );
+
+        // Verify that replacing first_line.full with extracted content is a no-op
+        let mut modified = text.to_string();
+        modified.replace_range(first_line.full.clone(), extracted);
+        assert_eq!(
+            modified, text,
+            "Replacing line.full with its content should be a no-op"
+        );
+    }
 }

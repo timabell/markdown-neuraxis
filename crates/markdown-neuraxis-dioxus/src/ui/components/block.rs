@@ -78,12 +78,11 @@ pub fn BlockRenderer(
         BlockKind::ListItem { .. } => {
             if is_focused {
                 // Use first line only - node_range includes nested children
-                let content_text = block
-                    .lines
-                    .first()
+                let first_line = block.lines.first();
+                let edit_range = first_line.map(|line| line.full.clone());
+                let content_text = first_line
                     .and_then(|line| source.get(line.full.clone()))
                     .unwrap_or("")
-                    .trim_end()
                     .to_string();
                 let block_clone = block.clone();
                 rsx! {
@@ -92,6 +91,7 @@ pub fn BlockRenderer(
                         EditorBlock {
                             block: block_clone,
                             content_text,
+                            edit_range,
                             on_command,
                             on_cancel: {
                                 let mut focused_anchor_id = focused_anchor_id;

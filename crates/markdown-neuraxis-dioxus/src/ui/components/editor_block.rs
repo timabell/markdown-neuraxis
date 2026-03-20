@@ -8,23 +8,31 @@ use markdown_neuraxis_engine::editing::{Block, BlockKind, Cmd};
 pub fn EditorBlock(
     block: Block,
     content_text: String,
+    /// Optional override for the edit range. Defaults to block.node_range.
+    /// Used for ListItems where we edit only the first line, not nested children.
+    edit_range: Option<std::ops::Range<usize>>,
     on_command: Callback<Cmd>,
     on_cancel: Callback<()>,
 ) -> Element {
     // Local state for textarea content - only commit changes on specific events
+    let original_content = content_text.clone();
     let local_content = use_signal(|| content_text.clone());
+    let edit_range = edit_range.unwrap_or_else(|| block.node_range.clone());
 
     // Helper to commit current changes to the document
     let commit_changes = {
         let on_command = on_command;
-        let block_range = block.node_range.clone();
+        let edit_range = edit_range.clone();
         move || {
             let current_text = local_content.read().clone();
-            let replace_cmd = Cmd::ReplaceRange {
-                range: block_range.clone(),
-                text: current_text,
-            };
-            on_command.call(replace_cmd);
+            // Only commit if content actually changed to avoid no-op replacements
+            if current_text != original_content {
+                let replace_cmd = Cmd::ReplaceRange {
+                    range: edit_range.clone(),
+                    text: current_text,
+                };
+                on_command.call(replace_cmd);
+            }
         }
     };
 
@@ -50,7 +58,7 @@ pub fn EditorBlock(
 
                 // Handle special keyboard commands via keydown (Tab, Shift+Tab, Enter, Escape)
                 onkeydown: {
-                    let block_range = block.node_range.clone();
+                    let edit_range = edit_range.clone();
                     let block_kind = block.kind.clone();
                     let on_command = on_command;
                     let on_cancel = on_cancel;
@@ -58,7 +66,7 @@ pub fn EditorBlock(
                     move |event: Event<KeyboardData>| {
                         handle_editor_keydown(
                             event,
-                            &block_range,
+                            &edit_range,
                             &block_kind,
                             &on_command,
                             &on_cancel,
@@ -93,15 +101,15 @@ fn calculate_textarea_rows(content: &str) -> u32 {
 // Helper function to handle editor keyboard events
 fn handle_editor_keydown(
     event: Event<KeyboardData>,
-    block_range: &std::ops::Range<usize>,
+    edit_range: &std::ops::Range<usize>,
     block_kind: &BlockKind,
     on_command: &Callback<Cmd>,
     on_cancel: &Callback<()>,
     commit_changes: &impl Fn(),
 ) {
     match event.key() {
-        Key::Tab => handle_tab_key(event, block_range, on_command, commit_changes),
-        Key::Enter => handle_enter_key(event, block_range, block_kind, on_command, commit_changes),
+        Key::Tab => handle_tab_key(event, edit_range, on_command, commit_changes),
+        Key::Enter => handle_enter_key(event, edit_range, block_kind, on_command, commit_changes),
         Key::Escape => {
             commit_changes();
             on_cancel.call(());
@@ -113,7 +121,7 @@ fn handle_editor_keydown(
 // Handle Tab key press for indentation
 fn handle_tab_key(
     event: Event<KeyboardData>,
-    block_range: &std::ops::Range<usize>,
+    edit_range: &std::ops::Range<usize>,
     on_command: &Callback<Cmd>,
     commit_changes: &impl Fn(),
 ) {
@@ -122,11 +130,11 @@ fn handle_tab_key(
 
     let cmd = if event.modifiers().shift() {
         Cmd::OutdentLines {
-            range: block_range.clone(),
+            range: edit_range.clone(),
         }
     } else {
         Cmd::IndentLines {
-            range: block_range.clone(),
+            range: edit_range.clone(),
         }
     };
     on_command.call(cmd);
@@ -135,7 +143,7 @@ fn handle_tab_key(
 // Handle Enter key press for new lines or list item splitting
 fn handle_enter_key(
     event: Event<KeyboardData>,
-    block_range: &std::ops::Range<usize>,
+    edit_range: &std::ops::Range<usize>,
     block_kind: &BlockKind,
     on_command: &Callback<Cmd>,
     commit_changes: &impl Fn(),
@@ -149,11 +157,9 @@ fn handle_enter_key(
     commit_changes();
 
     let cmd = match block_kind {
-        BlockKind::ListItem { .. } => Cmd::SplitListItem {
-            at: block_range.end,
-        },
+        BlockKind::ListItem { .. } => Cmd::SplitListItem { at: edit_range.end },
         _ => Cmd::InsertText {
-            at: block_range.end,
+            at: edit_range.end,
             text: "\n".to_string(),
         },
     };
