@@ -42,9 +42,13 @@ use super::inline;
 /// This is the main dispatch function for block parsing. It skips blank lines,
 /// then examines the first token to determine the block type.
 pub fn block(p: &mut Parser<'_, '_>) {
-    // Skip leading blank lines
-    while p.at(SyntaxKind::NEWLINE) {
-        p.bump();
+    // Skip leading blank lines (including HARD_BREAK which is "  \n" tokenized)
+    loop {
+        if p.at(SyntaxKind::NEWLINE) || p.at(SyntaxKind::HARD_BREAK) {
+            p.bump();
+        } else {
+            break;
+        }
     }
 
     if p.at_end() {
@@ -406,10 +410,15 @@ fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
     // Continue parsing list items at the same level
     loop {
         // Skip blank lines within the list - but a blank line followed by non-list ends the list
+        // HARD_BREAK is "  \n" tokenized by lexer - treat as blank line here
         let mut blank_count = 0;
-        while p.at(SyntaxKind::NEWLINE) {
-            blank_count += 1;
-            p.bump();
+        loop {
+            if p.at(SyntaxKind::NEWLINE) || p.at(SyntaxKind::HARD_BREAK) {
+                blank_count += 1;
+                p.bump();
+            } else {
+                break;
+            }
         }
 
         if p.at_end() {
@@ -542,6 +551,11 @@ fn list_item_content(p: &mut Parser<'_, '_>) {
 
         // Check what follows the whitespace
         let after_ws = p.nth(1);
+
+        // Whitespace followed by newline = blank line, not continuation
+        if after_ws == SyntaxKind::NEWLINE || after_ws == SyntaxKind::EOF {
+            break;
+        }
 
         // If it's a block marker, end the paragraph and handle as nested block
         match after_ws {
@@ -1793,5 +1807,33 @@ mod tests {
             fm.is_none() || hr.is_some(),
             "Single --- should be thematic break, not frontmatter"
         );
+    }
+
+    #[test]
+    fn list_item_after_blank_line_with_whitespace() {
+        // Whitespace-only line should be treated same as empty blank line
+        // This breaks the list into two separate lists (matching VSCode behavior)
+        let input = "- First item\n  \n- Second item\n";
+        let tree = parse(input);
+
+        // Debug: print all children
+        eprintln!("Tree children:");
+        for child in tree.children() {
+            eprintln!(
+                "  {:?} @ {:?}: {:?}",
+                child.kind(),
+                child.text_range(),
+                child.text()
+            );
+        }
+
+        let lists: Vec<_> = tree
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::UNORDERED_LIST)
+            .collect();
+        assert_eq!(lists.len(), 2, "Whitespace-only line should break list");
+
+        // Text should be preserved
+        assert_eq!(tree.text().to_string(), input);
     }
 }
