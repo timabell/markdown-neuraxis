@@ -145,7 +145,19 @@ fun App() {
                         file = fileStack.last(),
                         fileTree = discoveryState.tree,
                         notesUri = notesUri!!,
-                        onNavigateToFile = { file -> fileStack.add(file) },
+                        onNavigateToFile = { file ->
+                            // Expand parent folders so file is visible, then navigate
+                            treeVersion++
+                            fileStack.add(file)
+                        },
+                        onNavigateToFolder = { folderPath ->
+                            // Find and expand the folder, then navigate back to file list
+                            discoveryState.tree.findFolderByName(folderPath)?.let { folder ->
+                                discoveryState.tree.expandToFolder(folder)
+                            }
+                            fileStack.clear()
+                            treeVersion++
+                        },
                         onMissingFile = { name -> missingFileName = name },
                         modifier = Modifier.padding(padding)
                     )
