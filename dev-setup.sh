@@ -19,8 +19,11 @@ sudo apt install -y \
     libwebkit2gtk-4.1-dev \
     libxdo-dev
 
+# Install Rust development tools via binstall for faster binary downloads
+# Prerequisite: cargo binstall (https://github.com/cargo-bins/cargo-binstall)
 echo "Installing Rust development tools..."
-cargo install cargo-insta
+cargo binstall -y cargo-insta
+cargo binstall -y cargo-machete
 
 echo "Development dependencies installed successfully!"
 echo "You can now run 'cargo build' to build the application."
