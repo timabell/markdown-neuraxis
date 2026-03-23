@@ -3012,7 +3012,6 @@ dependencies = [
  "markdown-neuraxis-syntax",
  "pretty_assertions",
  "pulldown-cmark",
- "regex",
  "relative-path 2.0.1",
  "rstest",
  "tempfile",
