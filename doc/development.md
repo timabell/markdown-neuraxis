@@ -151,9 +151,10 @@ feat: Add FileModel for workspace support
 
 Release notes are generated from conventional commits using git-cliff. Configuration is in [.github/cliff.toml](../.github/cliff.toml).
 
-Commits are grouped by scope (Android, Desktop, Cli, Core) then by type (Features, Bug Fixes, etc.).
+Commits are grouped by scope (All Platforms, Dioxus Desktop, Android, CLI) then by type (Features, Bug Fixes, etc.).
 
-To generate a changelog:
+To preview release notes:
 ```bash
-git cliff --unreleased
+./release-notes.sh           # show latest release
+./release-notes.sh --preview # show unreleased changes
 ```

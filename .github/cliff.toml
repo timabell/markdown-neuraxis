@@ -1,51 +1,57 @@
 [changelog]
-header = """
-# Changelog\n
-"""
+header = ""
 body = """
-{% if version %}\
-    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
-{% else %}\
-    ## [unreleased]
+{% if version %}## {{ version }}
+{% else %}## [unreleased]
 {% endif %}\
 {% for scope, scope_commits in commits | group_by(attribute="scope") %}
-    {% if scope %}
-    ### {{ scope | upper_first }}
-    {% else %}
-    ### Core
-    {% endif %}
-    {% for group, commits in scope_commits | group_by(attribute="group") %}
-        #### {{ group | upper_first }}
-        {% for commit in commits %}
-            - {{ commit.message | upper_first }}\
-        {% endfor %}
-    {% endfor %}
-{% endfor %}\n
+
+### {{ scope | striptags | trim }}
+{% for group, group_commits in scope_commits | group_by(attribute="group") %}
+#### {{ group | striptags | trim }}
+{% for commit in group_commits %}\
+- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
+{% endfor %}
+{% endfor %}\
+{% endfor %}
 """
+footer = ""
 trim = true
 
 [git]
+# Parse "type(scope): message" format to extract scope and set group via commit_parsers
 conventional_commits = true
-filter_unconventional = true # ignore commits without "prefix:"
+# false = silently skip non-conventional commits (no warning about "parse errors")
+# true = warn about commits that don't match "type: message" format
+filter_unconventional = false
+# false = keep each commit as one entry; true = split multi-paragraph commits
 split_commits = false
+
+# Rewrite scopes to platform display names before parsing.
+# HTML comments (<!-- N -->) control sort order, removed by striptags in template.
 commit_preprocessors = [
-    { pattern = '\((\w+\s)?#([0-9]+)\)', replace = ""},
+    { pattern = '\(dioxus\)', replace = "(<!-- 2 -->Dioxus Desktop)" },
+    { pattern = '\(android\)', replace = "(<!-- 3 -->Android)" },
+    { pattern = '\(cli\)', replace = "(<!-- 4 -->CLI)" },
 ]
+
+# Match commit message prefixes to assign groups (change types).
+# First matching parser wins. default_scope applies when commit has no scope.
+# HTML comments control sort order within each platform section.
 commit_parsers = [
-    { message = "^feat", group = "Features"},
-    { message = "^fix", group = "Bug Fixes"},
-    { message = "^refactor", group = "Refactor"},
-    { message = "^chore", group = "Chores"},
-    { message = "^doc", group = "Documentation"},
-    { message = "^perf", group = "Performance"},
-    { message = "^style", group = "Styling"},
-    { message = "^security", group = "Security"},
-    { body = ".*security", group = "Security"},
+    { message = "^feat", group = "<!-- 1 -->✨ Features", default_scope = "<!-- 1 -->All Platforms" },
+    { message = "^fix", group = "<!-- 2 -->🐛 Bug Fixes", default_scope = "<!-- 1 -->All Platforms" },
+    { message = "^refactor", group = "<!-- 3 -->🔧 Refactor", default_scope = "<!-- 1 -->All Platforms" },
+    { message = "^perf", group = "<!-- 4 -->⚡ Performance", default_scope = "<!-- 1 -->All Platforms" },
+    { message = "^doc", group = "<!-- 5 -->📚 Documentation", default_scope = "<!-- 1 -->All Platforms" },
+    { message = "^security", group = "<!-- 6 -->🔒 Security", default_scope = "<!-- 1 -->All Platforms" },
+    { body = ".*security", group = "<!-- 6 -->🔒 Security", default_scope = "<!-- 1 -->All Platforms" },
 ]
-protect_breaking_commits = false
-filter_commits = true # ignore prefixes not listed above
+
+# false = include commits that don't match any parser (as ungrouped)
+# true = exclude commits that don't match any parser
+filter_commits = false
+
 tag_pattern = "v[0-9]*"
-skip_tags = "v[0-9]*-.*" # ignore pre-release semver tags
-ignore_tags = ""
-topo_order = false
-sort_commits = "oldest"
+# Skip pre-release tags like v1.0.0-beta.1
+skip_tags = "v[0-9]*-.*"
