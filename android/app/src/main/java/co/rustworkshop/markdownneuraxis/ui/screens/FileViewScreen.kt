@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.LocalContentColor
 import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
@@ -129,9 +131,17 @@ private fun RenderSegments(
     onWikiLinkClick: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val contentColor = LocalContentColor.current
+
+    // Ensure style has the correct text color for dark/light mode
+    val themedStyle = if (style.color == Color.Unspecified) {
+        style.copy(color = contentColor)
+    } else {
+        style
+    }
 
     if (segments.isEmpty()) {
-        Text(text = content, style = style, modifier = modifier)
+        Text(text = content, style = themedStyle, modifier = modifier)
         return
     }
 
@@ -161,7 +171,7 @@ private fun RenderSegments(
 
     ClickableText(
         text = annotatedText,
-        style = style,
+        style = themedStyle,
         modifier = modifier,
         onClick = { offset ->
             annotatedText.getStringAnnotations(tag = "url", start = offset, end = offset)
