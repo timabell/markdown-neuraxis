@@ -3,21 +3,15 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Paragraph [0..33]
-  lines:
-    full:0..33 prefix:0..0"" content:0..32"An image: ![alt text](image.png)"
   segments:
     Text [0..10] "An image: "
     Image [10..32] alt:"alt text" url:"image.png"
 Paragraph [34..49]
-  lines:
-    full:34..49 prefix:34..34"" content:34..48"Image in list:"
   segments:
     Text [34..48] "Image in list:"
 List { ordered: false } [49..78]
   children:
     ListItem { marker: "- " } [49..78]
-      lines:
-        full:49..78 prefix:49..51"- " content:51..77"![icon](icon.png) Item one"
       segments:
         Image [51..68] alt:"icon" url:"icon.png"
         Text [68..77] " Item one"

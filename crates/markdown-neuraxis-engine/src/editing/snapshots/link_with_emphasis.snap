@@ -3,17 +3,11 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Paragraph [0..30]
-  lines:
-    full:0..30 prefix:0..0"" content:0..29"[*emphasized link text*](url)"
   segments:
     Link [0..29] text:"*emphasized link text*" url:"url"
 Paragraph [31..59]
-  lines:
-    full:31..59 prefix:31..31"" content:31..58"[**strong link text**](url)"
   segments:
     Link [31..58] text:"**strong link text**" url:"url"
 Paragraph [60..91]
-  lines:
-    full:60..91 prefix:60..60"" content:60..90"[link with `code` inside](url)"
   segments:
     Link [60..90] text:"link with `code` inside" url:"url"

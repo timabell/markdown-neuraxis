@@ -6,22 +6,14 @@ List { ordered: false } [0..68]
   children:
     ListItem { marker: "- " } [0..53]
       root_range: 0..68
-      lines:
-        full:0..18 prefix:0..2"- " content:2..17"Item with code:"
       segments:
         Text [2..17] "Item with code:"
       children:
         FencedCode { language: Some("python") } [20..53]
           root_range: 0..68
-          lines:
-            full:20..30 prefix:20..20"" content:20..29"```python"
-            full:30..47 prefix:30..30"" content:30..46"  print(\"hello\")"
-            full:47..53 prefix:47..47"" content:47..52"  ```"
           segments:
-            Text [30..46] "  print(\"hello\")"
+            Text [30..52] "  print(\"hello\")\n  ```"
     ListItem { marker: "- " } [53..68]
       root_range: 0..68
-      lines:
-        full:53..68 prefix:53..55"- " content:55..67"Another item"
       segments:
         Text [55..67] "Another item"
