@@ -518,6 +518,17 @@ hr {
     outline: none;
 }
 
+/* When editing a list item, hide the browser's bullet marker and shift the
+   editor-block left so the markdown bullet marker aligns with where the
+   rendered bullet was */
+.list-item:has(> .editor-block) {
+    list-style-type: none;
+}
+
+.list-item > .editor-block {
+    margin-left: -24px; /* Matches .list padding-left to align with bullet position */
+}
+
 /* HTML block styles - valid markdown, displayed as plain text */
 .html-block {
     margin: 12px 0;
