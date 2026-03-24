@@ -515,13 +515,13 @@ impl Document {
                     {
                         return Some(result);
                     }
-                    // Calculate local offset using first line's content range
-                    if let Some(first_line) = block.lines.first() {
-                        let local_offset = byte_position.saturating_sub(first_line.content.start);
-                        return Some((block.id, local_offset));
-                    }
-                    // Fallback: use node_range start
-                    let local_offset = byte_position.saturating_sub(block.node_range.start);
+                    // Calculate local offset using first segment's range or node_range
+                    let content_start = block
+                        .segments
+                        .first()
+                        .map(|s| s.range.start)
+                        .unwrap_or(block.node_range.start);
+                    let local_offset = byte_position.saturating_sub(content_start);
                     return Some((block.id, local_offset));
                 }
             }
@@ -529,58 +529,6 @@ impl Document {
         }
 
         find_in_blocks(&snapshot.blocks, byte_position)
-    }
-
-    /// Hit-testing helper: Convert global byte position to textarea-local description
-    /// Returns the block ID, local byte offset, and cursor position for textarea
-    /// This implements ADR-0004 selection mapping between rope and textarea
-    pub fn describe_point(&self, byte_position: usize) -> Option<crate::editing::PointDescription> {
-        if let Some((block_id, local_offset)) = self.locate_in_block(byte_position) {
-            let snapshot = self.snapshot();
-            let source = self.text();
-
-            // Recursively find block by ID
-            fn find_block_by_id(
-                blocks: &[crate::editing::snapshot::Block],
-                id: crate::editing::AnchorId,
-            ) -> Option<&crate::editing::snapshot::Block> {
-                for block in blocks {
-                    if block.id == id {
-                        return Some(block);
-                    }
-                    if let crate::editing::snapshot::BlockContent::Children(ref children) =
-                        block.content
-                        && let Some(found) = find_block_by_id(children, id)
-                    {
-                        return Some(found);
-                    }
-                }
-                None
-            }
-
-            if let Some(block) = find_block_by_id(&snapshot.blocks, block_id) {
-                // Extract content from lines
-                let content: String = block
-                    .lines
-                    .iter()
-                    .map(|line| &source[line.content.clone()])
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                // Calculate line and column within the content for textarea mapping
-                let (local_line, local_col) = byte_to_point_in_text(&content, local_offset);
-
-                return Some(crate::editing::PointDescription {
-                    block_id,
-                    local_byte_offset: local_offset,
-                    local_line,
-                    local_col,
-                    textarea_cursor_pos: local_offset,
-                });
-            }
-        }
-
-        None
     }
 }
 
@@ -1089,14 +1037,29 @@ mod tests {
         let source = doc.text();
         let snapshot = doc.snapshot();
 
-        // Helper to extract content from a block
-        fn get_content(block: &crate::editing::snapshot::Block, source: &str) -> String {
+        // Helper to extract text content from a block's segments
+        fn get_content(block: &crate::editing::snapshot::Block, _source: &str) -> String {
+            fn extract_text(node: &crate::editing::InlineNode) -> String {
+                use crate::editing::InlineNode;
+                match node {
+                    InlineNode::Text(t) => t.clone(),
+                    InlineNode::Strong(children) | InlineNode::Emphasis(children) => {
+                        children.iter().map(extract_text).collect()
+                    }
+                    InlineNode::Code(t) | InlineNode::Strikethrough(t) => t.clone(),
+                    InlineNode::WikiLink { target, alias } => {
+                        alias.as_ref().unwrap_or(target).clone()
+                    }
+                    InlineNode::Link { text, .. } => text.clone(),
+                    InlineNode::Image { alt, .. } => alt.clone(),
+                    InlineNode::HardBreak => "\n".to_string(),
+                }
+            }
             block
-                .lines
+                .segments
                 .iter()
-                .map(|line| &source[line.content.clone()])
-                .collect::<Vec<_>>()
-                .join("\n")
+                .map(|seg| extract_text(&seg.kind))
+                .collect()
         }
 
         // Helper to count total blocks recursively

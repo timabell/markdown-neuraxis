@@ -6,19 +6,13 @@ List { ordered: false } [0..36]
   children:
     ListItem { marker: "- " } [0..12]
       root_range: 0..36
-      lines:
-        full:0..12 prefix:0..2"- " content:2..11"Dash item"
       segments:
         Text [2..11] "Dash item"
     ListItem { marker: "* " } [12..24]
       root_range: 0..36
-      lines:
-        full:12..24 prefix:12..14"* " content:14..23"Star item"
       segments:
         Text [14..23] "Star item"
     ListItem { marker: "+ " } [24..36]
       root_range: 0..36
-      lines:
-        full:24..36 prefix:24..26"+ " content:26..35"Plus item"
       segments:
         Text [26..35] "Plus item"
