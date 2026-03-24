@@ -5,13 +5,13 @@ body = """
 {% else %}## [unreleased]
 {% endif %}\
 {% for scope, scope_commits in commits | group_by(attribute="scope") %}
-
 ### {{ scope | striptags | trim }}
 {% for group, group_commits in scope_commits | group_by(attribute="group") %}
 #### {{ group | striptags | trim }}
+
 {% for commit in group_commits %}\
 - {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
-{% endfor %}
+{% endfor %}\
 {% endfor %}\
 {% endfor %}
 """
