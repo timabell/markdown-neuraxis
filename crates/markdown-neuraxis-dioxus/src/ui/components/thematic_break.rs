@@ -39,7 +39,10 @@ pub fn ThematicBreak(
                 tabindex: "0",
                 onclick: {
                     let mut focused_anchor_id = focused_anchor_id;
-                    move |_| focused_anchor_id.set(Some(block_id))
+                    move |evt| {
+                        evt.stop_propagation();
+                        focused_anchor_id.set(Some(block_id))
+                    }
                 },
                 onkeydown: {
                     let mut focused_anchor_id = focused_anchor_id;
