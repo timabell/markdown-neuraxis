@@ -5,14 +5,11 @@ expression: formatted
 List { ordered: false } [0..36]
   children:
     ListItem { marker: "- " } [0..12]
-      root_range: 0..36
       segments:
         Text [2..11] "Dash item"
     ListItem { marker: "* " } [12..24]
-      root_range: 0..36
       segments:
         Text [14..23] "Star item"
     ListItem { marker: "+ " } [24..36]
-      root_range: 0..36
       segments:
         Text [26..35] "Plus item"

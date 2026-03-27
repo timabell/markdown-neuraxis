@@ -5,28 +5,22 @@ expression: formatted
 List { ordered: false } [0..94]
   children:
     ListItem { marker: "- " } [0..80]
-      root_range: 0..94
       segments:
         Text [2..29] "First item\n  continued here"
       children:
         BlockQuote [32..46]
-          root_range: 0..94
           segments:
             Text [34..45] "quoted part"
         BlockQuote [48..61]
-          root_range: 0..94
           segments:
             Text [50..60] "more quote"
         BlockQuote [63..80]
-          root_range: 0..94
           segments:
             Text [66..79] "deeply nested"
           children:
             BlockQuote [64..80]
-              root_range: 0..94
               segments:
                 Text [66..79] "deeply nested"
     ListItem { marker: "- " } [80..94]
-      root_range: 0..94
       segments:
         Text [82..93] "Second item"

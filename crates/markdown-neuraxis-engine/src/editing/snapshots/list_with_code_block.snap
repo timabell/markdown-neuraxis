@@ -5,15 +5,12 @@ expression: formatted
 List { ordered: false } [0..68]
   children:
     ListItem { marker: "- " } [0..53]
-      root_range: 0..68
       segments:
         Text [2..17] "Item with code:"
       children:
         FencedCode { language: Some("python") } [20..53]
-          root_range: 0..68
           segments:
             Text [30..46] "  print(\"hello\")"
     ListItem { marker: "- " } [53..68]
-      root_range: 0..68
       segments:
         Text [55..67] "Another item"

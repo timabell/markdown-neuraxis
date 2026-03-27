@@ -5,14 +5,11 @@ expression: formatted
 List { ordered: true } [0..43]
   children:
     ListItem { marker: "1. " } [0..14]
-      root_range: 0..43
       segments:
         Text [3..13] "First item"
     ListItem { marker: "2. " } [14..29]
-      root_range: 0..43
       segments:
         Text [17..28] "Second item"
     ListItem { marker: "3. " } [29..43]
-      root_range: 0..43
       segments:
         Text [32..42] "Third item"

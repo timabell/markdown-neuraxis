@@ -5,15 +5,12 @@ expression: formatted
 List { ordered: false } [0..201]
   children:
     ListItem { marker: "- " } [0..21]
-      root_range: 0..201
       segments:
         Text [2..20] "Normal bullet item"
     ListItem { marker: "- " } [21..95]
-      root_range: 0..201
       segments:
         Text [23..94] "This line has hard wrap\n  this continues after break\n  and a third line"
     ListItem { marker: "- " } [95..170]
-      root_range: 0..201
       segments:
         Text [97..126] "This line has forced newlines"
         HardBreak [126..129]
@@ -21,7 +18,6 @@ List { ordered: false } [0..201]
         HardBreak [144..147]
         Text [147..169] "  trailing whitespaces"
     ListItem { marker: "- " } [170..201]
-      root_range: 0..201
       segments:
         Text [172..198] "Bullet with trailing space"
         HardBreak [198..201]

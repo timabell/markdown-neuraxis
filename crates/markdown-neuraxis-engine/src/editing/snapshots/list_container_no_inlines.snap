@@ -5,19 +5,16 @@ expression: formatted
 List { ordered: false } [0..78]
   children:
     ListItem { marker: "- " } [0..27]
-      root_range: 0..78
       segments:
         Emphasis [2..12]
           Text "emphasis"
         Text [12..26] " in first item"
     ListItem { marker: "- " } [27..55]
-      root_range: 0..78
       segments:
         Strong [29..39]
           Text "strong"
         Text [39..54] " in second item"
     ListItem { marker: "- " } [55..78]
-      root_range: 0..78
       segments:
         Code [57..63] "code"
         Text [63..77] " in third item"

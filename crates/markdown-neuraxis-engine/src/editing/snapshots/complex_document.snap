@@ -14,25 +14,21 @@ Heading { level: 2 } [47..59]
 List { ordered: false } [60..125]
   children:
     ListItem { marker: "- " } [60..110]
-      root_range: 60..125
       segments:
         Text [62..73] "Feature one"
       children:
         List { ordered: false } [76..110]
           children:
             ListItem { marker: "- " } [76..110]
-              root_range: 60..125
               segments:
                 Text [78..91] "Sub-feature A"
               children:
                 List { ordered: false } [94..110]
                   children:
                     ListItem { marker: "- " } [94..110]
-                      root_range: 60..125
                       segments:
                         Text [96..109] "Sub-feature B"
     ListItem { marker: "- " } [110..124]
-      root_range: 60..125
       segments:
         Text [112..123] "Feature two"
 Heading { level: 2 } [125..141]

@@ -90,8 +90,6 @@ pub struct Block {
     pub kind: BlockKind,
     /// This block's full span in the source
     pub node_range: Range<usize>,
-    /// Top-level ancestor's span (for "edit full block" behavior)
-    pub root_range: Range<usize>,
     /// Inline content for rendering. Top-level siblings with byte ranges;
     /// each segment's InlineNode may contain recursive nested formatting.
     pub segments: Vec<InlineSegment>,
@@ -141,7 +139,7 @@ pub fn create_snapshot(doc: &crate::editing::Document) -> Snapshot {
     // Process top-level children, passing anchors for ID lookup
     let anchors = &doc.anchors;
     for child in tree.children() {
-        if let Some(block) = process_node(&source, child, None, anchors) {
+        if let Some(block) = process_node(&source, child, anchors) {
             blocks.push(block);
         }
     }
@@ -195,25 +193,16 @@ fn generate_fallback_anchor_id(range: &Range<usize>) -> AnchorId {
 }
 
 /// Process a Rowan node into a Block
-fn process_node(
-    source: &str,
-    node: SyntaxNode,
-    root_range: Option<Range<usize>>,
-    anchors: &[Anchor],
-) -> Option<Block> {
-    let text_range = node.text_range();
-    let node_range = (text_range.start().into())..(text_range.end().into());
-    let root_range = root_range.unwrap_or_else(|| node_range.clone());
-
+fn process_node(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     match node.kind() {
-        SyntaxKind::ORDERED_LIST => process_list(source, node, root_range, anchors, true),
-        SyntaxKind::UNORDERED_LIST => process_list(source, node, root_range, anchors, false),
-        SyntaxKind::LIST_ITEM => process_list_item(source, node, root_range, anchors),
-        SyntaxKind::PARAGRAPH => process_paragraph(source, node, root_range, anchors),
-        SyntaxKind::BLOCK_QUOTE => process_block_quote(source, node, root_range, anchors),
-        SyntaxKind::HEADING => process_heading(source, node, root_range, anchors),
-        SyntaxKind::FENCED_CODE => process_fenced_code(source, node, root_range, anchors),
-        SyntaxKind::THEMATIC_BREAK => process_thematic_break(source, node, root_range, anchors),
+        SyntaxKind::ORDERED_LIST => process_list(source, node, anchors, true),
+        SyntaxKind::UNORDERED_LIST => process_list(source, node, anchors, false),
+        SyntaxKind::LIST_ITEM => process_list_item(source, node, anchors),
+        SyntaxKind::PARAGRAPH => process_paragraph(source, node, anchors),
+        SyntaxKind::BLOCK_QUOTE => process_block_quote(source, node, anchors),
+        SyntaxKind::HEADING => process_heading(source, node, anchors),
+        SyntaxKind::FENCED_CODE => process_fenced_code(source, node, anchors),
+        SyntaxKind::THEMATIC_BREAK => process_thematic_break(source, node, anchors),
         _ => None, // Skip unknown node types
     }
 }
@@ -221,7 +210,6 @@ fn process_node(
 fn process_list(
     source: &str,
     node: SyntaxNode,
-    root_range: Range<usize>,
     anchors: &[Anchor],
     ordered: bool,
 ) -> Option<Block> {
@@ -230,7 +218,7 @@ fn process_list(
     let mut children = Vec::new();
 
     for child in node.children() {
-        if let Some(block) = process_node(source, child, Some(root_range.clone()), anchors) {
+        if let Some(block) = process_node(source, child, anchors) {
             children.push(block);
         }
     }
@@ -244,19 +232,13 @@ fn process_list(
     Some(Block {
         id,
         kind: BlockKind::List { ordered },
-        node_range: node_range.clone(),
-        root_range: node_range,
+        node_range,
         segments: vec![],
         content: BlockContent::Children(children),
     })
 }
 
-fn process_list_item(
-    source: &str,
-    node: SyntaxNode,
-    root_range: Range<usize>,
-    anchors: &[Anchor],
-) -> Option<Block> {
+fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
     let text = &source[node_range.clone()];
@@ -279,7 +261,7 @@ fn process_list_item(
         if child.kind() == SyntaxKind::PARAGRAPH {
             continue;
         }
-        if let Some(block) = process_node(source, child, Some(root_range.clone()), anchors) {
+        if let Some(block) = process_node(source, child, anchors) {
             children.push(block);
         }
     }
@@ -330,18 +312,12 @@ fn process_list_item(
         id,
         kind: BlockKind::ListItem { marker },
         node_range,
-        root_range,
         segments,
         content,
     })
 }
 
-fn process_paragraph(
-    source: &str,
-    node: SyntaxNode,
-    root_range: Range<usize>,
-    anchors: &[Anchor],
-) -> Option<Block> {
+fn process_paragraph(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
 
@@ -362,18 +338,12 @@ fn process_paragraph(
         id,
         kind: BlockKind::Paragraph,
         node_range,
-        root_range,
         segments,
         content: BlockContent::Leaf,
     })
 }
 
-fn process_block_quote(
-    source: &str,
-    node: SyntaxNode,
-    root_range: Range<usize>,
-    anchors: &[Anchor],
-) -> Option<Block> {
+fn process_block_quote(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
     let text = &source[node_range.clone()];
@@ -382,7 +352,7 @@ fn process_block_quote(
     let mut children = Vec::new();
     for child in node.children() {
         if child.kind() == SyntaxKind::BLOCK_QUOTE
-            && let Some(block) = process_block_quote(source, child, root_range.clone(), anchors)
+            && let Some(block) = process_block_quote(source, child, anchors)
         {
             children.push(block);
         }
@@ -410,18 +380,12 @@ fn process_block_quote(
         id,
         kind: BlockKind::BlockQuote,
         node_range,
-        root_range,
         segments,
         content,
     })
 }
 
-fn process_heading(
-    source: &str,
-    node: SyntaxNode,
-    root_range: Range<usize>,
-    anchors: &[Anchor],
-) -> Option<Block> {
+fn process_heading(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
     let text = &source[node_range.clone()];
@@ -445,18 +409,12 @@ fn process_heading(
         id,
         kind: BlockKind::Heading { level },
         node_range,
-        root_range,
         segments,
         content: BlockContent::Leaf,
     })
 }
 
-fn process_fenced_code(
-    source: &str,
-    node: SyntaxNode,
-    root_range: Range<usize>,
-    anchors: &[Anchor],
-) -> Option<Block> {
+fn process_fenced_code(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
     let text = &source[node_range.clone()];
@@ -505,18 +463,12 @@ fn process_fenced_code(
         id,
         kind: BlockKind::FencedCode { language },
         node_range,
-        root_range,
         segments,
         content: BlockContent::Leaf,
     })
 }
 
-fn process_thematic_break(
-    _source: &str,
-    node: SyntaxNode,
-    root_range: Range<usize>,
-    anchors: &[Anchor],
-) -> Option<Block> {
+fn process_thematic_break(_source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
 
@@ -528,7 +480,6 @@ fn process_thematic_break(
         id,
         kind: BlockKind::ThematicBreak,
         node_range,
-        root_range,
         segments: vec![],
         content: BlockContent::Leaf,
     })
@@ -876,11 +827,6 @@ mod tests {
             prefix, block.kind, block.node_range.start, block.node_range.end
         )
         .unwrap();
-
-        // Root range (if different)
-        if block.root_range != block.node_range {
-            writeln!(out, "{}  root_range: {:?}", prefix, block.root_range).unwrap();
-        }
 
         // Segments
         if !block.segments.is_empty() {
@@ -1277,12 +1223,6 @@ mod tests {
                     block.node_range.end <= doc_len,
                     "node_range {:?} exceeds document length {}",
                     block.node_range,
-                    doc_len
-                );
-                assert!(
-                    block.root_range.end <= doc_len,
-                    "root_range {:?} exceeds document length {}",
-                    block.root_range,
                     doc_len
                 );
                 for segment in &block.segments {

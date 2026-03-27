@@ -41,7 +41,7 @@
       "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",
       "line": 116,
       "title": "Step 3: Block - The Core UI Primitive",
-      "description": "## Block Structure\n\nThe main primitive the UI works with:\n\n```rust\npub struct Block {\n    pub id: AnchorId,            // Stable ID (survives edits)\n    pub kind: BlockKind,         // Heading, Paragraph, ListItem, etc.\n    pub node_range: Range<usize>,\n    pub root_range: Range<usize>,\n    pub lines: Vec<LineInfo>,    // Per-line breakdown\n    pub inlines: Vec<InlineElement>, // Emphasis, links, etc.\n    pub content: BlockContent,   // Leaf or Children(Vec<Block>)\n}\n```\n\nThis gives the UI everything it needs without understanding markdown syntax."
+      "description": "## Block Structure\n\nThe main primitive the UI works with:\n\n```rust\npub struct Block {\n    pub id: AnchorId,            // Stable ID (survives edits)\n    pub kind: BlockKind,         // Heading, Paragraph, ListItem, etc.\n    pub node_range: Range<usize>,// Full span in source\n    pub segments: Vec<InlineSegment>, // Text with formatting info\n    pub content: BlockContent,   // Leaf or Children(Vec<Block>)\n}\n```\n\nThis gives the UI everything it needs without understanding markdown syntax."
     },
     {
       "file": "crates/markdown-neuraxis-engine/src/editing/snapshot.rs",

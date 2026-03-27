@@ -10,7 +10,6 @@ BlockQuote [14..30]
     Text [17..29] "Nested quote"
   children:
     BlockQuote [15..30]
-      root_range: 14..30
       segments:
         Text [17..29] "Nested quote"
 BlockQuote [30..48]
@@ -18,12 +17,10 @@ BlockQuote [30..48]
     Text [34..47] "Deeply nested"
   children:
     BlockQuote [31..48]
-      root_range: 30..48
       segments:
         Text [34..47] "Deeply nested"
       children:
         BlockQuote [32..48]
-          root_range: 30..48
           segments:
             Text [34..47] "Deeply nested"
 BlockQuote [48..72]
@@ -31,7 +28,6 @@ BlockQuote [48..72]
     Text [51..71] "Back to second level"
   children:
     BlockQuote [49..72]
-      root_range: 48..72
       segments:
         Text [51..71] "Back to second level"
 BlockQuote [72..94]

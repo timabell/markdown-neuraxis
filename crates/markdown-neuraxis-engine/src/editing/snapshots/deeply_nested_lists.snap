@@ -11,27 +11,23 @@ List { ordered: false } [0..70]
         List { ordered: false } [12..70]
           children:
             ListItem { marker: "- " } [12..70]
-              root_range: 0..70
               segments:
                 Text [14..21] "Level 2"
               children:
                 List { ordered: false } [26..70]
                   children:
                     ListItem { marker: "- " } [26..70]
-                      root_range: 0..70
                       segments:
                         Text [28..35] "Level 3"
                       children:
                         List { ordered: false } [42..70]
                           children:
                             ListItem { marker: "- " } [42..70]
-                              root_range: 0..70
                               segments:
                                 Text [44..51] "Level 4"
                               children:
                                 List { ordered: false } [60..70]
                                   children:
                                     ListItem { marker: "- " } [60..70]
-                                      root_range: 0..70
                                       segments:
                                         Text [62..69] "Level 5"

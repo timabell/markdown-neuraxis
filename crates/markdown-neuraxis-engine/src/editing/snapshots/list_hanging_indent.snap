@@ -5,10 +5,8 @@ expression: formatted
 List { ordered: false } [0..47]
   children:
     ListItem { marker: "- " } [0..33]
-      root_range: 0..47
       segments:
         Text [2..32] "First line\n  continuation here"
     ListItem { marker: "- " } [33..47]
-      root_range: 0..47
       segments:
         Text [35..46] "Second item"
