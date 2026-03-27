@@ -73,14 +73,19 @@ Or use a blank line for paragraph breaks.
 
 ### Ordered Lists
 
-1. First numbered item
-2. Second numbered item
-   1. Nested numbered item
-   2. Another nested item
-      1. Deeper nested number
-      2. Another deep item
-3. Back to top level
-4. Final numbered item
+- first top bullet which
+  is multi-line  
+  and hardwrapped
+  - But contains inner bullets as well
+  - Some of which are also multiline
+    like this one  
+    and also hardwrapped
+  but if we unindent back to this where even are we now? undefined behaviour?
+- second top bullet
+  ```js
+  var hi;
+  ```
+  with inline code is just segments
 
 ### Mixed Lists with Content
 
