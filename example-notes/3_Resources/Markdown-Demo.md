@@ -82,6 +82,62 @@ Or use a blank line for paragraph breaks.
 3. Back to top level
 4. Final numbered item
 
+### Multi-line Bullets and Continuation
+
+- This is a multi-line bullet point that continues
+  on the next line with proper indentation.
+  The content flows naturally across multiple lines
+  while remaining part of the same list item.
+
+- Another bullet with a hard line break  
+  This line appears after a hard break (two trailing spaces).  
+  And another hard break here.
+
+- Bullet with **bold text**, *italic*, and `inline code`
+  all mixed together with [[wiki-links]] and #tags
+  spanning multiple continuation lines.
+
+### Rich Nested Content
+
+- Parent bullet with nested code fence
+  ```rust
+  fn process_markdown(input: &str) -> Result<Document> {
+      let parser = Parser::new(input);
+      parser.parse()
+  }
+  ```
+  Text continues after the code fence.
+
+- Bullet with nested blockquote
+  > This quote is nested inside a bullet.
+  > It spans multiple lines with **bold** and *italic*.
+  >
+  > Even has a paragraph break within.
+
+  More content after the blockquote.
+
+- Complex nesting example
+  - Child with `inline code` and **emphasis**
+    ```python
+    # Deeply nested code block
+    def nested_function():
+        return "Hello from nested code!"
+    ```
+  - Another child with [[Internal Link|aliased link]]
+    > Nested quote in nested bullet
+  - Child with hard break  
+    continuation after break
+
+### Inline Formatting Combinations
+
+- **Bold with *nested italic* inside** works
+- *Italic with **nested bold** inside* also works
+- ***Bold and italic combined*** for emphasis
+- `Code with **no bold** inside` - formatting disabled in code
+- Text with ~~strikethrough~~ and **~~bold strikethrough~~**
+- Link with formatting: [**Bold link text**](https://example.com)
+- Wiki link variations: [[Simple]], [[Path/To/File]], [[target|Display Text]]
+
 ### Mixed Lists with Content
 
 - Main bullet point
