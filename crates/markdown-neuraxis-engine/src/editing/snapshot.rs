@@ -1,13 +1,13 @@
 //! # Snapshot V2: Tree-Structured Document Projection
 //!
 //! This module provides ergonomic primitives for the editor UI by exposing
-//! the document structure as a tree with per-line range information.
+//! the document structure as a tree of blocks with inline segments.
 //!
 //! ## Design Goals (from ADR-0012)
 //!
 //! - Keep all "wtf is this string" complexity in the snapshot layer
 //! - Editor gets clean primitives without understanding markdown syntax
-//! - Support both content editing and full-line editing modes
+//! - Use segments for both rendering and editing ranges
 
 use std::ops::Range;
 
@@ -15,45 +15,17 @@ use markdown_neuraxis_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, parse};
 
 use crate::editing::{Anchor, AnchorId};
 
-/// Per-line range information for multi-line blocks
-#[derive(Debug, Clone, PartialEq)]
-pub struct LineInfo {
-    /// Full line range including all prefixes
-    pub full: Range<usize>,
-    /// Prefix range (indent + markers like "> " or "- ")
-    pub prefix: Range<usize>,
-    /// Content range (actual text after prefix)
-    pub content: Range<usize>,
-}
-
-impl LineInfo {
-    /// Create a new LineInfo, clamping content range to be valid.
-    /// If content_start > content_end (e.g., whitespace-only line), returns empty range.
-    pub fn new(
-        full: Range<usize>,
-        prefix: Range<usize>,
-        content_start: usize,
-        content_end: usize,
-    ) -> Self {
-        Self {
-            full,
-            prefix,
-            content: content_start.min(content_end)..content_end,
-        }
-    }
-}
-
 /// Content of a block: either leaf (no children) or nested children
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockContent {
-    /// Leaf block - text extracted via LineInfo ranges
+    /// Leaf block - content available via segments
     Leaf,
     /// Container block with child blocks
     Children(Vec<Block>),
 }
 
-/// A segment of inline content ready for UI rendering.
-/// UIs can iterate directly over segments to render all text.
+/// A segment of inline content with source byte range.
+/// The InlineNode may contain recursively nested formatting.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InlineSegment {
     /// The kind of segment with its content
@@ -120,13 +92,32 @@ pub struct Block {
     pub node_range: Range<usize>,
     /// Top-level ancestor's span (for "edit full block" behavior)
     pub root_range: Range<usize>,
-    /// Per-line breakdown with prefix/content ranges
-    pub lines: Vec<LineInfo>,
-    /// Flat list of inline segments for UI rendering.
-    /// Includes Text segments for gaps between formatted inlines.
+    /// Inline content for rendering. Top-level siblings with byte ranges;
+    /// each segment's InlineNode may contain recursive nested formatting.
     pub segments: Vec<InlineSegment>,
     /// Block content (text or children)
     pub content: BlockContent,
+}
+
+impl Block {
+    /// Byte range of this block's content in the source.
+    ///
+    /// For leaf blocks, this equals `node_range`.
+    /// For blocks with children, this is the range before children begin -
+    /// includes the marker and any continuation lines, but excludes nested blocks.
+    pub fn content_range(&self) -> Range<usize> {
+        match &self.content {
+            BlockContent::Leaf => self.node_range.clone(),
+            BlockContent::Children(children) => {
+                if let Some(first_child) = children.first() {
+                    self.node_range.start..first_child.node_range.start
+                } else {
+                    // Children vector is empty - treat as leaf
+                    self.node_range.clone()
+                }
+            }
+        }
+    }
 }
 
 /// Tree-structured document snapshot
@@ -255,8 +246,7 @@ fn process_list(
         kind: BlockKind::List { ordered },
         node_range: node_range.clone(),
         root_range: node_range,
-        lines: vec![],    // List container has no lines of its own
-        segments: vec![], // List containers have no segments
+        segments: vec![],
         content: BlockContent::Children(children),
     })
 }
@@ -277,62 +267,12 @@ fn process_list_item(
     let marker = extract_list_marker(first_line);
     let marker_len = marker.len();
 
-    // First line info - full includes the newline if present
-    let line_start = node_range.start;
-    let line_end_with_newline = if first_line_content_end < text.len()
-        && text.as_bytes().get(first_line_content_end) == Some(&b'\n')
-    {
-        node_range.start + first_line_content_end + 1
-    } else {
-        node_range.start + first_line_content_end
-    };
-    let content_start = line_start + marker_len;
+    // Content starts after marker, ends before newline
+    let content_start = node_range.start + marker_len;
     let content_end = node_range.start + first_line_content_end;
 
-    let first_line_info = LineInfo::new(
-        line_start..line_end_with_newline,
-        line_start..(line_start + marker_len),
-        content_start,
-        content_end,
-    );
-
-    // Collect continuation lines from PARAGRAPH child only (not nested blocks)
-    let mut lines_vec = vec![first_line_info];
-    if let Some(para) = node.children().find(|c| c.kind() == SyntaxKind::PARAGRAPH) {
-        let para_range = para.text_range();
-        let para_end: usize = para_range.end().into();
-        let mut pos = line_end_with_newline;
-        while pos < para_end {
-            let remaining = &source[pos..para_end];
-            let line_len = remaining
-                .find('\n')
-                .map(|i| i + 1)
-                .unwrap_or(remaining.len());
-            let line_end = pos + line_len;
-            let line_text = &source[pos..line_end];
-
-            // Find where content starts (skip leading whitespace/indentation)
-            let indent_len = line_text.len() - line_text.trim_start().len();
-            let content_start_pos = pos + indent_len;
-            let content_end_pos = if line_text.ends_with('\n') {
-                line_end - 1
-            } else {
-                line_end
-            };
-
-            lines_vec.push(LineInfo::new(
-                pos..line_end,
-                pos..(pos + indent_len), // indent is the "prefix" for continuation
-                content_start_pos,
-                content_end_pos,
-            ));
-            pos = line_end;
-        }
-    }
-
     // Process children (nested content)
-    // Note: Skip PARAGRAPH children since LIST_ITEM already extracts its text from lines.
-    // We only want to process nested structural elements like LIST, BLOCK_QUOTE, FENCED_CODE.
+    // Skip PARAGRAPH children - segments are extracted separately below.
     let mut children = Vec::new();
     for child in node.children() {
         // Skip PARAGRAPH inside list items - the list item already extracted its text
@@ -391,7 +331,6 @@ fn process_list_item(
         kind: BlockKind::ListItem { marker },
         node_range,
         root_range,
-        lines: lines_vec,
         segments,
         content,
     })
@@ -405,38 +344,18 @@ fn process_paragraph(
 ) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
-    let text = &source[node_range.clone()];
 
-    // Split into lines and create LineInfo for each
-    let mut lines = Vec::new();
-    let mut pos = node_range.start;
-
-    for line in text.split_inclusive('\n') {
-        let line_end = pos + line.len();
-        let trimmed_start = line.len() - line.trim_start().len();
-        let content_end = if line.ends_with('\n') {
-            line_end - 1
-        } else {
-            line_end
-        };
-        let content_start = pos + trimmed_start;
-
-        lines.push(LineInfo::new(
-            pos..line_end,
-            pos..(pos + trimmed_start),
-            content_start,
-            content_end,
-        ));
-
-        pos = line_end;
-    }
-
-    // Extract segments from inline content
-    let content_range = compute_content_range(&lines);
+    // Content range: strip trailing newline if present
+    let content_end = if node_range.end > node_range.start
+        && source.as_bytes().get(node_range.end - 1) == Some(&b'\n')
+    {
+        node_range.end - 1
+    } else {
+        node_range.end
+    };
+    let content_range = node_range.start..content_end;
     let segments = extract_segments(&node, source, content_range);
 
-    // Paragraphs don't have their own anchors in the current model,
-    // so we generate a fallback ID from the range
     let id = find_anchor_for_range(anchors, &node_range);
 
     Some(Block {
@@ -444,7 +363,6 @@ fn process_paragraph(
         kind: BlockKind::Paragraph,
         node_range,
         root_range,
-        lines,
         segments,
         content: BlockContent::Leaf,
     })
@@ -460,46 +378,8 @@ fn process_block_quote(
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
     let text = &source[node_range.clone()];
 
-    // Split into lines
-    let mut lines = Vec::new();
-    let mut children = Vec::new();
-    let mut pos = node_range.start;
-    let mut is_first_line = true;
-
-    for line in text.split_inclusive('\n') {
-        let line_end = pos + line.len();
-
-        // For the first line, find the actual line start (may include indentation not in node)
-        let actual_line_start = if is_first_line {
-            find_line_start(source, pos)
-        } else {
-            pos
-        };
-        is_first_line = false;
-
-        // Get the full line text including any leading indentation
-        let full_line = &source[actual_line_start..line_end];
-
-        // Find prefix (leading whitespace + > markers)
-        let prefix_end = find_blockquote_prefix_end(full_line);
-        let content_end = if full_line.ends_with('\n') {
-            line_end - 1
-        } else {
-            line_end
-        };
-        let content_start = actual_line_start + prefix_end;
-
-        lines.push(LineInfo::new(
-            actual_line_start..line_end,
-            actual_line_start..(actual_line_start + prefix_end),
-            content_start,
-            content_end,
-        ));
-
-        pos = line_end;
-    }
-
     // Check for nested blockquotes in children
+    let mut children = Vec::new();
     for child in node.children() {
         if child.kind() == SyntaxKind::BLOCK_QUOTE
             && let Some(block) = process_block_quote(source, child, root_range.clone(), anchors)
@@ -514,20 +394,23 @@ fn process_block_quote(
         BlockContent::Children(children)
     };
 
-    // Blockquotes don't have their own anchors in the current model,
-    // so we generate a fallback ID from the range
     let id = find_anchor_for_range(anchors, &node_range);
 
-    // Extract segments from inline content
-    let content_range = compute_content_range(&lines);
-    let segments = extract_segments(&node, source, content_range);
+    // Extract segments from blockquote content (after "> " prefix)
+    let prefix_len = text.find(|c: char| c != '>' && c != ' ').unwrap_or(0);
+    let content_start = node_range.start + prefix_len;
+    let content_end = if text.ends_with('\n') {
+        node_range.end - 1
+    } else {
+        node_range.end
+    };
+    let segments = extract_segments(&node, source, content_start..content_end);
 
     Some(Block {
         id,
         kind: BlockKind::BlockQuote,
         node_range,
         root_range,
-        lines,
         segments,
         content,
     })
@@ -545,35 +428,24 @@ fn process_heading(
 
     // Count # for level
     let level = text.chars().take_while(|&c| c == '#').count() as u8;
-    let prefix_end = level as usize + 1; // # + space
+    let prefix_len = level as usize + 1; // # + space
 
+    // Content: after prefix, before trailing newline
+    let content_start = node_range.start + prefix_len;
     let content_end = if text.ends_with('\n') {
         node_range.end - 1
     } else {
         node_range.end
     };
 
-    let line_info = LineInfo::new(
-        node_range.clone(),
-        node_range.start..(node_range.start + prefix_end),
-        node_range.start + prefix_end,
-        content_end,
-    );
-
-    // Look up anchor ID for this heading
     let id = find_anchor_for_range(anchors, &node_range);
-
-    // Extract segments from inline content
-    let lines_vec = vec![line_info];
-    let content_range = compute_content_range(&lines_vec);
-    let segments = extract_segments(&node, source, content_range);
+    let segments = extract_segments(&node, source, content_start..content_end);
 
     Some(Block {
         id,
         kind: BlockKind::Heading { level },
         node_range,
         root_range,
-        lines: lines_vec,
         segments,
         content: BlockContent::Leaf,
     })
@@ -602,38 +474,17 @@ fn process_fenced_code(
         Some(language.to_string())
     };
 
-    // Create line infos for all lines
-    let mut lines = Vec::new();
-    let mut pos = node_range.start;
-
-    for line in text.split_inclusive('\n') {
-        let line_end = pos + line.len();
-        let content_end = if line.ends_with('\n') {
-            line_end - 1
-        } else {
-            line_end
-        };
-
-        lines.push(LineInfo::new(
-            pos..line_end,
-            pos..pos, // Code blocks have no prefix
-            pos,
-            content_end,
-        ));
-
-        pos = line_end;
-    }
-
-    // Look up anchor ID for this fenced code block
     let id = find_anchor_for_range(anchors, &node_range);
 
-    // Generate a single Text segment with the code content (middle lines, excluding fences)
-    let segments = if lines.len() > 2 {
-        // Skip first line (opening fence) and last line (closing fence)
-        let content_start = lines[1].content.start;
-        let content_end = lines[lines.len() - 2].content.end;
-        let code_text = &source[content_start..content_end];
-        if !code_text.is_empty() {
+    // Extract code content between opening and closing fences
+    let segments = if let Some(first_newline) = text.find('\n') {
+        let content_start = node_range.start + first_newline + 1;
+        // Find last line (closing fence) by finding last newline before end
+        let last_newline = text.rfind('\n').unwrap_or(text.len());
+        // Content ends at the last newline (before closing fence line)
+        let content_end = node_range.start + last_newline;
+        if content_start < content_end {
+            let code_text = &source[content_start..content_end];
             vec![InlineSegment {
                 kind: InlineNode::Text(code_text.to_string()),
                 range: content_start..content_end,
@@ -650,7 +501,6 @@ fn process_fenced_code(
         kind: BlockKind::FencedCode { language },
         node_range,
         root_range,
-        lines,
         segments,
         content: BlockContent::Leaf,
     })
@@ -674,7 +524,6 @@ fn process_thematic_break(
         kind: BlockKind::ThematicBreak,
         node_range,
         root_range,
-        lines: vec![],
         segments: vec![],
         content: BlockContent::Leaf,
     })
@@ -696,47 +545,6 @@ fn extract_list_marker(line: &str) -> String {
         }
     } else {
         String::new()
-    }
-}
-
-/// Find where the blockquote prefix ends (whitespace + > markers + space)
-fn find_blockquote_prefix_end(line: &str) -> usize {
-    let mut pos = 0;
-    let chars: Vec<char> = line.chars().collect();
-
-    // Skip leading whitespace
-    while pos < chars.len() && (chars[pos] == ' ' || chars[pos] == '\t') {
-        pos += 1;
-    }
-
-    // Skip > markers and spaces
-    while pos < chars.len() && chars[pos] == '>' {
-        pos += 1;
-        // Skip optional space after >
-        if pos < chars.len() && chars[pos] == ' ' {
-            pos += 1;
-        }
-    }
-
-    pos
-}
-
-/// Find the actual start of the line containing `pos` in the source.
-/// Scans backwards from `pos` to find the previous newline (or start of document).
-fn find_line_start(source: &str, pos: usize) -> usize {
-    if pos == 0 {
-        return 0;
-    }
-    // Scan backwards to find previous newline
-    let bytes = source.as_bytes();
-    let mut i = pos - 1;
-    while i > 0 && bytes[i] != b'\n' {
-        i -= 1;
-    }
-    if bytes[i] == b'\n' {
-        i + 1 // Position after the newline
-    } else {
-        0 // Start of document
     }
 }
 
@@ -1035,17 +843,6 @@ fn parse_image(text: &str) -> Option<(String, String)> {
     Some((alt, url))
 }
 
-/// Helper to compute content range from lines for segment generation.
-/// For blocks with multiple lines, joins them as a single range.
-fn compute_content_range(lines: &[LineInfo]) -> Range<usize> {
-    if lines.is_empty() {
-        return 0..0;
-    }
-    let start = lines.first().unwrap().content.start;
-    let end = lines.last().unwrap().content.end;
-    start..end
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1054,15 +851,15 @@ mod tests {
     // ============ Snapshot formatting (test-only) ============
 
     /// Format a snapshot as a readable string for snapshot testing.
-    fn insta_format_snapshot(snapshot: &Snapshot, source: &str) -> String {
+    fn insta_format_snapshot(snapshot: &Snapshot) -> String {
         let mut result = String::new();
         for block in &snapshot.blocks {
-            insta_format_block(&mut result, block, source, 0);
+            insta_format_block(&mut result, block, 0);
         }
         result
     }
 
-    fn insta_format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
+    fn insta_format_block(out: &mut String, block: &Block, indent: usize) {
         use std::fmt::Write;
 
         let prefix = "  ".repeat(indent);
@@ -1080,26 +877,6 @@ mod tests {
             writeln!(out, "{}  root_range: {:?}", prefix, block.root_range).unwrap();
         }
 
-        // Lines
-        if !block.lines.is_empty() {
-            writeln!(out, "{}  lines:", prefix).unwrap();
-            for line in &block.lines {
-                let prefix_text = &source[line.prefix.clone()];
-                let content_text = &source[line.content.clone()];
-                writeln!(
-                    out,
-                    "{}    full:{:?} prefix:{:?}{:?} content:{:?}{:?}",
-                    prefix,
-                    line.full,
-                    line.prefix,
-                    prefix_text.replace('\n', "\\n"),
-                    line.content,
-                    content_text.replace('\n', "\\n")
-                )
-                .unwrap();
-            }
-        }
-
         // Segments
         if !block.segments.is_empty() {
             writeln!(out, "{}  segments:", prefix).unwrap();
@@ -1111,12 +888,12 @@ mod tests {
         // Content
         match &block.content {
             BlockContent::Leaf => {
-                // Text extracted via lines[].content ranges - no separate field needed
+                // Content available via segments
             }
             BlockContent::Children(children) => {
                 writeln!(out, "{}  children:", prefix).unwrap();
                 for child in children {
-                    insta_format_block(out, child, source, indent + 2);
+                    insta_format_block(out, child, indent + 2);
                 }
             }
         }
@@ -1287,7 +1064,7 @@ mod tests {
         doc.create_anchors_from_tree();
 
         let snapshot = create_snapshot(&doc);
-        let formatted = insta_format_snapshot(&snapshot, &input);
+        let formatted = insta_format_snapshot(&snapshot);
 
         let mut settings = insta::Settings::clone_current();
         settings.set_prepend_module_to_snapshot(false);
@@ -1320,8 +1097,12 @@ mod tests {
         assert_eq!(block.kind, BlockKind::Heading { level: 1 });
         assert_eq!(block.node_range, 0..13);
         // Content should be "Hello World" (after "# ")
-        assert_eq!(block.lines.len(), 1);
-        assert_eq!(block.lines[0].content, 2..13);
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            InlineNode::Text("Hello World".to_string())
+        );
+        assert_eq!(block.segments[0].range, 2..13);
     }
 
     #[test]
@@ -1473,24 +1254,12 @@ mod tests {
                     block.root_range,
                     doc_len
                 );
-                for line in &block.lines {
+                for segment in &block.segments {
                     assert!(
-                        line.full.end <= doc_len,
-                        "line.full {:?} exceeds document length {}",
-                        line.full,
+                        segment.range.end <= doc_len,
+                        "segment.range {:?} exceeds document length {}",
+                        segment.range,
                         doc_len
-                    );
-                    assert!(
-                        line.prefix.end <= line.full.end,
-                        "line.prefix {:?} exceeds line.full {:?}",
-                        line.prefix,
-                        line.full
-                    );
-                    assert!(
-                        line.content.end <= line.full.end,
-                        "line.content {:?} exceeds line.full {:?}",
-                        line.content,
-                        line.full
                     );
                 }
                 if let BlockContent::Children(children) = &block.content {
@@ -1673,9 +1442,11 @@ mod tests {
         assert_eq!(block.kind, BlockKind::BlockQuote);
 
         // Content should be stripped of > marker
-        assert_eq!(block.lines.len(), 1);
-        let content_text = &text[block.lines[0].content.clone()];
-        assert_eq!(content_text, "This is a quote");
+        assert_eq!(block.segments.len(), 1);
+        assert_eq!(
+            block.segments[0].kind,
+            InlineNode::Text("This is a quote".to_string())
+        );
     }
 
     #[test]
@@ -1829,14 +1600,14 @@ mod tests {
         let source = doc.text();
 
         for block in &snapshot.blocks {
-            for line in &block.lines {
+            for segment in &block.segments {
                 assert!(
-                    line.content.start <= line.content.end,
-                    "Invalid content range: {:?}",
-                    line.content
+                    segment.range.start <= segment.range.end,
+                    "Invalid segment range: {:?}",
+                    segment.range
                 );
                 // Must not panic when slicing
-                let _content = &source[line.content.clone()];
+                let _content = &source[segment.range.clone()];
             }
         }
     }
@@ -1851,13 +1622,13 @@ mod tests {
         let source = doc.text();
 
         for block in &snapshot.blocks {
-            for line in &block.lines {
+            for segment in &block.segments {
                 assert!(
-                    line.content.start <= line.content.end,
-                    "Invalid content range: {:?}",
-                    line.content
+                    segment.range.start <= segment.range.end,
+                    "Invalid segment range: {:?}",
+                    segment.range
                 );
-                let _content = &source[line.content.clone()];
+                let _content = &source[segment.range.clone()];
             }
         }
     }
@@ -1872,13 +1643,13 @@ mod tests {
         let source = doc.text();
 
         for block in &snapshot.blocks {
-            for line in &block.lines {
+            for segment in &block.segments {
                 assert!(
-                    line.content.start <= line.content.end,
-                    "Invalid content range: {:?}",
-                    line.content
+                    segment.range.start <= segment.range.end,
+                    "Invalid segment range: {:?}",
+                    segment.range
                 );
-                let _content = &source[line.content.clone()];
+                let _content = &source[segment.range.clone()];
             }
         }
     }
@@ -2216,6 +1987,124 @@ mod tests {
         assert!(has_hard_break, "Should have HardBreak segment");
     }
 
+    // ============ content_range() tests ============
+
+    #[test]
+    fn test_content_range_leaf_returns_node_range() {
+        // Leaf blocks return their full node_range as content_range
+        let text = "# Hello World";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        let heading = &snapshot.blocks[0];
+        assert_eq!(heading.kind, BlockKind::Heading { level: 1 });
+        assert_eq!(
+            heading.content_range(),
+            heading.node_range.clone(),
+            "Leaf block content_range should equal node_range"
+        );
+    }
+
+    #[test]
+    fn test_content_range_with_children_excludes_nested() {
+        // Block with children: content_range is from node_range.start to first child's start
+        let text = "- parent\n  - child\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Find the parent list item
+        fn find_parent_item(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if matches!(block.kind, BlockKind::ListItem { .. })
+                    && matches!(block.content, BlockContent::Children(_))
+                {
+                    return Some(block);
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_parent_item(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let parent = find_parent_item(&snapshot.blocks).expect("Should have parent list item");
+        let content_range = parent.content_range();
+
+        // Content range should start at block start
+        assert_eq!(content_range.start, parent.node_range.start);
+
+        // Content range should end before first child begins
+        if let BlockContent::Children(children) = &parent.content {
+            let first_child = &children[0];
+            assert_eq!(
+                content_range.end, first_child.node_range.start,
+                "content_range should end where first child starts"
+            );
+        }
+
+        // Verify we can slice the content (should be "- parent\n")
+        let content = &text[content_range.clone()];
+        assert!(
+            content.contains("parent"),
+            "Content should include 'parent'"
+        );
+        assert!(
+            !content.contains("child"),
+            "Content should NOT include 'child'"
+        );
+    }
+
+    #[test]
+    fn test_content_range_multiline_before_children() {
+        // List item with continuation line before nested child
+        let text = "- first line\n  second line\n  - nested\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        fn find_parent_with_nested(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if matches!(block.kind, BlockKind::ListItem { .. })
+                    && let BlockContent::Children(children) = &block.content
+                    && children
+                        .iter()
+                        .any(|c| matches!(c.kind, BlockKind::List { .. }))
+                {
+                    return Some(block);
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_parent_with_nested(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let parent =
+            find_parent_with_nested(&snapshot.blocks).expect("Should find parent with nested list");
+        let content_range = parent.content_range();
+        let content = &text[content_range.clone()];
+
+        // Both continuation lines should be in content, but not the nested item
+        assert!(
+            content.contains("first line"),
+            "Content should include first line"
+        );
+        assert!(
+            content.contains("second line"),
+            "Content should include continuation line"
+        );
+        assert!(
+            !content.contains("nested"),
+            "Content should NOT include nested child"
+        );
+    }
+
     #[test]
     fn test_segments_adjacent_formatting() {
         // Adjacent formatting: **bold***italic*
@@ -2304,11 +2193,10 @@ mod tests {
     }
 
     #[test]
-    fn test_list_item_line_full_includes_trailing_newline() {
-        // Verifies that line.full range includes trailing newline, so extracting
-        // source[line.full] and replacing range line.full is a no-op.
-        // This is critical for the editing workflow where focusing/unfocusing
-        // a list item without changes should not modify the document.
+    fn test_list_item_segments_exclude_marker_and_newline() {
+        // Verifies that segments contain content WITHOUT marker or trailing newline,
+        // making them suitable for textarea display. The node_range still includes
+        // the full block with marker and newline for structural operations.
         let text = "- Item 1\n- Item 2\n";
         let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
         doc.create_anchors_from_tree();
@@ -2331,28 +2219,20 @@ mod tests {
 
         let item = find_first_list_item(&snapshot.blocks).expect("Should have list item");
 
-        // The first line's full range should capture "- Item 1\n" exactly
-        assert!(
-            !item.lines.is_empty(),
-            "List item should have at least one line"
-        );
-        let first_line = &item.lines[0];
-
-        // Extract content using line.full (what the UI does for editing)
-        let extracted = &text[first_line.full.clone()];
-
-        // Verify it includes the trailing newline
+        // Segments should have content without marker or newline
+        assert_eq!(item.segments.len(), 1);
         assert_eq!(
-            extracted, "- Item 1\n",
-            "line.full should include trailing newline"
+            item.segments[0].kind,
+            InlineNode::Text("Item 1".to_string())
         );
+        // Segment range should be after marker (2) and before newline (8)
+        assert_eq!(item.segments[0].range, 2..8);
 
-        // Verify that replacing first_line.full with extracted content is a no-op
-        let mut modified = text.to_string();
-        modified.replace_range(first_line.full.clone(), extracted);
+        // node_range includes the full block with marker and newline
         assert_eq!(
-            modified, text,
-            "Replacing line.full with its content should be a no-op"
+            &text[item.node_range.clone()],
+            "- Item 1\n",
+            "node_range should include marker and trailing newline"
         );
     }
 }

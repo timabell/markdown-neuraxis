@@ -20,9 +20,8 @@ mod dioxus_component_tests {
     #[test]
     fn test_dioxus_list_rendering_textarea_count() {
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // Find nested items (items that aren't at root level by looking at content patterns)
         let nested_items: Vec<_> = blocks
@@ -72,9 +71,8 @@ mod dioxus_component_tests {
     fn test_actual_component_focus_state() {
         // This test tries to get closer to the actual Dioxus component behavior
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // Get a nested item to test
         let nested_item = blocks
@@ -113,9 +111,8 @@ mod dioxus_component_tests {
     fn test_signal_behavior_simulation() {
         // This test simulates signal behavior that might cause the bug
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         println!("Testing signal behavior simulation");
 
@@ -199,9 +196,8 @@ mod dioxus_component_tests {
     fn test_potential_dioxus_state_bug() {
         // This test looks for potential Dioxus-specific issues
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         println!("Analyzing potential Dioxus state management issues");
 

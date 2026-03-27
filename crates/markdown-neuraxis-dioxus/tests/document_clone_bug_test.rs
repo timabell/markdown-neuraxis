@@ -102,14 +102,12 @@ fn test_document_clone_anchor_content_integrity() {
 
     let mut original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     original_doc.create_anchors_from_tree();
-    let original_source = original_doc.text();
     let original_snapshot = original_doc.snapshot();
-    let original_blocks = flatten_blocks(&original_snapshot.blocks, &original_source);
+    let original_blocks = flatten_blocks(&original_snapshot.blocks);
 
     let cloned_doc = original_doc.clone();
-    let cloned_source = cloned_doc.text();
     let cloned_snapshot = cloned_doc.snapshot();
-    let cloned_blocks = flatten_blocks(&cloned_snapshot.blocks, &cloned_source);
+    let cloned_blocks = flatten_blocks(&cloned_snapshot.blocks);
 
     println!("=== SNAPSHOT COMPARISON ===");
     println!("Original snapshot blocks: {}", original_blocks.len());
@@ -183,9 +181,8 @@ fn test_document_clone_preserves_functionality() {
     };
 
     let _patch = cloned_doc.apply(edit_cmd);
-    let modified_source = cloned_doc.text();
     let modified_snapshot = cloned_doc.snapshot();
-    let modified_blocks = flatten_blocks(&modified_snapshot.blocks, &modified_source);
+    let modified_blocks = flatten_blocks(&modified_snapshot.blocks);
 
     println!("=== FUNCTIONALITY TEST ===");
     for (i, block) in modified_blocks.iter().enumerate() {

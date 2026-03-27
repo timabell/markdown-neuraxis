@@ -46,9 +46,8 @@ fn test_render_block_anchor_uniqueness() {
 
     let mut document = Document::from_bytes(content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
-    let source = document.text();
     let snapshot = document.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Core invariant: All render block anchor IDs must be unique
     let mut anchor_ids = HashSet::new();
@@ -97,13 +96,11 @@ fn test_anchor_stability_across_snapshots() {
     document.create_anchors_from_tree();
 
     // Take multiple snapshots and ensure they have the same anchor IDs in the same order
-    let source1 = document.text();
     let snapshot1 = document.snapshot();
-    let blocks1 = flatten_blocks(&snapshot1.blocks, &source1);
+    let blocks1 = flatten_blocks(&snapshot1.blocks);
 
-    let source2 = document.text();
     let snapshot2 = document.snapshot();
-    let blocks2 = flatten_blocks(&snapshot2.blocks, &source2);
+    let blocks2 = flatten_blocks(&snapshot2.blocks);
 
     assert_eq!(
         blocks1.len(),
@@ -139,9 +136,8 @@ fn test_snapshot_block_anchor_uniqueness() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
-    let source = document.text();
     let snapshot = document.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Check that all render blocks have unique anchor IDs
     let mut anchor_ids = HashSet::new();
@@ -185,9 +181,8 @@ fn test_focus_state_integration_single_textarea_invariant() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
-    let source = document.text();
     let snapshot = document.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Simulate the focus state that the UI maintains
     let mut focused_anchor_id: Option<AnchorId>;
@@ -254,9 +249,8 @@ fn test_nested_list_anchor_hierarchy() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
-    let source = document.text();
     let snapshot = document.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Build a map of anchor ID to content for list items
     let mut anchor_contents = HashMap::new();
@@ -307,9 +301,8 @@ fn test_list_item_click_simulation_anchor_uniqueness() {
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
     let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
-    let source = document.text();
     let snapshot = document.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Get all list items
     let list_items: Vec<_> = blocks
@@ -358,9 +351,8 @@ fn test_multiple_textarea_bug_location_analysis() {
 
     let mut document = Document::from_bytes(content.as_bytes()).unwrap();
     document.create_anchors_from_tree();
-    let source = document.text();
     let snapshot = document.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     println!("\n=== MULTIPLE TEXTAREA BUG LOCATION ANALYSIS ===");
 

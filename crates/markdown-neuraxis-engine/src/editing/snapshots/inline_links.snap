@@ -3,15 +3,11 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Paragraph [0..54]
-  lines:
-    full:0..54 prefix:0..0"" content:0..53"A paragraph with [a link](https://example.com) in it."
   segments:
     Text [0..17] "A paragraph with "
     Link [17..46] text:"a link" url:"https://example.com"
     Text [46..53] " in it."
 Paragraph [55..102]
-  lines:
-    full:55..102 prefix:55..55"" content:55..101"Also [[wikilink]] and [[wikilink|with alias]]."
   segments:
     Text [55..60] "Also "
     WikiLink [60..72] target:"wikilink"

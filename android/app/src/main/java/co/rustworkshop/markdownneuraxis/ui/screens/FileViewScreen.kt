@@ -34,6 +34,19 @@ import uniffi.markdown_neuraxis_ffi.resolveWikilink
 
 private const val TAG = "MarkdownNeuraxis"
 
+/** Extract plain text from segments recursively */
+private fun segmentsToText(segments: List<TextSegmentDto>): String {
+    return segments.joinToString("") { segment ->
+        when (segment.kind) {
+            "text", "code", "strikethrough", "wiki_link" -> segment.content
+            "emphasis", "strong" -> segmentsToText(segment.children)
+            "link", "image" -> segment.content.substringBefore("|")
+            "hard_break" -> "\n"
+            else -> ""
+        }
+    }
+}
+
 @Composable
 fun FileViewScreen(
     file: DocumentFile,
@@ -125,7 +138,6 @@ private fun RenderBlockTree(
 @Composable
 private fun RenderSegments(
     segments: List<TextSegmentDto>,
-    content: String,
     style: TextStyle = LocalTextStyle.current,
     modifier: Modifier = Modifier,
     onWikiLinkClick: (String) -> Unit
@@ -141,7 +153,6 @@ private fun RenderSegments(
     }
 
     if (segments.isEmpty()) {
-        Text(text = content, style = themedStyle, modifier = modifier)
         return
     }
 
@@ -208,7 +219,6 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
             }
             RenderSegments(
                 segments = block.segments,
-                content = block.content,
                 style = style.copy(fontWeight = FontWeight.Bold),
                 modifier = Modifier.padding(vertical = 8.dp),
                 onWikiLinkClick = onWikiLinkClick
@@ -222,7 +232,6 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
                 )
                 RenderSegments(
                     segments = block.segments,
-                    content = block.content,
                     onWikiLinkClick = onWikiLinkClick
                 )
             }
@@ -230,7 +239,6 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
         "paragraph" -> {
             RenderSegments(
                 segments = block.segments,
-                content = block.content,
                 modifier = Modifier.padding(vertical = 4.dp),
                 onWikiLinkClick = onWikiLinkClick
             )
@@ -244,7 +252,7 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
                     .padding(vertical = 4.dp)
             ) {
                 Text(
-                    text = block.content,
+                    text = segmentsToText(block.segments),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(8.dp)
@@ -260,7 +268,6 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
             ) {
                 RenderSegments(
                     segments = block.segments,
-                    content = block.content,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
                     onWikiLinkClick = onWikiLinkClick
@@ -272,7 +279,7 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
         }
         else -> {
             Text(
-                text = block.content,
+                text = segmentsToText(block.segments),
                 modifier = Modifier.padding(vertical = 4.dp)
             )
         }

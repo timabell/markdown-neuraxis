@@ -77,13 +77,10 @@ pub fn BlockRenderer(
         }
         BlockKind::ListItem { .. } => {
             if is_focused {
-                // Use first line only - node_range includes nested children
-                let first_line = block.lines.first();
-                let edit_range = first_line.map(|line| line.full.clone());
-                let content_text = first_line
-                    .and_then(|line| source.get(line.full.clone()))
-                    .unwrap_or("")
-                    .to_string();
+                // Use content_range() - excludes nested children
+                let edit_range = block.content_range();
+                let content_text = source.get(edit_range.clone()).unwrap_or("").to_string();
+                let edit_range = Some(edit_range);
                 let block_clone = block.clone();
                 rsx! {
                     li {

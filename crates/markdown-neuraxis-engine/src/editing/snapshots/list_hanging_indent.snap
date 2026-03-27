@@ -6,14 +6,9 @@ List { ordered: false } [0..47]
   children:
     ListItem { marker: "- " } [0..33]
       root_range: 0..47
-      lines:
-        full:0..13 prefix:0..2"- " content:2..12"First line"
-        full:13..33 prefix:13..15"  " content:15..32"continuation here"
       segments:
         Text [2..32] "First line\n  continuation here"
     ListItem { marker: "- " } [33..47]
       root_range: 0..47
-      lines:
-        full:33..47 prefix:33..35"- " content:35..46"Second item"
       segments:
         Text [35..46] "Second item"

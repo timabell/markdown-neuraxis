@@ -3,21 +3,15 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Heading { level: 1 } [0..26]
-  lines:
-    full:0..26 prefix:0..2"# " content:2..25"Heading with *emphasis*"
   segments:
     Text [2..15] "Heading with "
     Emphasis [15..25]
       Text "emphasis"
 Heading { level: 2 } [27..55]
-  lines:
-    full:27..55 prefix:27..30"## " content:30..54"Heading with [link](url)"
   segments:
     Text [30..43] "Heading with "
     Link [43..54] text:"link" url:"url"
 Heading { level: 3 } [56..80]
-  lines:
-    full:56..80 prefix:56..60"### " content:60..79"Heading with `code`"
   segments:
     Text [60..73] "Heading with "
     Code [73..79] "code"

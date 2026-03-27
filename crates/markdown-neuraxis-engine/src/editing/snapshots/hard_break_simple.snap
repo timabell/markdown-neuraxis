@@ -3,9 +3,6 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Paragraph [0..20]
-  lines:
-    full:0..11 prefix:0..0"" content:0..10"Line one  "
-    full:11..20 prefix:11..11"" content:11..19"Line two"
   segments:
     Text [0..8] "Line one"
     HardBreak [8..11]

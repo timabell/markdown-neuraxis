@@ -3,7 +3,5 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Heading { level: 1 } [0..17]
-  lines:
-    full:0..17 prefix:0..2"# " content:2..16"Just a heading"
   segments:
     Text [2..16] "Just a heading"

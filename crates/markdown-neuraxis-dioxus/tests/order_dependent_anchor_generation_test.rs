@@ -35,9 +35,8 @@ fn test_anchor_generation_is_order_independent() {
     for generation in 0..5 {
         // Clear existing anchors and regenerate from scratch
         doc.create_anchors_from_tree();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // Create content -> anchor_id mapping for this generation
         let mut mapping = std::collections::HashMap::new();
@@ -103,9 +102,8 @@ fn test_anchor_generation_with_tree_manipulation() {
 
     // First generation
     doc.create_anchors_from_tree();
-    let source1 = doc.text();
     let snapshot1 = doc.snapshot();
-    let blocks1 = flatten_blocks(&snapshot1.blocks, &source1);
+    let blocks1 = flatten_blocks(&snapshot1.blocks);
     let mapping1: std::collections::HashMap<String, u128> = blocks1
         .iter()
         .map(|b| (b.content.clone(), b.id.0))
@@ -120,9 +118,8 @@ fn test_anchor_generation_with_tree_manipulation() {
     let text = doc.text();
     let mut new_doc = Document::from_bytes(text.as_bytes()).unwrap();
     new_doc.create_anchors_from_tree();
-    let source2 = new_doc.text();
     let snapshot2 = new_doc.snapshot();
-    let blocks2 = flatten_blocks(&snapshot2.blocks, &source2);
+    let blocks2 = flatten_blocks(&snapshot2.blocks);
     let mapping2: std::collections::HashMap<String, u128> = blocks2
         .iter()
         .map(|b| (b.content.clone(), b.id.0))
@@ -156,9 +153,8 @@ fn test_anchor_generation_with_incremental_parsing() {
 
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
-    let source = doc.text();
     let initial_snapshot = doc.snapshot();
-    let initial_blocks = flatten_blocks(&initial_snapshot.blocks, &source);
+    let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
 
     // Filter out empty content blocks (LIST containers) as they have unstable fallback IDs
     let initial_mapping: std::collections::HashMap<String, u128> = initial_blocks
@@ -180,9 +176,8 @@ fn test_anchor_generation_with_incremental_parsing() {
     };
 
     let _patch = doc.apply(edit_cmd);
-    let after_source = doc.text();
     let after_edit_snapshot = doc.snapshot();
-    let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks, &after_source);
+    let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks);
 
     // Filter out empty content blocks (LIST containers) as they have unstable fallback IDs
     let after_edit_mapping: std::collections::HashMap<String, u128> = after_edit_blocks
@@ -215,9 +210,8 @@ fn test_specific_collision_scenario() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     doc.create_anchors_from_tree();
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     let indented_1_items: Vec<_> = blocks
         .iter()

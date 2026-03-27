@@ -6,30 +6,22 @@ List { ordered: false } [0..91]
   children:
     ListItem { marker: "- " } [0..23]
       root_range: 0..91
-      lines:
-        full:0..23 prefix:0..2"- " content:2..22"Item with *emphasis*"
       segments:
         Text [2..12] "Item with "
         Emphasis [12..22]
           Text "emphasis"
     ListItem { marker: "- " } [23..47]
       root_range: 0..91
-      lines:
-        full:23..47 prefix:23..25"- " content:25..46"Item with [link](url)"
       segments:
         Text [25..35] "Item with "
         Link [35..46] text:"link" url:"url"
     ListItem { marker: "- " } [47..66]
       root_range: 0..91
-      lines:
-        full:47..66 prefix:47..49"- " content:49..65"Item with `code`"
       segments:
         Text [49..59] "Item with "
         Code [59..65] "code"
     ListItem { marker: "- " } [66..91]
       root_range: 0..91
-      lines:
-        full:66..91 prefix:66..68"- " content:68..90"Item with [[wikilink]]"
       segments:
         Text [68..78] "Item with "
         WikiLink [78..90] target:"wikilink"

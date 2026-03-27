@@ -14,9 +14,8 @@ fn test_ui_block_to_anchor_mapping_correctness() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // This simulates what the UI rendering does vs what click handling does
     // If they're different, we found the bug
@@ -99,9 +98,8 @@ fn test_snapshot_block_order_vs_ui_rendering_order() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     println!("=== TESTING SNAPSHOT BLOCK ORDER ===");
     println!("Blocks in snapshot order:");
@@ -166,9 +164,8 @@ fn test_hierarchical_list_item_click_confusion() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     println!("=== TESTING HIERARCHICAL LIST STRUCTURE ===");
 

@@ -3,24 +3,15 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 Heading { level: 2 } [0..15]
-  lines:
-    full:0..15 prefix:0..3"## " content:3..14"Heading 2  "
   segments:
     Text [3..14] "Heading 2  "
 Heading { level: 3 } [15..31]
-  lines:
-    full:15..31 prefix:15..19"### " content:19..30"Heading 3  "
   segments:
     Text [19..30] "Heading 3  "
 Heading { level: 1 } [31..45]
-  lines:
-    full:31..45 prefix:31..33"# " content:33..44"Heading 1  "
   segments:
     Text [33..44] "Heading 1  "
 Paragraph [45..81]
-  lines:
-    full:45..58 prefix:45..45"" content:45..57"Text after  "
-    full:58..81 prefix:58..58"" content:58..80"heading with hardbreak"
   segments:
     Text [45..55] "Text after"
     HardBreak [55..58]
