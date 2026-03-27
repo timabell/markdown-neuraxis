@@ -5,6 +5,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use markdown_neuraxis_config::Config;
+use markdown_neuraxis_engine::editing::snapshot::{InlineNode, InlineSegment};
 use markdown_neuraxis_engine::{Document, FileTree, FileTreeItem, io};
 use ratatui::{
     Frame, Terminal,
@@ -157,24 +158,18 @@ impl App {
         use markdown_neuraxis_engine::editing::snapshot::{Block, BlockContent, BlockKind};
 
         let snapshot = document.snapshot();
-        let source = document.text();
         let mut lines = Vec::new();
 
-        fn render_block(block: &Block, source: &str, lines: &mut Vec<String>) {
-            // Extract content from line ranges
-            let content: String = block
-                .lines
-                .iter()
-                .map(|line| &source[line.content.clone()])
-                .collect::<Vec<_>>()
-                .join("\n");
+        fn render_block(block: &Block, lines: &mut Vec<String>) {
+            // Extract plain text from segments (temporary until CLI does rich rendering)
+            let content = segments_to_plain_text(&block.segments);
 
             match &block.kind {
                 BlockKind::Root => {
                     // Process children
                     if let BlockContent::Children(children) = &block.content {
                         for child in children {
-                            render_block(child, source, lines);
+                            render_block(child, lines);
                         }
                     }
                 }
@@ -191,7 +186,7 @@ impl App {
                     // Process list items
                     if let BlockContent::Children(children) = &block.content {
                         for child in children {
-                            render_block(child, source, lines);
+                            render_block(child, lines);
                         }
                     }
                 }
@@ -209,7 +204,7 @@ impl App {
                     // Process nested content
                     if let BlockContent::Children(children) = &block.content {
                         for child in children {
-                            render_block(child, source, lines);
+                            render_block(child, lines);
                         }
                     }
                 }
@@ -235,10 +230,34 @@ impl App {
         }
 
         for block in &snapshot.blocks {
-            render_block(block, &source, &mut lines);
+            render_block(block, &mut lines);
         }
 
         lines
+    }
+}
+
+/// Extract plain text from segments (temporary helper for CLI until rich rendering)
+fn segments_to_plain_text(segments: &[InlineSegment]) -> String {
+    segments
+        .iter()
+        .map(|seg| inline_node_to_text(&seg.kind))
+        .collect()
+}
+
+/// Recursively extract plain text from an inline node
+fn inline_node_to_text(node: &InlineNode) -> String {
+    match node {
+        InlineNode::Text(s) => s.clone(),
+        InlineNode::Strong(children) | InlineNode::Emphasis(children) => {
+            children.iter().map(inline_node_to_text).collect()
+        }
+        InlineNode::Code(s) => s.clone(),
+        InlineNode::Strikethrough(s) => s.clone(),
+        InlineNode::WikiLink { target, alias } => alias.as_ref().unwrap_or(target).clone(),
+        InlineNode::Link { text, .. } => text.clone(),
+        InlineNode::Image { alt, .. } => alt.clone(),
+        InlineNode::HardBreak => "\n".to_string(),
     }
 }
 

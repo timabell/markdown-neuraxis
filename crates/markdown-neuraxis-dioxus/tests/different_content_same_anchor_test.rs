@@ -12,9 +12,8 @@ fn test_different_content_same_anchor_id_bug() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Build a map from anchor ID to all content that uses that ID
     let mut anchor_to_contents: std::collections::HashMap<u128, Vec<String>> =
@@ -83,9 +82,8 @@ fn test_specific_indented_1_vs_indented_1_2_collision() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Find all "indented 1" blocks (exact match)
     let indented_1_blocks: Vec<_> = blocks

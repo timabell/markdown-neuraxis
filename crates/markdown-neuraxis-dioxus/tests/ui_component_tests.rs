@@ -15,9 +15,8 @@ mod code_fence_editor_tests {
         let markdown = "```rust\nfn main() {}\n```";
         let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
         doc.create_anchors_from_tree();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         let code_fence = blocks
             .iter()
@@ -58,9 +57,8 @@ mod ui_layer_textarea_bug_tests {
     fn test_focus_state_calculation_is_exclusive() {
         // Test the core issue: only ONE item should calculate is_focused=true at a time
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // Get all block anchor IDs
         let anchor_ids: Vec<AnchorId> = blocks.iter().map(|b| b.id).collect();
@@ -102,9 +100,8 @@ mod ui_layer_textarea_bug_tests {
     fn test_multiple_render_items_with_same_focus_signal() {
         // This test simulates the bug: multiple RenderListItem components sharing focus signal
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // Find nested items (the ones causing the bug)
         let nested_items: Vec<_> = blocks
@@ -157,9 +154,8 @@ mod ui_layer_textarea_bug_tests {
     fn test_ui_component_focus_signal_behavior() {
         // Test that reproduces the exact bug scenario from UI perspective
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // This test will help us understand if the issue is:
         // 1. Signal state management (same signal shared incorrectly)
@@ -247,9 +243,8 @@ mod ui_layer_textarea_bug_tests {
         // This test specifically checks if there are any anchor ID collisions
         // that could cause the multiple textarea bug
         let doc = create_nested_list_doc();
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         let anchor_ids: Vec<AnchorId> = blocks.iter().map(|b| b.id).collect();
         let unique_ids: HashSet<AnchorId> = anchor_ids.iter().cloned().collect();

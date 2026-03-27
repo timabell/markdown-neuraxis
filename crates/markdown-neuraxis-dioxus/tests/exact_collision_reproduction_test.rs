@@ -35,9 +35,8 @@ fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
     let mut doc = Document::from_bytes(actual_file_content.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Find the specific blocks that collided in the diagnostic output
     let indented_1_blocks: Vec<_> = blocks
@@ -130,12 +129,10 @@ fn test_anchor_generation_algorithm_produces_unique_ids_for_similar_content() {
         doc1.create_anchors_from_tree();
         doc2.create_anchors_from_tree();
 
-        let source1 = doc1.text();
-        let source2 = doc2.text();
         let snapshot1 = doc1.snapshot();
         let snapshot2 = doc2.snapshot();
-        let blocks1 = flatten_blocks(&snapshot1.blocks, &source1);
-        let blocks2 = flatten_blocks(&snapshot2.blocks, &source2);
+        let blocks1 = flatten_blocks(&snapshot1.blocks);
+        let blocks2 = flatten_blocks(&snapshot2.blocks);
 
         if let (Some(block1), Some(block2)) = (blocks1.first(), blocks2.first()) {
             println!("  '{}' -> anchor_id={}", content1, block1.id.0);
@@ -176,9 +173,8 @@ fn test_combined_document_collision_reproduction() {
     let mut doc = Document::from_bytes(problematic_markdown.as_bytes()).unwrap();
     doc.create_anchors_from_tree();
 
-    let source = doc.text();
     let snapshot = doc.snapshot();
-    let blocks = flatten_blocks(&snapshot.blocks, &source);
+    let blocks = flatten_blocks(&snapshot.blocks);
 
     // Build collision detection map
     let mut anchor_to_blocks: std::collections::HashMap<u128, Vec<String>> =

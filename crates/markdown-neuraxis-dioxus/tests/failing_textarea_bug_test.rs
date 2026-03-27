@@ -18,9 +18,8 @@ mod failing_bug_reproduction {
         let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
         doc.create_anchors_from_tree();
 
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // Find the exact problematic items from the screenshot
         // In the new hierarchical model, we identify root items by looking at content patterns
@@ -116,9 +115,8 @@ mod failing_bug_reproduction {
 
         for iteration in 0..3 {
             doc.create_anchors_from_tree();
-            let source = doc.text();
             let snapshot = doc.snapshot();
-            let blocks = flatten_blocks(&snapshot.blocks, &source);
+            let blocks = flatten_blocks(&snapshot.blocks);
 
             println!("\n=== ANCHOR GENERATION ITERATION {} ===", iteration);
 
@@ -198,9 +196,8 @@ mod failing_bug_reproduction {
         let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
         doc.create_anchors_from_tree();
 
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        let blocks = flatten_blocks(&snapshot.blocks, &source);
+        let blocks = flatten_blocks(&snapshot.blocks);
 
         // Look for the specific collision: same anchor ID for different content
         let target_anchor_id = 10032346120884770342u128;

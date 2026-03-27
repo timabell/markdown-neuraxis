@@ -13,9 +13,8 @@ fn test_editing_lifecycle_causes_anchor_instability() {
 
     // Step 1: Initial document load (like opening the file)
     doc.create_anchors_from_tree();
-    let initial_source = doc.text();
     let initial_snapshot = doc.snapshot();
-    let initial_blocks = flatten_blocks(&initial_snapshot.blocks, &initial_source);
+    let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
 
     // Capture initial anchor mappings
     let mut anchor_history = Vec::new();
@@ -43,9 +42,8 @@ fn test_editing_lifecycle_causes_anchor_instability() {
 
         doc.create_anchors_from_tree(); // This is what might cause instability
 
-        let cycle_source = doc.text();
         let cycle_snapshot = doc.snapshot();
-        let cycle_blocks = flatten_blocks(&cycle_snapshot.blocks, &cycle_source);
+        let cycle_blocks = flatten_blocks(&cycle_snapshot.blocks);
         let cycle_mapping: std::collections::HashMap<String, u128> = cycle_blocks
             .iter()
             .map(|b| (b.content.clone(), b.id.0))
@@ -120,9 +118,8 @@ fn test_rapid_focus_changes_cause_collision() {
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     doc.create_anchors_from_tree();
-    let initial_source = doc.text();
     let initial_snapshot = doc.snapshot();
-    let initial_blocks = flatten_blocks(&initial_snapshot.blocks, &initial_source);
+    let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
 
     // Find items that could collide based on diagnostic output
     let indented_1_items: Vec<_> = initial_blocks
@@ -144,9 +141,8 @@ fn test_rapid_focus_changes_cause_collision() {
         // This simulates the sequence: click item → focus → anchor regeneration
         doc.create_anchors_from_tree();
 
-        let rapid_source = doc.text();
         let rapid_snapshot = doc.snapshot();
-        let rapid_blocks = flatten_blocks(&rapid_snapshot.blocks, &rapid_source);
+        let rapid_blocks = flatten_blocks(&rapid_snapshot.blocks);
 
         // Check if the rapid regeneration caused the diagnostic bug
         let current_indented_1: Vec<_> = rapid_blocks

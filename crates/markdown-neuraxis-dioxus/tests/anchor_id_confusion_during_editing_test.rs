@@ -31,7 +31,7 @@ fn test_anchor_id_confusion_after_editing() {
     // Take initial snapshot and record anchor IDs
     let source = doc.text();
     let initial_snapshot = doc.snapshot();
-    let initial_blocks = flatten_blocks(&initial_snapshot.blocks, &source);
+    let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
 
     let mut initial_anchor_mapping = HashMap::new();
     for block in &initial_blocks {
@@ -72,9 +72,8 @@ fn test_anchor_id_confusion_after_editing() {
     let _patch = doc.apply(edit_cmd);
 
     // Take snapshot after editing
-    let after_source = doc.text();
     let after_edit_snapshot = doc.snapshot();
-    let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks, &after_source);
+    let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks);
     let mut after_edit_anchor_mapping = HashMap::new();
     for block in &after_edit_blocks {
         after_edit_anchor_mapping.insert(block.content.clone(), block.id);
@@ -160,9 +159,8 @@ fn test_multiple_edit_cycles_preserve_anchor_identity() {
     doc.create_anchors_from_tree();
 
     // Record initial anchor mappings
-    let source = doc.text();
     let initial_snapshot = doc.snapshot();
-    let initial_blocks = flatten_blocks(&initial_snapshot.blocks, &source);
+    let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
     let initial_mappings: HashMap<String, _> = initial_blocks
         .iter()
         .map(|b| (b.content.clone(), b.id))
@@ -199,9 +197,8 @@ fn test_multiple_edit_cycles_preserve_anchor_identity() {
         let _patch = doc.apply(edit_cmd);
 
         // Check that anchor identity is preserved
-        let after_source = doc.text();
         let after_edit_snapshot = doc.snapshot();
-        let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks, &after_source);
+        let after_edit_blocks = flatten_blocks(&after_edit_snapshot.blocks);
         for block in &after_edit_blocks {
             // Skip empty content blocks (LIST containers don't have stable anchors)
             if block.content.is_empty() {

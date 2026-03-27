@@ -61,9 +61,8 @@ impl DocumentHandle {
     pub fn get_snapshot(&self) -> SnapshotDto {
         // Recover from poisoned mutex (another thread panicked while holding lock)
         let doc = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        let source = doc.text();
         let snapshot = doc.snapshot();
-        SnapshotDto::from_engine(snapshot, &source)
+        SnapshotDto::from_engine(snapshot)
     }
 }
 
@@ -79,8 +78,8 @@ pub struct SnapshotDto {
 }
 
 impl SnapshotDto {
-    fn from_engine(snapshot: Snapshot, source: &str) -> Self {
-        let blocks = convert_blocks(&snapshot.blocks, source);
+    fn from_engine(snapshot: Snapshot) -> Self {
+        let blocks = convert_blocks(&snapshot.blocks);
         Self {
             version: 0, // TODO: Add version to Snapshot when needed
             blocks,
@@ -90,37 +89,29 @@ impl SnapshotDto {
 
 /// Convert engine blocks to DTOs recursively, preserving tree structure.
 /// List containers are "unwrapped" - their children are promoted to the parent level.
-fn convert_blocks(blocks: &[Block], source: &str) -> Vec<BlockDto> {
+fn convert_blocks(blocks: &[Block]) -> Vec<BlockDto> {
     let mut result = Vec::new();
     for block in blocks {
-        convert_block_into(block, source, &mut result);
+        convert_block_into(block, &mut result);
     }
     result
 }
 
 /// Convert a single engine block to DTOs, appending to the result vector.
 /// Some blocks (List, Root) are "unwrapped" and their children are added directly.
-fn convert_block_into(block: &Block, source: &str, result: &mut Vec<BlockDto>) {
+fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
     match &block.kind {
         BlockKind::Root | BlockKind::List { .. } => {
             // Unwrap containers: add children directly to result
             if let BlockContent::Children(children) = &block.content {
                 for child in children {
-                    convert_block_into(child, source, result);
+                    convert_block_into(child, result);
                 }
             }
             return;
         }
         _ => {}
     }
-
-    // Extract content from line ranges
-    let content: String = block
-        .lines
-        .iter()
-        .map(|line| &source[line.content.clone()])
-        .collect::<Vec<_>>()
-        .join("\n");
 
     let (kind, heading_level, list_marker) = match &block.kind {
         BlockKind::Root | BlockKind::List { .. } => unreachable!(), // Handled above
@@ -141,7 +132,7 @@ fn convert_block_into(block: &Block, source: &str, result: &mut Vec<BlockDto>) {
 
     // Process children recursively
     let children = if let BlockContent::Children(child_blocks) = &block.content {
-        convert_blocks(child_blocks, source)
+        convert_blocks(child_blocks)
     } else {
         Vec::new()
     };
@@ -151,7 +142,6 @@ fn convert_block_into(block: &Block, source: &str, result: &mut Vec<BlockDto>) {
         kind,
         heading_level,
         list_marker,
-        content,
         segments,
         children,
     });
@@ -168,8 +158,6 @@ pub struct BlockDto {
     pub heading_level: u8,
     /// List marker if this is a list item
     pub list_marker: Option<String>,
-    /// The text content of this block
-    pub content: String,
     /// Parsed inline segments (wiki-links, URLs, plain text)
     pub segments: Vec<TextSegmentDto>,
     /// Child blocks (e.g., nested list items)
@@ -296,6 +284,21 @@ mod tests {
         None
     }
 
+    /// Extract plain text from segments (test helper)
+    fn segments_to_text(segments: &[TextSegmentDto]) -> String {
+        segments.iter().map(segment_to_text).collect()
+    }
+
+    fn segment_to_text(segment: &TextSegmentDto) -> String {
+        match segment.kind.as_str() {
+            "text" | "code" | "strikethrough" | "wiki_link" => segment.content.clone(),
+            "emphasis" | "strong" => segments_to_text(&segment.children),
+            "link" | "image" => segment.content.split('|').next().unwrap_or("").to_string(),
+            "hard_break" => "\n".to_string(),
+            _ => String::new(),
+        }
+    }
+
     #[test]
     fn test_document_from_string() {
         let content = "# Hello World\n\n- Item 1\n- Item 2";
@@ -318,7 +321,8 @@ mod tests {
         let heading = &snapshot.blocks[0];
         assert_eq!(heading.kind, "heading");
         assert_eq!(heading.heading_level, 1);
-        assert_eq!(heading.content, "Heading");
+        // Content is now extracted from segments
+        assert_eq!(segments_to_text(&heading.segments), "Heading");
     }
 
     #[test]
@@ -422,7 +426,8 @@ mod tests {
         assert_eq!(snapshot.blocks.len(), 1);
         let parent = &snapshot.blocks[0];
         assert_eq!(parent.kind, "list_item");
-        assert!(parent.content.contains("parent"));
+        // Content is now extracted from segments
+        assert!(segments_to_text(&parent.segments).contains("parent"));
 
         // Parent should have nested items
         assert!(
@@ -447,7 +452,7 @@ mod tests {
             .and_then(|c1| find_block_by_kind(&c1.children, "list_item"))
             .and_then(|c2| find_block_by_kind(&c2.children, "list_item"));
         assert!(grandchild.is_some(), "Should find grandchild through tree");
-        assert!(grandchild.unwrap().content.contains("grandchild"));
+        assert!(segments_to_text(&grandchild.unwrap().segments).contains("grandchild"));
     }
 
     #[test]
@@ -460,6 +465,7 @@ mod tests {
         assert_eq!(snapshot.blocks.len(), 1);
         let quote = &snapshot.blocks[0];
         assert_eq!(quote.kind, "block_quote");
-        assert_eq!(quote.content, "This is a quote");
+        // Content is now extracted from segments
+        assert_eq!(segments_to_text(&quote.segments), "This is a quote");
     }
 }

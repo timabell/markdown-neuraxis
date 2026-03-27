@@ -99,6 +99,27 @@ pub struct Block {
     pub content: BlockContent,
 }
 
+impl Block {
+    /// Byte range of this block's content in the source.
+    ///
+    /// For leaf blocks, this equals `node_range`.
+    /// For blocks with children, this is the range before children begin -
+    /// includes the marker and any continuation lines, but excludes nested blocks.
+    pub fn content_range(&self) -> Range<usize> {
+        match &self.content {
+            BlockContent::Leaf => self.node_range.clone(),
+            BlockContent::Children(children) => {
+                if let Some(first_child) = children.first() {
+                    self.node_range.start..first_child.node_range.start
+                } else {
+                    // Children vector is empty - treat as leaf
+                    self.node_range.clone()
+                }
+            }
+        }
+    }
+}
+
 /// Tree-structured document snapshot
 #[derive(Debug, Clone, PartialEq)]
 pub struct Snapshot {
@@ -830,15 +851,15 @@ mod tests {
     // ============ Snapshot formatting (test-only) ============
 
     /// Format a snapshot as a readable string for snapshot testing.
-    fn insta_format_snapshot(snapshot: &Snapshot, source: &str) -> String {
+    fn insta_format_snapshot(snapshot: &Snapshot) -> String {
         let mut result = String::new();
         for block in &snapshot.blocks {
-            insta_format_block(&mut result, block, source, 0);
+            insta_format_block(&mut result, block, 0);
         }
         result
     }
 
-    fn insta_format_block(out: &mut String, block: &Block, source: &str, indent: usize) {
+    fn insta_format_block(out: &mut String, block: &Block, indent: usize) {
         use std::fmt::Write;
 
         let prefix = "  ".repeat(indent);
@@ -872,7 +893,7 @@ mod tests {
             BlockContent::Children(children) => {
                 writeln!(out, "{}  children:", prefix).unwrap();
                 for child in children {
-                    insta_format_block(out, child, source, indent + 2);
+                    insta_format_block(out, child, indent + 2);
                 }
             }
         }
@@ -1043,7 +1064,7 @@ mod tests {
         doc.create_anchors_from_tree();
 
         let snapshot = create_snapshot(&doc);
-        let formatted = insta_format_snapshot(&snapshot, &input);
+        let formatted = insta_format_snapshot(&snapshot);
 
         let mut settings = insta::Settings::clone_current();
         settings.set_prepend_module_to_snapshot(false);
@@ -1964,6 +1985,124 @@ mod tests {
                 .any(|s| matches!(s.kind, InlineNode::HardBreak))
         });
         assert!(has_hard_break, "Should have HardBreak segment");
+    }
+
+    // ============ content_range() tests ============
+
+    #[test]
+    fn test_content_range_leaf_returns_node_range() {
+        // Leaf blocks return their full node_range as content_range
+        let text = "# Hello World";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        let heading = &snapshot.blocks[0];
+        assert_eq!(heading.kind, BlockKind::Heading { level: 1 });
+        assert_eq!(
+            heading.content_range(),
+            heading.node_range.clone(),
+            "Leaf block content_range should equal node_range"
+        );
+    }
+
+    #[test]
+    fn test_content_range_with_children_excludes_nested() {
+        // Block with children: content_range is from node_range.start to first child's start
+        let text = "- parent\n  - child\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        // Find the parent list item
+        fn find_parent_item(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if matches!(block.kind, BlockKind::ListItem { .. })
+                    && matches!(block.content, BlockContent::Children(_))
+                {
+                    return Some(block);
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_parent_item(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let parent = find_parent_item(&snapshot.blocks).expect("Should have parent list item");
+        let content_range = parent.content_range();
+
+        // Content range should start at block start
+        assert_eq!(content_range.start, parent.node_range.start);
+
+        // Content range should end before first child begins
+        if let BlockContent::Children(children) = &parent.content {
+            let first_child = &children[0];
+            assert_eq!(
+                content_range.end, first_child.node_range.start,
+                "content_range should end where first child starts"
+            );
+        }
+
+        // Verify we can slice the content (should be "- parent\n")
+        let content = &text[content_range.clone()];
+        assert!(
+            content.contains("parent"),
+            "Content should include 'parent'"
+        );
+        assert!(
+            !content.contains("child"),
+            "Content should NOT include 'child'"
+        );
+    }
+
+    #[test]
+    fn test_content_range_multiline_before_children() {
+        // List item with continuation line before nested child
+        let text = "- first line\n  second line\n  - nested\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        fn find_parent_with_nested(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if matches!(block.kind, BlockKind::ListItem { .. })
+                    && let BlockContent::Children(children) = &block.content
+                    && children
+                        .iter()
+                        .any(|c| matches!(c.kind, BlockKind::List { .. }))
+                {
+                    return Some(block);
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_parent_with_nested(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let parent =
+            find_parent_with_nested(&snapshot.blocks).expect("Should find parent with nested list");
+        let content_range = parent.content_range();
+        let content = &text[content_range.clone()];
+
+        // Both continuation lines should be in content, but not the nested item
+        assert!(
+            content.contains("first line"),
+            "Content should include first line"
+        );
+        assert!(
+            content.contains("second line"),
+            "Content should include continuation line"
+        );
+        assert!(
+            !content.contains("nested"),
+            "Content should NOT include nested child"
+        );
     }
 
     #[test]
