@@ -40,7 +40,7 @@ Heading { level: 2 } [125..141]
     Text [128..140] "Code Example"
 FencedCode { language: Some("javascript") } [142..190]
   segments:
-    Text [156..189] "const x = 42;\nconsole.log(x);\n```"
+    Text [156..185] "const x = 42;\nconsole.log(x);"
 Heading { level: 2 } [191..201]
   segments:
     Text [194..200] "Quotes"

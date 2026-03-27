@@ -12,7 +12,7 @@ List { ordered: false } [0..68]
         FencedCode { language: Some("python") } [20..53]
           root_range: 0..68
           segments:
-            Text [30..52] "  print(\"hello\")\n  ```"
+            Text [30..46] "  print(\"hello\")"
     ListItem { marker: "- " } [53..68]
       root_range: 0..68
       segments:

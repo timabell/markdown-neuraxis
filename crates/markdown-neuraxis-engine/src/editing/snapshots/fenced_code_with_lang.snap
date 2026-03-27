@@ -4,4 +4,4 @@ expression: formatted
 ---
 FencedCode { language: Some("rust") } [0..57]
   segments:
-    Text [8..56] "fn main() {\n    println!(\"Hello, world!\");\n}\n```"
+    Text [8..52] "fn main() {\n    println!(\"Hello, world!\");\n}"

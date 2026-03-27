@@ -479,8 +479,13 @@ fn process_fenced_code(
     // Extract code content between opening and closing fences
     let segments = if let Some(first_newline) = text.find('\n') {
         let content_start = node_range.start + first_newline + 1;
-        // Find last line (closing fence) by finding last newline before end
-        let last_newline = text.rfind('\n').unwrap_or(text.len());
+        // Find last line (closing fence) by finding last newline before the closing fence.
+        // We need to trim any trailing newline that comes AFTER the closing fence,
+        // otherwise rfind finds that trailing newline instead of the one before the fence.
+        let text_without_trailing = text.trim_end_matches('\n');
+        let last_newline = text_without_trailing
+            .rfind('\n')
+            .unwrap_or(text_without_trailing.len());
         // Content ends at the last newline (before closing fence line)
         let content_end = node_range.start + last_newline;
         if content_start < content_end {
@@ -1230,6 +1235,32 @@ mod tests {
         assert_eq!(snapshot.blocks.len(), 1);
         let block = &snapshot.blocks[0];
         assert_eq!(block.kind, BlockKind::FencedCode { language: None });
+    }
+
+    #[test]
+    fn test_code_fence_content_excludes_closing_fence() {
+        // The code fence content should NOT include the closing ``` markers
+        // Bug: when there's a trailing newline after closing fence, rfind('\n')
+        // finds that trailing newline instead of the one before the closing fence
+        let text = "```rust\nfn main() {}\n```\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        let block = &snapshot.blocks[0];
+
+        // Verify the segment content does not include the closing fence
+        assert_eq!(block.segments.len(), 1);
+        if let InlineNode::Text(content) = &block.segments[0].kind {
+            assert_eq!(content, "fn main() {}");
+            assert!(
+                !content.contains("```"),
+                "Content should not include closing fence, got: {content:?}"
+            );
+        } else {
+            panic!("Expected Text segment");
+        }
     }
 
     #[test]

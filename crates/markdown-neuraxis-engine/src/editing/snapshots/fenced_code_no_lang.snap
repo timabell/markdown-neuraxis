@@ -4,4 +4,4 @@ expression: formatted
 ---
 FencedCode { language: None } [0..33]
   segments:
-    Text [4..32] "some code here\nmore code\n```"
+    Text [4..28] "some code here\nmore code"

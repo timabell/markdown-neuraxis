@@ -4,4 +4,4 @@ expression: formatted
 ---
 FencedCode { language: None } [0..25]
   segments:
-    Text [4..24] "code with tildes\n~~~"
+    Text [4..20] "code with tildes"

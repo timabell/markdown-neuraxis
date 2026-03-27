@@ -4,7 +4,7 @@ expression: formatted
 ---
 FencedCode { language: None } [0..49]
   segments:
-    Text [4..48] "*not emphasis* **not strong** `not code`\n```"
+    Text [4..44] "*not emphasis* **not strong** `not code`"
 FencedCode { language: Some("rust") } [50..92]
   segments:
-    Text [58..91] "let x = \"[[not a wikilink]]\";\n```"
+    Text [58..87] "let x = \"[[not a wikilink]]\";"
