@@ -1,0 +1,7 @@
+- parent
+  - child 1
+  - child 2
+    - grandchild
+  - child 3
+- another parent
+  - only child

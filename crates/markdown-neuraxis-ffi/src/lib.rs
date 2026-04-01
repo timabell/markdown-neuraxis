@@ -448,9 +448,26 @@ mod tests {
         );
 
         // Verify we can traverse to find specific items
-        let grandchild = find_block_by_kind(&parent.children, "list_item")
-            .and_then(|c1| find_block_by_kind(&c1.children, "list_item"))
-            .and_then(|c2| find_block_by_kind(&c2.children, "list_item"));
+        // FFI layer "unwraps" List containers, so list items are direct children.
+        // Correct structure: parent.children = [child1, child2] where child2.children = [grandchild]
+        // child1 and child2 are siblings in parent.children, not nested under each other
+        let nested_items: Vec<_> = parent
+            .children
+            .iter()
+            .filter(|b| b.kind == "list_item")
+            .collect();
+        assert_eq!(
+            nested_items.len(),
+            2,
+            "Parent should have 2 direct child items (child 1, child 2)"
+        );
+
+        // child 2 should have the grandchild
+        let child2 = nested_items
+            .iter()
+            .find(|b| segments_to_text(&b.segments).contains("child 2"));
+        assert!(child2.is_some(), "Should find child 2");
+        let grandchild = find_block_by_kind(&child2.unwrap().children, "list_item");
         assert!(grandchild.is_some(), "Should find grandchild through tree");
         assert!(segments_to_text(&grandchild.unwrap().segments).contains("grandchild"));
     }

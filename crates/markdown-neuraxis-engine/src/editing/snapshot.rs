@@ -95,6 +95,20 @@ pub struct Block {
     pub segments: Vec<InlineSegment>,
     /// Block content (text or children)
     pub content: BlockContent,
+    /// Explicit end position for editable content, used by `content_range()`.
+    ///
+    /// For list items with nested children, the syntax tree includes structural
+    /// whitespace (indentation) between the paragraph and nested blocks:
+    /// ```text
+    /// LIST_ITEM@0..25
+    ///   PARAGRAPH@0..10      <- editable content ends here
+    ///   WHITESPACE@10..14    <- structural indent (NOT editable)
+    ///   UNORDERED_LIST@14..25
+    /// ```
+    /// Without this field, `content_range()` would use `first_child.node_range.start`
+    /// (14), incorrectly including the whitespace. This field stores the paragraph
+    /// end (10) so editing shows "- item\n" not "- item\n    ".
+    pub content_end: Option<usize>,
 }
 
 impl Block {
@@ -104,6 +118,11 @@ impl Block {
     /// For blocks with children, this is the range before children begin -
     /// includes the marker and any continuation lines, but excludes nested blocks.
     pub fn content_range(&self) -> Range<usize> {
+        // Use explicit content_end if set (excludes structural whitespace)
+        if let Some(end) = self.content_end {
+            return self.node_range.start..end;
+        }
+
         match &self.content {
             BlockContent::Leaf => self.node_range.clone(),
             BlockContent::Children(children) => {
@@ -235,6 +254,7 @@ fn process_list(
         node_range,
         segments: vec![],
         content: BlockContent::Children(children),
+        content_end: None,
     })
 }
 
@@ -251,7 +271,7 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
 
     // Content starts after marker, ends before newline
     let content_start = node_range.start + marker_len;
-    let content_end = node_range.start + first_line_content_end;
+    let fallback_content_end = node_range.start + first_line_content_end;
 
     // Process children (nested content)
     // Skip PARAGRAPH children - segments are extracted separately below.
@@ -266,6 +286,9 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
         }
     }
 
+    // Track whether we have nested children
+    let has_nested_children = !children.is_empty();
+
     let content = if children.is_empty() {
         BlockContent::Leaf
     } else {
@@ -275,8 +298,9 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
     // Look up anchor ID for this list item
     let id = find_anchor_for_range(anchors, &node_range);
 
-    // Extract segments from the list item's content
+    // Extract segments from the list item's content and track paragraph end
     // We look in the PARAGRAPH child (if present) since that's where inlines live
+    let mut paragraph_end: Option<usize> = None;
     let segments = node
         .children()
         .find(|c| c.kind() == SyntaxKind::PARAGRAPH)
@@ -285,8 +309,11 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
             // and exclude trailing newline
             let para_range = para.text_range();
             let para_start: usize = para_range.start().into();
-            let mut para_end: usize = para_range.end().into();
-            // Strip trailing newline from content range
+            let para_end_with_newline: usize = para_range.end().into();
+            // Track the full paragraph end (including newline) for content_end
+            paragraph_end = Some(para_end_with_newline);
+            let mut para_end = para_end_with_newline;
+            // Strip trailing newline from content range for segments
             if para_end > para_start && source.as_bytes().get(para_end - 1) == Some(&b'\n') {
                 para_end -= 1;
             }
@@ -295,7 +322,7 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
         })
         .unwrap_or_else(|| {
             // No paragraph child - use first line content range as fallback
-            let fallback_range = content_start..content_end;
+            let fallback_range = content_start..fallback_content_end;
             if !fallback_range.is_empty() {
                 let text = &source[fallback_range.clone()];
                 if !text.is_empty() {
@@ -308,12 +335,21 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
             vec![]
         });
 
+    // Set explicit content_end when we have nested children to exclude
+    // structural whitespace between paragraph and nested blocks
+    let content_end = if has_nested_children {
+        paragraph_end
+    } else {
+        None
+    };
+
     Some(Block {
         id,
         kind: BlockKind::ListItem { marker },
         node_range,
         segments,
         content,
+        content_end,
     })
 }
 
@@ -340,6 +376,7 @@ fn process_paragraph(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
         node_range,
         segments,
         content: BlockContent::Leaf,
+        content_end: None,
     })
 }
 
@@ -382,6 +419,7 @@ fn process_block_quote(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Op
         node_range,
         segments,
         content,
+        content_end: None,
     })
 }
 
@@ -411,6 +449,7 @@ fn process_heading(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option
         node_range,
         segments,
         content: BlockContent::Leaf,
+        content_end: None,
     })
 }
 
@@ -465,6 +504,7 @@ fn process_fenced_code(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Op
         node_range,
         segments,
         content: BlockContent::Leaf,
+        content_end: None,
     })
 }
 
@@ -482,6 +522,7 @@ fn process_thematic_break(_source: &str, node: SyntaxNode, anchors: &[Anchor]) -
         node_range,
         segments: vec![],
         content: BlockContent::Leaf,
+        content_end: None,
     })
 }
 
@@ -1979,7 +2020,7 @@ mod tests {
 
     #[test]
     fn test_content_range_with_children_excludes_nested() {
-        // Block with children: content_range is from node_range.start to first child's start
+        // Block with children: content_range excludes nested blocks AND structural whitespace
         let text = "- parent\n  - child\n";
         let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
         doc.create_anchors_from_tree();
@@ -2008,17 +2049,23 @@ mod tests {
         // Content range should start at block start
         assert_eq!(content_range.start, parent.node_range.start);
 
-        // Content range should end before first child begins
+        // Content range should end BEFORE structural whitespace (before first child)
         if let BlockContent::Children(children) = &parent.content {
             let first_child = &children[0];
-            assert_eq!(
-                content_range.end, first_child.node_range.start,
-                "content_range should end where first child starts"
+            assert!(
+                content_range.end <= first_child.node_range.start,
+                "content_range.end ({}) should be <= first_child start ({})",
+                content_range.end,
+                first_child.node_range.start
             );
         }
 
         // Verify we can slice the content (should be "- parent\n")
         let content = &text[content_range.clone()];
+        assert_eq!(
+            content, "- parent\n",
+            "Content should be exactly '- parent\\n'"
+        );
         assert!(
             content.contains("parent"),
             "Content should include 'parent'"
@@ -2073,6 +2120,87 @@ mod tests {
         assert!(
             !content.contains("nested"),
             "Content should NOT include nested child"
+        );
+    }
+
+    #[test]
+    fn test_content_range_nested_siblings_excludes_next_sibling_indent() {
+        // Bug: When editing a nested bullet with siblings, the content_range
+        // should NOT include the next sibling's indentation
+        let text = "- parent\n  - child1\n  - child2\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+        //                  0         1         2         3
+        //                  0123456789012345678901234567890123
+        // text:            "- parent\n  - child1\n  - child2\n"
+        //                   ^        ^  ^        ^  ^        ^
+        //                   0        9  11       20 22       31
+        // Byte positions:
+        // - "- parent\n" = bytes 0-9 (marker + content + newline)
+        // - "  " = bytes 9-11 (indent before child1, consumed by list_ext)
+        // - "- child1\n" = bytes 11-20 (LIST_ITEM for child1)
+        // - "  " = bytes 20-22 (indent before child2)
+        // - "- child2\n" = bytes 22-31 (LIST_ITEM for child2)
+        //
+        // The parser design is that list_ext consumes the indent BEFORE calling
+        // list_item, so the LIST_ITEM node does NOT include leading whitespace.
+        // Therefore child1's node_range should be 11..20, not 9..20.
+
+        // Find child1 list item
+        fn find_child1(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if let BlockKind::ListItem { .. } = &block.kind {
+                    // Check if segments contain "child1"
+                    let has_child1 = block.segments.iter().any(|s| {
+                        if let InlineNode::Text(t) = &s.kind {
+                            t.contains("child1")
+                        } else {
+                            false
+                        }
+                    });
+                    if has_child1 {
+                        return Some(block);
+                    }
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_child1(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let child1 = find_child1(&snapshot.blocks).expect("Should find child1");
+        let content_range = child1.content_range();
+        let content = &text[content_range.clone()];
+
+        // child1 is a leaf (no nested children), so content_range == node_range
+        // node_range should be "- child1\n" (bytes 11..20), NOT including child2's indent
+        assert!(
+            content.contains("child1"),
+            "Content should include 'child1', got: {:?}",
+            content
+        );
+        assert!(
+            !content.contains("child2"),
+            "Content should NOT include 'child2', got: {:?}",
+            content
+        );
+        // Bug: actual content is "- child1\n  " which includes child2's indent
+        // Expected: "- child1\n" which ends at the newline
+        let expected_content = "- child1\n";
+        assert_eq!(
+            content, expected_content,
+            "content_range should be exactly '- child1\\n', got: {:?}",
+            content
+        );
+        assert_eq!(
+            content_range,
+            11..20,
+            "content_range should be 11..20, got {:?}",
+            content_range
         );
     }
 
