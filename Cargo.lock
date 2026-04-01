@@ -2992,6 +2992,7 @@ version = "0.1.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "dirs",
  "env_logger",
  "insta",
  "log",
@@ -2999,6 +3000,7 @@ dependencies = [
  "markdown-neuraxis-engine",
  "pretty_assertions",
  "relative-path 2.0.1",
+ "rfd",
  "tempfile",
 ]
 

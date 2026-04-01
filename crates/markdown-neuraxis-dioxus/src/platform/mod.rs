@@ -2,29 +2,18 @@
 //!
 //! This module provides abstractions for platform-specific operations.
 //! With Android support moved to native Kotlin (see ADR-0010/0011),
-//! this module now only contains desktop stubs.
+//! this module now only contains desktop functionality.
 
-/// Result of a storage permission check
-#[derive(Debug, Clone, PartialEq)]
-pub enum StoragePermissionStatus {
-    /// Permission is granted, can access external storage
-    Granted,
-    /// Permission denied, need to request it
-    Denied,
-    /// Need to open settings for user to grant permission manually
-    NeedsSettingsIntent,
-}
+use std::path::PathBuf;
 
-/// Check if the app has storage permission to read external folders.
-///
-/// On desktop platforms, always returns `Granted`.
-pub fn check_storage_permission() -> StoragePermissionStatus {
-    StoragePermissionStatus::Granted
-}
-
-/// Request storage permission.
-///
-/// On desktop platforms, this is a no-op and always returns `true`.
-pub fn request_storage_permission() -> bool {
-    true
+/// Opens a native folder picker dialog asynchronously.
+/// Returns `Some(path)` if user selected a folder, `None` if cancelled.
+#[must_use]
+pub async fn pick_folder(start_dir: Option<&std::path::Path>) -> Option<PathBuf> {
+    use rfd::AsyncFileDialog;
+    let mut dialog = AsyncFileDialog::new();
+    if let Some(dir) = start_dir {
+        dialog = dialog.set_directory(dir);
+    }
+    dialog.pick_folder().await.map(|h| h.path().to_path_buf())
 }
