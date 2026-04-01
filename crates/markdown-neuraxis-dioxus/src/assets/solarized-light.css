@@ -245,6 +245,11 @@ hr {
     line-height: 1.5;
 }
 
+.list-item-content {
+    display: inline;
+    width: auto;
+}
+
 /* Code block styles */
 .code-block {
     margin: 16px 0;

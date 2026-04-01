@@ -116,16 +116,19 @@ pub fn BlockRenderer(
                 rsx! {
                     li {
                         class: "list-item",
-                        onclick: {
-                            let mut focused_anchor_id = focused_anchor_id;
-                            move |evt| {
-                                evt.stop_propagation();
-                                focused_anchor_id.set(Some(block_id))
+                        span {
+                            class: "list-item-content clickable-block",
+                            onclick: {
+                                let mut focused_anchor_id = focused_anchor_id;
+                                move |evt| {
+                                    evt.stop_propagation();
+                                    focused_anchor_id.set(Some(block_id))
+                                }
+                            },
+                            InlineSegments {
+                                segments,
+                                on_wikilink_click
                             }
-                        },
-                        InlineSegments {
-                            segments,
-                            on_wikilink_click
                         }
                         // Render nested children (nested lists)
                         if let BlockContent::Children(children) = &block.content {
