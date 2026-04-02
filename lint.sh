@@ -4,10 +4,13 @@ cargo fmt
 ./clippy-harsh.sh
 cargo deny check licenses
 cargo machete
+cargo test
 
 # Android lint
 source ./set-android-envs.sh
 (cd android && ./gradlew lint)
+
+./build-android.sh
 
 # Check YAML files in .github
 if command -v yamllint >/dev/null 2>&1; then
