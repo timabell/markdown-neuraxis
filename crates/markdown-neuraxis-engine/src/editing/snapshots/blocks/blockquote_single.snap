@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+BlockQuote [0..24]
+  segments:
+    Text [2..23] "This is a blockquote."

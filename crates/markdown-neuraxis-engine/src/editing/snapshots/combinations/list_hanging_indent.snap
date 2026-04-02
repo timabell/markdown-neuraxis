@@ -1,0 +1,12 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..53]
+  children:
+    ListItem { marker: "- " } [0..37]
+      segments:
+        Text [2..36] "First bullet\n  with hanging indent"
+    ListItem { marker: "- " } [37..53]
+      segments:
+        Text [39..52] "Second bullet"

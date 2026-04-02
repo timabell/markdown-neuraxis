@@ -1,0 +1,9 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..70]
+  segments:
+    Text [0..20] "Line with hard break"
+    HardBreak [20..23]
+    Text [23..69] "next line\nSingle space no break \nalso no break"

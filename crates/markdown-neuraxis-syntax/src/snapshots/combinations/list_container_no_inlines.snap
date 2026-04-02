@@ -1,0 +1,53 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..78
+  UNORDERED_LIST@0..78
+    LIST_ITEM@0..27
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..27
+        EMPHASIS@2..12
+          STAR@2..3 "*"
+          TEXT@3..11 "emphasis"
+          STAR@11..12 "*"
+        WHITESPACE@12..13 " "
+        TEXT@13..15 "in"
+        WHITESPACE@15..16 " "
+        TEXT@16..21 "first"
+        WHITESPACE@21..22 " "
+        TEXT@22..26 "item"
+        NEWLINE@26..27 "\\n"
+    LIST_ITEM@27..55
+      DASH@27..28 "-"
+      WHITESPACE@28..29 " "
+      PARAGRAPH@29..55
+        STRONG@29..39
+          STAR@29..30 "*"
+          STAR@30..31 "*"
+          TEXT@31..37 "strong"
+          STAR@37..38 "*"
+          STAR@38..39 "*"
+        WHITESPACE@39..40 " "
+        TEXT@40..42 "in"
+        WHITESPACE@42..43 " "
+        TEXT@43..49 "second"
+        WHITESPACE@49..50 " "
+        TEXT@50..54 "item"
+        NEWLINE@54..55 "\\n"
+    LIST_ITEM@55..78
+      DASH@55..56 "-"
+      WHITESPACE@56..57 " "
+      PARAGRAPH@57..78
+        CODE_SPAN@57..63
+          BACKTICK@57..58 "`"
+          TEXT@58..62 "code"
+          BACKTICK@62..63 "`"
+        WHITESPACE@63..64 " "
+        TEXT@64..66 "in"
+        WHITESPACE@66..67 " "
+        TEXT@67..72 "third"
+        WHITESPACE@72..73 " "
+        TEXT@73..77 "item"
+        NEWLINE@77..78 "\\n"

@@ -1,0 +1,25 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+BlockQuote [0..14]
+  segments:
+    Text [2..13] "Outer quote"
+BlockQuote [14..30]
+  segments:
+    Text [18..29] "Inner quote"
+  children:
+    BlockQuote [16..30]
+      segments:
+        Text [18..29] "Inner quote"
+BlockQuote [30..50]
+  segments:
+    Text [36..49] "Deepest quote"
+  children:
+    BlockQuote [32..50]
+      segments:
+        Text [36..49] "Deepest quote"
+      children:
+        BlockQuote [34..50]
+          segments:
+            Text [36..49] "Deepest quote"

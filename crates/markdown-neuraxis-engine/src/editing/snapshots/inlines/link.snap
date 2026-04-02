@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..33]
+  segments:
+    Link [0..32] text:"link text" url:"https://example.com"

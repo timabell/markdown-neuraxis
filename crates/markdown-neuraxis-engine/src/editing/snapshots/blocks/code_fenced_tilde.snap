@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+FencedCode { language: None } [0..25]
+  segments:
+    Text [4..20] "tilde code block"

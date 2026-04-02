@@ -1,0 +1,46 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Heading { level: 1 } [0..26]
+  segments:
+    Text [2..25] "eeting Notes 2024-01-15"
+Paragraph [26..87]
+  segments:
+    Text [26..86] "(no space after #, technically not a heading per CommonMark)"
+Heading { level: 2 } [88..103]
+  segments:
+    Text [91..102] "ction Items"
+List { ordered: false } [103..230]
+  children:
+    ListItem { marker: "- " } [103..136]
+      segments:
+        Text [109..114] "Call "
+        WikiLink [114..135] target:"John] about proje"
+    ListItem { marker: "- " } [136..157]
+      segments:
+        Text [142..156] "Review PR #123"
+    ListItem { marker: "* " } [157..178]
+      segments:
+        Text [159..177] "mixed bullet style"
+    ListItem { marker: "+ " } [178..230]
+      segments:
+        Text [180..193] "another style"
+      children:
+        List { ordered: false } [196..230]
+          children:
+            ListItem { marker: "- " } [196..229]
+              segments:
+                Text [198..228] "nested but inconsistent indent"
+BlockQuote [230..257]
+  segments:
+    Text [232..256] "half finished blockquote"
+Paragraph [257..282]
+  segments:
+    Text [257..281] "that continues without >"
+Paragraph [283..314]
+  segments:
+    Text [283..313] "Some <b>html that's not closed"
+FencedCode { language: Some("python") } [315..443]
+  segments:
+    Text [325..429] "def broken():\n    # oops forgot to close the fence\n\nRandom [[wikilink|with pipe]] and [[broken one\n\n---\n"

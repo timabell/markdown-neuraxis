@@ -1,0 +1,66 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..112
+  UNORDERED_LIST@0..112
+    LIST_ITEM@0..95
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..14
+        TEXT@2..8 "Parent"
+        WHITESPACE@8..9 " "
+        TEXT@9..13 "item"
+        NEWLINE@13..14 "\\n"
+      WHITESPACE@14..16 "  "
+      UNORDERED_LIST@16..95
+        LIST_ITEM@16..33
+          DASH@16..17 "-"
+          WHITESPACE@17..18 " "
+          PARAGRAPH@18..33
+            TEXT@18..23 "Child"
+            WHITESPACE@23..24 " "
+            TEXT@24..28 "item"
+            WHITESPACE@28..29 " "
+            TEXT@29..32 "one"
+            NEWLINE@32..33 "\\n"
+        WHITESPACE@33..35 "  "
+        LIST_ITEM@35..74
+          DASH@35..36 "-"
+          WHITESPACE@36..37 " "
+          PARAGRAPH@37..52
+            TEXT@37..42 "Child"
+            WHITESPACE@42..43 " "
+            TEXT@43..47 "item"
+            WHITESPACE@47..48 " "
+            TEXT@48..51 "two"
+            NEWLINE@51..52 "\\n"
+          WHITESPACE@52..56 "    "
+          UNORDERED_LIST@56..74
+            LIST_ITEM@56..74
+              DASH@56..57 "-"
+              WHITESPACE@57..58 " "
+              PARAGRAPH@58..74
+                TEXT@58..68 "Grandchild"
+                WHITESPACE@68..69 " "
+                TEXT@69..73 "item"
+                NEWLINE@73..74 "\\n"
+        WHITESPACE@74..76 "  "
+        LIST_ITEM@76..95
+          DASH@76..77 "-"
+          WHITESPACE@77..78 " "
+          PARAGRAPH@78..95
+            TEXT@78..83 "Child"
+            WHITESPACE@83..84 " "
+            TEXT@84..88 "item"
+            WHITESPACE@88..89 " "
+            TEXT@89..94 "three"
+            NEWLINE@94..95 "\\n"
+    LIST_ITEM@95..112
+      DASH@95..96 "-"
+      WHITESPACE@96..97 " "
+      PARAGRAPH@97..112
+        TEXT@97..104 "Another"
+        WHITESPACE@104..105 " "
+        TEXT@105..111 "parent"
+        NEWLINE@111..112 "\\n"

@@ -1,0 +1,24 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..26]
+  children:
+    ListItem { marker: "- " } [0..25]
+      segments:
+        Text [2..24] "First with empty blank"
+List { ordered: false } [26..48]
+  children:
+    ListItem { marker: "- " } [26..47]
+      segments:
+        Text [28..46] "Second after empty"
+List { ordered: false } [48..81]
+  children:
+    ListItem { marker: "- " } [48..78]
+      segments:
+        Text [50..77] "Third with whitespace blank"
+List { ordered: false } [81..107]
+  children:
+    ListItem { marker: "- " } [81..107]
+      segments:
+        Text [83..106] "Fourth after whitespace"

@@ -1008,10 +1008,17 @@ mod tests {
 
     /// Run a snapshot test for a given .md file.
     /// Called by generated test functions (see build.rs).
-    fn snapshot_test(name: &str) {
-        let snapshot_dir =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/editing/snapshots");
-        let input_path = snapshot_dir.join(format!("{name}.md"));
+    /// `rel_path` is relative to tests/snapshots/, e.g., "blocks/heading_h1".
+    fn snapshot_test(rel_path: &str) {
+        // Shared input files at workspace root
+        let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let input_path = workspace_root
+            .join("tests/snapshots")
+            .join(format!("{rel_path}.md"));
         let input = std::fs::read_to_string(&input_path).unwrap();
 
         let mut doc = Document::from_bytes(input.as_bytes()).unwrap();
@@ -1020,11 +1027,25 @@ mod tests {
         let snapshot = create_snapshot(&doc);
         let formatted = insta_format_snapshot(&snapshot);
 
+        // Snapshot output goes in crate-local directory, mirroring input structure
+        let crate_snap_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/editing/snapshots");
+        let rel_dir = std::path::Path::new(rel_path).parent();
+        let snapshot_dir = match rel_dir {
+            Some(d) if !d.as_os_str().is_empty() => crate_snap_dir.join(d),
+            _ => crate_snap_dir.clone(),
+        };
+        let snapshot_name = std::path::Path::new(rel_path)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+
         let mut settings = insta::Settings::clone_current();
         settings.set_prepend_module_to_snapshot(false);
-        settings.set_snapshot_path(&snapshot_dir);
+        settings.set_snapshot_path(snapshot_dir);
         settings.bind(|| {
-            insta::assert_snapshot!(name, formatted);
+            insta::assert_snapshot!(snapshot_name, formatted);
         });
     }
 

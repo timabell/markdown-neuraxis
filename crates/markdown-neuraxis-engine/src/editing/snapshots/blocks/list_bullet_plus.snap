@@ -1,0 +1,15 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..35]
+  children:
+    ListItem { marker: "+ " } [0..11]
+      segments:
+        Text [2..10] "Item one"
+    ListItem { marker: "+ " } [11..22]
+      segments:
+        Text [13..21] "Item two"
+    ListItem { marker: "+ " } [22..35]
+      segments:
+        Text [24..34] "Item three"

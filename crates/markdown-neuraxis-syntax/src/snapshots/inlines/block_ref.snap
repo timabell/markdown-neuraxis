@@ -1,0 +1,21 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..41
+  PARAGRAPH@0..41
+    BLOCK_REF@0..40
+      LPAREN@0..1 "("
+      LPAREN@1..2 "("
+      TEXT@2..10 "12345678"
+      DASH@10..11 "-"
+      TEXT@11..15 "1234"
+      DASH@15..16 "-"
+      TEXT@16..20 "1234"
+      DASH@20..21 "-"
+      TEXT@21..25 "1234"
+      DASH@25..26 "-"
+      TEXT@26..38 "123456789012"
+      RPAREN@38..39 ")"
+      RPAREN@39..40 ")"
+    NEWLINE@40..41 "\\n"

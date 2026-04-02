@@ -1,0 +1,54 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..70
+  UNORDERED_LIST@0..70
+    LIST_ITEM@0..70
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..10
+        TEXT@2..7 "Level"
+        WHITESPACE@7..8 " "
+        TEXT@8..9 "1"
+        NEWLINE@9..10 "\\n"
+      WHITESPACE@10..12 "  "
+      UNORDERED_LIST@12..70
+        LIST_ITEM@12..70
+          DASH@12..13 "-"
+          WHITESPACE@13..14 " "
+          PARAGRAPH@14..22
+            TEXT@14..19 "Level"
+            WHITESPACE@19..20 " "
+            TEXT@20..21 "2"
+            NEWLINE@21..22 "\\n"
+          WHITESPACE@22..26 "    "
+          UNORDERED_LIST@26..70
+            LIST_ITEM@26..70
+              DASH@26..27 "-"
+              WHITESPACE@27..28 " "
+              PARAGRAPH@28..36
+                TEXT@28..33 "Level"
+                WHITESPACE@33..34 " "
+                TEXT@34..35 "3"
+                NEWLINE@35..36 "\\n"
+              WHITESPACE@36..42 "      "
+              UNORDERED_LIST@42..70
+                LIST_ITEM@42..70
+                  DASH@42..43 "-"
+                  WHITESPACE@43..44 " "
+                  PARAGRAPH@44..52
+                    TEXT@44..49 "Level"
+                    WHITESPACE@49..50 " "
+                    TEXT@50..51 "4"
+                    NEWLINE@51..52 "\\n"
+                  WHITESPACE@52..60 "        "
+                  UNORDERED_LIST@60..70
+                    LIST_ITEM@60..70
+                      DASH@60..61 "-"
+                      WHITESPACE@61..62 " "
+                      PARAGRAPH@62..70
+                        TEXT@62..67 "Level"
+                        WHITESPACE@67..68 " "
+                        TEXT@68..69 "5"
+                        NEWLINE@69..70 "\\n"

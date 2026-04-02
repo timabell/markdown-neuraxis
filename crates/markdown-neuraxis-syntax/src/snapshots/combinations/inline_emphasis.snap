@@ -1,0 +1,50 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..96
+  PARAGRAPH@0..41
+    TEXT@0..4 "This"
+    WHITESPACE@4..5 " "
+    TEXT@5..8 "has"
+    WHITESPACE@8..9 " "
+    EMPHASIS@9..19
+      STAR@9..10 "*"
+      TEXT@10..18 "emphasis"
+      STAR@18..19 "*"
+    WHITESPACE@19..20 " "
+    TEXT@20..23 "and"
+    WHITESPACE@23..24 " "
+    STRONG@24..34
+      STAR@24..25 "*"
+      STAR@25..26 "*"
+      TEXT@26..32 "strong"
+      STAR@32..33 "*"
+      STAR@33..34 "*"
+    WHITESPACE@34..35 " "
+    TEXT@35..39 "text"
+    DOT@39..40 "."
+    NEWLINE@40..41 "\\n"
+  NEWLINE@41..42 "\\n"
+  PARAGRAPH@42..96
+    TEXT@42..46 "Also"
+    WHITESPACE@46..47 " "
+    EMPHASIS@47..68
+      UNDERSCORE@47..48 "_"
+      TEXT@48..58 "underscore"
+      WHITESPACE@58..59 " "
+      TEXT@59..67 "emphasis"
+      UNDERSCORE@67..68 "_"
+    WHITESPACE@68..69 " "
+    TEXT@69..72 "and"
+    WHITESPACE@72..73 " "
+    STRONG@73..94
+      UNDERSCORE@73..74 "_"
+      UNDERSCORE@74..75 "_"
+      TEXT@75..81 "double"
+      WHITESPACE@81..82 " "
+      TEXT@82..92 "underscore"
+      UNDERSCORE@92..93 "_"
+      UNDERSCORE@93..94 "_"
+    DOT@94..95 "."
+    NEWLINE@95..96 "\\n"

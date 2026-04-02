@@ -1,0 +1,35 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..50
+  BLOCK_QUOTE@0..14
+    GT@0..1 ">"
+    WHITESPACE@1..2 " "
+    TEXT@2..7 "Outer"
+    WHITESPACE@7..8 " "
+    TEXT@8..13 "quote"
+    NEWLINE@13..14 "\\n"
+  BLOCK_QUOTE@14..30
+    GT@14..15 ">"
+    WHITESPACE@15..16 " "
+    BLOCK_QUOTE@16..30
+      GT@16..17 ">"
+      WHITESPACE@17..18 " "
+      TEXT@18..23 "Inner"
+      WHITESPACE@23..24 " "
+      TEXT@24..29 "quote"
+      NEWLINE@29..30 "\\n"
+  BLOCK_QUOTE@30..50
+    GT@30..31 ">"
+    WHITESPACE@31..32 " "
+    BLOCK_QUOTE@32..50
+      GT@32..33 ">"
+      WHITESPACE@33..34 " "
+      BLOCK_QUOTE@34..50
+        GT@34..35 ">"
+        WHITESPACE@35..36 " "
+        TEXT@36..43 "Deepest"
+        WHITESPACE@43..44 " "
+        TEXT@44..49 "quote"
+        NEWLINE@49..50 "\\n"

@@ -1,0 +1,108 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..95]
+  children:
+    ListItem { marker: "- " } [0..80]
+      segments:
+        Text [2..29] "First item\n  continued here"
+      children:
+        BlockQuote [32..46]
+          segments:
+            Text [34..45] "quoted part"
+        BlockQuote [48..61]
+          segments:
+            Text [50..60] "more quote"
+        BlockQuote [63..80]
+          segments:
+            Text [66..79] "deeply nested"
+          children:
+            BlockQuote [64..80]
+              segments:
+                Text [66..79] "deeply nested"
+    ListItem { marker: "- " } [80..94]
+      segments:
+        Text [82..93] "Second item"
+List { ordered: true } [95..228]
+  children:
+    ListItem { marker: "1. " } [95..210]
+      segments:
+        Text [98..116] "Numbered with code"
+      children:
+        FencedCode { language: Some("rust") } [120..188]
+          segments:
+            Text [128..180] "   fn example() {\n       println!(\"in a list\");\n   }"
+        List { ordered: true } [191..210]
+          children:
+            ListItem { marker: "1. " } [191..210]
+              segments:
+                Text [194..209] "Nested numbered"
+    ListItem { marker: "2. " } [210..227]
+      segments:
+        Text [213..226] "More numbered"
+List { ordered: false } [228..437]
+  children:
+    ListItem { marker: "- " } [228..424]
+      segments:
+        Text [230..246] "Deep blockquotes"
+      children:
+        BlockQuote [249..261]
+          segments:
+            Text [251..260] "level one"
+        BlockQuote [263..275]
+          segments:
+            Text [265..274] "continued"
+        BlockQuote [277..290]
+          segments:
+            Text [280..289] "level two"
+          children:
+            BlockQuote [278..290]
+              segments:
+                Text [280..289] "level two"
+        BlockQuote [292..310]
+          segments:
+            Text [295..309] "also continued"
+          children:
+            BlockQuote [293..310]
+              segments:
+                Text [295..309] "also continued"
+        BlockQuote [312..343]
+          segments:
+            Text [316..342] "level three with long text"
+          children:
+            BlockQuote [313..343]
+              segments:
+                Text [316..342] "level three with long text"
+              children:
+                BlockQuote [314..343]
+                  segments:
+                    Text [316..342] "level three with long text"
+        BlockQuote [345..378]
+          segments:
+            Text [349..377] "that wraps to multiple lines"
+          children:
+            BlockQuote [346..378]
+              segments:
+                Text [349..377] "that wraps to multiple lines"
+              children:
+                BlockQuote [347..378]
+                  segments:
+                    Text [349..377] "that wraps to multiple lines"
+        BlockQuote [380..402]
+          segments:
+            Text [384..401] "in the blockquote"
+          children:
+            BlockQuote [381..402]
+              segments:
+                Text [384..401] "in the blockquote"
+              children:
+                BlockQuote [382..402]
+                  segments:
+                    Text [384..401] "in the blockquote"
+        BlockQuote [404..424]
+          segments:
+            Text [406..423] "back to level one"
+    ListItem { marker: "- " } [424..437]
+      segments:
+        Text [426..436] "Final item"

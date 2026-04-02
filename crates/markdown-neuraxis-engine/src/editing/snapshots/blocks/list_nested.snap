@@ -1,0 +1,27 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..86]
+  children:
+    ListItem { marker: "- " } [0..69]
+      segments:
+        Text [2..13] "Parent item"
+      children:
+        List { ordered: false } [16..69]
+          children:
+            ListItem { marker: "- " } [16..51]
+              segments:
+                Text [18..28] "Child item"
+              children:
+                List { ordered: false } [33..51]
+                  children:
+                    ListItem { marker: "- " } [33..51]
+                      segments:
+                        Text [35..50] "Grandchild item"
+            ListItem { marker: "- " } [53..69]
+              segments:
+                Text [55..68] "Another child"
+    ListItem { marker: "- " } [69..86]
+      segments:
+        Text [71..85] "Another parent"

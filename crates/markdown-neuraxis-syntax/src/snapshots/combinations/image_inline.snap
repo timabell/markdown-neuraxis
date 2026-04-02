@@ -1,0 +1,53 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..78
+  PARAGRAPH@0..33
+    TEXT@0..2 "An"
+    WHITESPACE@2..3 " "
+    TEXT@3..8 "image"
+    COLON@8..9 ":"
+    WHITESPACE@9..10 " "
+    IMAGE@10..32
+      EXCLAIM@10..11 "!"
+      LBRACKET@11..12 "["
+      TEXT@12..15 "alt"
+      WHITESPACE@15..16 " "
+      TEXT@16..20 "text"
+      RBRACKET@20..21 "]"
+      LPAREN@21..22 "("
+      TEXT@22..27 "image"
+      DOT@27..28 "."
+      TEXT@28..31 "png"
+      RPAREN@31..32 ")"
+    NEWLINE@32..33 "\\n"
+  NEWLINE@33..34 "\\n"
+  PARAGRAPH@34..49
+    TEXT@34..39 "Image"
+    WHITESPACE@39..40 " "
+    TEXT@40..42 "in"
+    WHITESPACE@42..43 " "
+    TEXT@43..47 "list"
+    COLON@47..48 ":"
+    NEWLINE@48..49 "\\n"
+  UNORDERED_LIST@49..78
+    LIST_ITEM@49..78
+      DASH@49..50 "-"
+      WHITESPACE@50..51 " "
+      PARAGRAPH@51..78
+        IMAGE@51..68
+          EXCLAIM@51..52 "!"
+          LBRACKET@52..53 "["
+          TEXT@53..57 "icon"
+          RBRACKET@57..58 "]"
+          LPAREN@58..59 "("
+          TEXT@59..63 "icon"
+          DOT@63..64 "."
+          TEXT@64..67 "png"
+          RPAREN@67..68 ")"
+        WHITESPACE@68..69 " "
+        TEXT@69..73 "Item"
+        WHITESPACE@73..74 " "
+        TEXT@74..77 "one"
+        NEWLINE@77..78 "\\n"
