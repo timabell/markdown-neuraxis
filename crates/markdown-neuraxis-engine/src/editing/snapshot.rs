@@ -95,41 +95,25 @@ pub struct Block {
     pub segments: Vec<InlineSegment>,
     /// Block content (text or children)
     pub content: BlockContent,
-    /// Explicit end position for editable content, used by `content_range()`.
-    ///
-    /// For list items with nested children, the syntax tree includes structural
-    /// whitespace (indentation) between the paragraph and nested blocks:
-    /// ```text
-    /// LIST_ITEM@0..25
-    ///   PARAGRAPH@0..10      <- editable content ends here
-    ///   WHITESPACE@10..14    <- structural indent (NOT editable)
-    ///   UNORDERED_LIST@14..25
-    /// ```
-    /// Without this field, `content_range()` would use `first_child.node_range.start`
-    /// (14), incorrectly including the whitespace. This field stores the paragraph
-    /// end (10) so editing shows "- item\n" not "- item\n    ".
-    pub content_end: Option<usize>,
 }
 
 impl Block {
     /// Byte range of this block's content in the source.
     ///
     /// For leaf blocks, this equals `node_range`.
-    /// For blocks with children, this is the range before children begin -
-    /// includes the marker and any continuation lines, but excludes nested blocks.
+    /// For blocks with children, this is the range up to the last segment's end -
+    /// includes the marker and text content, but excludes structural whitespace
+    /// and nested blocks.
     pub fn content_range(&self) -> Range<usize> {
-        // Use explicit content_end if set (excludes structural whitespace)
-        if let Some(end) = self.content_end {
-            return self.node_range.start..end;
-        }
-
         match &self.content {
             BlockContent::Leaf => self.node_range.clone(),
-            BlockContent::Children(children) => {
-                if let Some(first_child) = children.first() {
-                    self.node_range.start..first_child.node_range.start
+            BlockContent::Children(_) => {
+                // Use last segment's end to exclude structural whitespace
+                // between content and nested children
+                if let Some(last_segment) = self.segments.last() {
+                    self.node_range.start..last_segment.range.end
                 } else {
-                    // Children vector is empty - treat as leaf
+                    // No segments - use full node_range
                     self.node_range.clone()
                 }
             }
@@ -254,7 +238,6 @@ fn process_list(
         node_range,
         segments: vec![],
         content: BlockContent::Children(children),
-        content_end: None,
     })
 }
 
@@ -286,9 +269,6 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
         }
     }
 
-    // Track whether we have nested children
-    let has_nested_children = !children.is_empty();
-
     let content = if children.is_empty() {
         BlockContent::Leaf
     } else {
@@ -298,9 +278,8 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
     // Look up anchor ID for this list item
     let id = find_anchor_for_range(anchors, &node_range);
 
-    // Extract segments from the list item's content and track paragraph end
+    // Extract segments from the list item's content
     // We look in the PARAGRAPH child (if present) since that's where inlines live
-    let mut paragraph_end: Option<usize> = None;
     let segments = node
         .children()
         .find(|c| c.kind() == SyntaxKind::PARAGRAPH)
@@ -309,11 +288,8 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
             // and exclude trailing newline
             let para_range = para.text_range();
             let para_start: usize = para_range.start().into();
-            let para_end_with_newline: usize = para_range.end().into();
-            // Track the full paragraph end (including newline) for content_end
-            paragraph_end = Some(para_end_with_newline);
-            let mut para_end = para_end_with_newline;
-            // Strip trailing newline from content range for segments
+            let mut para_end: usize = para_range.end().into();
+            // Strip trailing newline - not needed for editing or segment extraction
             if para_end > para_start && source.as_bytes().get(para_end - 1) == Some(&b'\n') {
                 para_end -= 1;
             }
@@ -335,21 +311,12 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
             vec![]
         });
 
-    // Set explicit content_end when we have nested children to exclude
-    // structural whitespace between paragraph and nested blocks
-    let content_end = if has_nested_children {
-        paragraph_end
-    } else {
-        None
-    };
-
     Some(Block {
         id,
         kind: BlockKind::ListItem { marker },
         node_range,
         segments,
         content,
-        content_end,
     })
 }
 
@@ -376,7 +343,6 @@ fn process_paragraph(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
         node_range,
         segments,
         content: BlockContent::Leaf,
-        content_end: None,
     })
 }
 
@@ -419,7 +385,6 @@ fn process_block_quote(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Op
         node_range,
         segments,
         content,
-        content_end: None,
     })
 }
 
@@ -449,7 +414,6 @@ fn process_heading(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option
         node_range,
         segments,
         content: BlockContent::Leaf,
-        content_end: None,
     })
 }
 
@@ -504,7 +468,6 @@ fn process_fenced_code(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Op
         node_range,
         segments,
         content: BlockContent::Leaf,
-        content_end: None,
     })
 }
 
@@ -522,7 +485,6 @@ fn process_thematic_break(_source: &str, node: SyntaxNode, anchors: &[Anchor]) -
         node_range,
         segments: vec![],
         content: BlockContent::Leaf,
-        content_end: None,
     })
 }
 
@@ -2060,11 +2022,11 @@ mod tests {
             );
         }
 
-        // Verify we can slice the content (should be "- parent\n")
+        // Verify we can slice the content (should be "- parent" without trailing newline)
         let content = &text[content_range.clone()];
         assert_eq!(
-            content, "- parent\n",
-            "Content should be exactly '- parent\\n'"
+            content, "- parent",
+            "Content should be exactly '- parent' (no trailing newline)"
         );
         assert!(
             content.contains("parent"),
@@ -2073,6 +2035,48 @@ mod tests {
         assert!(
             !content.contains("child"),
             "Content should NOT include 'child'"
+        );
+    }
+
+    #[test]
+    fn test_content_range_excludes_trailing_newline_for_editing() {
+        // When editing a list item with nested children, the content should
+        // NOT include the trailing newline - it's structural, not editable content.
+        // The textarea should show "- parent" not "- parent\n"
+        let text = "- parent\n  - child\n";
+        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        doc.create_anchors_from_tree();
+        let snapshot = doc.snapshot();
+
+        fn find_parent_item(blocks: &[Block]) -> Option<&Block> {
+            for block in blocks {
+                if matches!(block.kind, BlockKind::ListItem { .. })
+                    && matches!(block.content, BlockContent::Children(_))
+                {
+                    return Some(block);
+                }
+                if let BlockContent::Children(children) = &block.content
+                    && let Some(found) = find_parent_item(children)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let parent = find_parent_item(&snapshot.blocks).expect("Should have parent list item");
+        let content_range = parent.content_range();
+        let content = &text[content_range];
+
+        // Content should NOT end with newline for editing purposes
+        assert!(
+            !content.ends_with('\n'),
+            "Edit content should not include trailing newline, got: {:?}",
+            content
+        );
+        assert_eq!(
+            content, "- parent",
+            "Content should be '- parent' without trailing newline"
         );
     }
 
