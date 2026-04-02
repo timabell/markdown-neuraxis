@@ -19,15 +19,12 @@ List { ordered: false } [60..125]
       children:
         List { ordered: false } [76..110]
           children:
-            ListItem { marker: "- " } [76..110]
+            ListItem { marker: "- " } [76..92]
               segments:
                 Text [78..91] "Sub-feature A"
-              children:
-                List { ordered: false } [94..110]
-                  children:
-                    ListItem { marker: "- " } [94..110]
-                      segments:
-                        Text [96..109] "Sub-feature B"
+            ListItem { marker: "- " } [94..110]
+              segments:
+                Text [96..109] "Sub-feature B"
     ListItem { marker: "- " } [110..124]
       segments:
         Text [112..123] "Feature two"

@@ -3,6 +3,7 @@ use crate::ui::components::document_content::DocumentContent;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Cmd, Document, Snapshot};
 use markdown_neuraxis_engine::models::MarkdownFile;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -17,6 +18,9 @@ pub fn MainPanel(
     on_wikilink_click: Callback<String>,
 ) -> Element {
     let mut focused_anchor_id = use_signal(|| None::<AnchorId>);
+    let collapsed_ids = use_signal(HashSet::<AnchorId>::new);
+    let context_menu_position = use_signal(|| None::<(f64, f64)>);
+    let context_menu_block = use_signal(|| None::<AnchorId>);
     let snapshot_clone = snapshot.clone();
     let mut navigate_to_block = create_navigation_handler(focused_anchor_id, snapshot_clone);
     let display_name = file.display_path();
@@ -43,6 +47,9 @@ pub fn MainPanel(
                     notes_path,
                     document,
                     focused_anchor_id,
+                    collapsed_ids,
+                    context_menu_position,
+                    context_menu_block,
                     on_file_select,
                     on_command,
                     on_wikilink_click

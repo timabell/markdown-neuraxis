@@ -187,6 +187,7 @@ hr {
 .document-content {
     max-width: 800px;
     line-height: 1.6;
+    margin-left: 20px; /* Room for collapse toggles */
 }
 
 .empty-document {
@@ -199,6 +200,7 @@ hr {
     margin: 24px 0 16px 0;
     color: var(--base02);
     font-weight: 600;
+    position: relative;
 }
 
 .heading.level-1 {
@@ -243,6 +245,12 @@ hr {
 .list-item {
     margin: 4px 0;
     line-height: 1.5;
+    position: relative;
+}
+
+.list-item-content {
+    display: inline;
+    width: auto;
 }
 
 /* Code block styles */
@@ -743,4 +751,71 @@ hr {
     .mobile-bottom-bar {
         display: none;
     }
+}
+
+/* Collapse toggle for outliner */
+.collapse-toggle {
+    position: absolute;
+    left: -17px;
+    width: 16px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--base01);
+    font-size: 10px;
+    text-align: center;
+}
+
+.collapse-toggle:hover {
+    color: var(--blue);
+}
+
+/* Heading toggles - vertically centered */
+.heading .collapse-toggle {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* List item toggles - align with first line */
+.list-item > .collapse-toggle {
+    top: 0.9em;
+    left: -40px;
+}
+
+/* Context menu for collapse toggles */
+.collapse-context-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+}
+
+.collapse-context-menu {
+    position: fixed;
+    background: var(--base3);
+    border: 1px solid var(--base1);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 150px;
+    padding: 4px 0;
+}
+
+.collapse-context-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--base01);
+    font-size: 14px;
+}
+
+.collapse-context-menu-item:hover {
+    background: var(--base2);
+}
+
+.collapse-context-menu-separator {
+    height: 1px;
+    background: var(--base1);
+    margin: 4px 0;
 }

@@ -399,16 +399,16 @@ fn blockquote(p: &mut Parser<'_, '_>) {
 }
 
 /// Parse a list (consecutive list items wrapped in LIST node).
-/// `nested` indicates if this list is inside a list item (requires indentation for siblings).
-fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
+/// `sibling_indent_len` is the whitespace length expected for sibling items (0 for root level).
+fn list_ext(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
     let m = p.start();
 
     // Parse the first list item and track whether it's ordered
     let is_ordered = is_numbered_list_item(p);
     if is_ordered {
-        list_item_numbered(p);
+        list_item_numbered(p, sibling_indent_len);
     } else {
-        list_item(p);
+        list_item(p, sibling_indent_len);
     }
 
     // Continue parsing list items at the same level
@@ -433,12 +433,17 @@ fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
             break;
         }
 
-        // For nested lists, siblings must be indented
-        if nested {
+        // For nested lists, siblings must be indented at the correct level
+        if sibling_indent_len > 0 {
             if !p.at(SyntaxKind::WHITESPACE) {
                 break; // Outdented - not part of this nested list
             }
-            // Consume indentation and check for list marker
+            // Check that whitespace length matches expected sibling indent
+            let ws_len = p.current_text().len();
+            if ws_len != sibling_indent_len {
+                break; // Different indent level - not a sibling in this list
+            }
+            // Consume matching indentation
             p.bump();
             match p.current() {
                 SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
@@ -448,13 +453,13 @@ fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
                     if blank_count > 0 {
                         break;
                     }
-                    list_item(p);
+                    list_item(p, sibling_indent_len);
                 }
                 SyntaxKind::TEXT if is_numbered_list_item(p) => {
                     if blank_count > 0 {
                         break;
                     }
-                    list_item_numbered(p);
+                    list_item_numbered(p, sibling_indent_len);
                 }
                 _ => break,
             }
@@ -468,13 +473,13 @@ fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
                     if blank_count > 0 {
                         break;
                     }
-                    list_item(p);
+                    list_item(p, 0);
                 }
                 SyntaxKind::TEXT if is_numbered_list_item(p) => {
                     if blank_count > 0 {
                         break;
                     }
-                    list_item_numbered(p);
+                    list_item_numbered(p, 0);
                 }
                 _ => break, // Not a list item, end the list
             }
@@ -491,12 +496,12 @@ fn list_ext(p: &mut Parser<'_, '_>, nested: bool) {
 
 /// Parse a root-level list.
 fn list(p: &mut Parser<'_, '_>) {
-    list_ext(p, false);
+    list_ext(p, 0);
 }
 
-/// Parse a nested list (inside a list item).
-fn nested_list(p: &mut Parser<'_, '_>) {
-    list_ext(p, true);
+/// Parse a nested list (inside a list item) at the given sibling indentation level.
+fn nested_list(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
+    list_ext(p, sibling_indent_len);
 }
 
 /// Parse a list item.
@@ -506,7 +511,9 @@ fn nested_list(p: &mut Parser<'_, '_>) {
 /// - Content wrapped in PARAGRAPH
 /// - Optional continuation lines (indented)
 /// - Optional nested blocks (blockquotes, nested lists)
-fn list_item(p: &mut Parser<'_, '_>) {
+///
+/// `sibling_indent_len` is the whitespace length for sibling items at the same level.
+fn list_item(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
     let m = p.start();
 
     // Consume the marker (-, *, +)
@@ -520,13 +527,14 @@ fn list_item(p: &mut Parser<'_, '_>) {
     }
 
     // Parse content as PARAGRAPH child
-    list_item_content(p);
+    list_item_content(p, sibling_indent_len);
 
     m.complete(p, SyntaxKind::LIST_ITEM);
 }
 
 /// Parse list item content (PARAGRAPH with continuations, then nested blocks).
-fn list_item_content(p: &mut Parser<'_, '_>) {
+/// `sibling_indent_len` is the whitespace length for sibling items at the same level.
+fn list_item_content(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
     // Check for checkbox at start: [ ] or [x] or [X]
     if is_checkbox(p) {
         checkbox(p);
@@ -570,14 +578,14 @@ fn list_item_content(p: &mut Parser<'_, '_>) {
             SyntaxKind::GT => {
                 // Blockquote - end paragraph, parse blockquote as sibling
                 para.complete(p, SyntaxKind::PARAGRAPH);
-                list_item_nested_blocks(p);
+                list_item_nested_blocks(p, sibling_indent_len);
                 return;
             }
             SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
                 // Could be nested list item
                 if p.nth(2) == SyntaxKind::WHITESPACE {
                     para.complete(p, SyntaxKind::PARAGRAPH);
-                    list_item_nested_blocks(p);
+                    list_item_nested_blocks(p, sibling_indent_len);
                     return;
                 }
                 // Otherwise it's just text, continue paragraph
@@ -586,7 +594,7 @@ fn list_item_content(p: &mut Parser<'_, '_>) {
                 // Could be nested numbered list item (e.g., "   1. item")
                 if p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE {
                     para.complete(p, SyntaxKind::PARAGRAPH);
-                    list_item_nested_blocks(p);
+                    list_item_nested_blocks(p, sibling_indent_len);
                     return;
                 }
                 // Otherwise it's just text, continue paragraph
@@ -595,7 +603,7 @@ fn list_item_content(p: &mut Parser<'_, '_>) {
                 // Could be fenced code block
                 if is_code_fence_at(p, 1) {
                     para.complete(p, SyntaxKind::PARAGRAPH);
-                    list_item_nested_blocks(p);
+                    list_item_nested_blocks(p, sibling_indent_len);
                     return;
                 }
                 // Otherwise it's inline code, continue paragraph
@@ -615,7 +623,9 @@ fn list_item_content(p: &mut Parser<'_, '_>) {
 }
 
 /// Parse nested blocks within a list item (blockquotes, nested lists, fenced code).
-fn list_item_nested_blocks(p: &mut Parser<'_, '_>) {
+/// `sibling_indent_len` is the whitespace length for sibling items - we only parse
+/// nested content when the current whitespace is LONGER than this (deeper nesting).
+fn list_item_nested_blocks(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
     loop {
         if p.at_end() {
             break;
@@ -623,6 +633,14 @@ fn list_item_nested_blocks(p: &mut Parser<'_, '_>) {
 
         // Must start with whitespace (indentation)
         if !p.at(SyntaxKind::WHITESPACE) {
+            break;
+        }
+
+        // Check indentation level - only process if DEEPER than sibling indent
+        let ws_len = p.current_text().len();
+        if ws_len <= sibling_indent_len {
+            // Same or less indentation = sibling item, not nested content
+            // Don't consume - let list_ext handle it
             break;
         }
 
@@ -636,9 +654,9 @@ fn list_item_nested_blocks(p: &mut Parser<'_, '_>) {
             }
             SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
                 if p.nth(2) == SyntaxKind::WHITESPACE {
-                    // Nested bullet list
+                    // Nested bullet list - pass the NEW indent level for its siblings
                     p.bump(); // consume indentation
-                    nested_list(p);
+                    nested_list(p, ws_len);
                     break; // Only one nested list
                 } else {
                     break;
@@ -648,7 +666,7 @@ fn list_item_nested_blocks(p: &mut Parser<'_, '_>) {
                 // Could be nested numbered list (e.g., "   1. item")
                 if p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE {
                     p.bump(); // consume indentation
-                    nested_list(p);
+                    nested_list(p, ws_len);
                     break;
                 } else {
                     break;
@@ -739,7 +757,8 @@ fn is_numbered_list_item(p: &Parser<'_, '_>) -> bool {
 }
 
 /// Parse a numbered list item (e.g., "1. item")
-fn list_item_numbered(p: &mut Parser<'_, '_>) {
+/// `sibling_indent_len` is the whitespace length for sibling items at the same level.
+fn list_item_numbered(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
     let m = p.start();
 
     // Consume the number
@@ -755,7 +774,7 @@ fn list_item_numbered(p: &mut Parser<'_, '_>) {
     }
 
     // Parse content as PARAGRAPH child
-    list_item_content(p);
+    list_item_content(p, sibling_indent_len);
 
     m.complete(p, SyntaxKind::LIST_ITEM);
 }

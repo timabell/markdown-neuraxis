@@ -10,27 +10,21 @@ List { ordered: false } [0..112]
       children:
         List { ordered: false } [16..95]
           children:
-            ListItem { marker: "- " } [16..95]
+            ListItem { marker: "- " } [16..33]
               segments:
                 Text [18..32] "Child item one"
+            ListItem { marker: "- " } [35..74]
+              segments:
+                Text [37..51] "Child item two"
               children:
-                List { ordered: false } [35..95]
+                List { ordered: false } [56..74]
                   children:
-                    ListItem { marker: "- " } [35..95]
+                    ListItem { marker: "- " } [56..74]
                       segments:
-                        Text [37..51] "Child item two"
-                      children:
-                        List { ordered: false } [56..95]
-                          children:
-                            ListItem { marker: "- " } [56..95]
-                              segments:
-                                Text [58..73] "Grandchild item"
-                              children:
-                                List { ordered: false } [76..95]
-                                  children:
-                                    ListItem { marker: "- " } [76..95]
-                                      segments:
-                                        Text [78..94] "Child item three"
+                        Text [58..73] "Grandchild item"
+            ListItem { marker: "- " } [76..95]
+              segments:
+                Text [78..94] "Child item three"
     ListItem { marker: "- " } [95..112]
       segments:
         Text [97..111] "Another parent"

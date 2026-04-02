@@ -1,14 +1,38 @@
-# markdown-neuraxis
-
-Abbreviations: MdNX, Madnax.
-
-⚠️⚠️ WARNING: This tool is in early development and will 100% corrupt your markdown files and possibly more. Only run this against data you have backed up, or throw-away copies for testing. There are known editing bugs that will lose markdown content due to read/write of markdown items that are not yet properly supported ⚠️⚠️
-
-**The central nervous system for your digital life, built on plain-text markdown.**
+# Markdown Neuraxis
 
 [github.com/timabell/markdown-neuraxis](https://github.com/timabell/markdown-neuraxis)
 
-![](doc/screenshot-of-app.png)
+**The central nervous system for your digital life, built on plain-text markdown.**
+
+⚠️⚠️ WARNING: This tool is in early development and will 100% corrupt your markdown files and possibly more. Only run this against data you have backed up, or throw-away copies for testing. There are known editing bugs that will lose markdown content due to read/write of markdown items that are not yet properly supported ⚠️⚠️
+
+![screenshot](doc/screenshot-of-app.png)
+
+Possible abbreviations: MdNX, Madnax.
+
+## What is markdown-neuraxis now
+
+- Markdown first
+- Local / privacy first
+- Open Source - A-GPL licensed
+- An outliner (collapsible bullets)
+- Cross-platform
+  - Desktop - Windows / Linux / Mac (with Dioxus)
+  - Mobile - Android with native Kotlin UI
+	- Terminal/command-line TUI (Text User Interface)
+- Fast Rust engine
+- Flexible in folder & file structure
+
+There is currently nothing out there that hits all these points. Sadly logseq is going db-first from markdown-first and the android app has stagnated and is slow; obsidian people love but is closed-source. Many markdown tools are cloud-first SaaS products.
+
+## What will markdown-neuraxis become
+
+- A great tool for GTD
+- A guided PARA experience
+- A daily journal
+- Support for plugins
+- A useful read-it-later tool
+- Much more - I have a huge backlog of ideas for this, and would welcome all input
 
 ## Join the early community
 
@@ -164,16 +188,6 @@ The editor uses a Logseq-style block-based editing system:
 - All other blocks remain rendered for context
 - Changes are automatically saved to disk when editing completes
 - Supports all markdown block types: paragraphs, headings, lists, code blocks, quotes
-
-## 🌱 Why This, Now?
-
-All existing tools either:
-
-- Sacrifice local control (SaaS lock-in)
-- Are not FOSS
-- Do not treat the plain text markdown files as the primary source of truth
-- Slow down (Electron bloat)
-- Miss the glue between **task**, **note**, **project**, and **life purpose**
 
 ## Get involved, show your support
 
