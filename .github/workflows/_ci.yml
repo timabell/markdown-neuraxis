@@ -123,10 +123,7 @@ jobs:
           sed -i.bak "s/^version = .*/version = \"$version\"/" Cargo.toml
 
       - name: Build binaries
-        run: |
-          cargo build --release --target ${{ matrix.target }} \
-            --package markdown-neuraxis-cli \
-            --package markdown-neuraxis-dioxus
+        run: cargo build --release --target ${{ matrix.target }} --package markdown-neuraxis-cli --package markdown-neuraxis-dioxus
 
       - name: Run tests
         run: cargo test --release --target ${{ matrix.target }}
