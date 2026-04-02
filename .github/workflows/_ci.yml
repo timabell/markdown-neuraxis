@@ -122,13 +122,11 @@ jobs:
           version="${version#v}"  # Remove 'v' prefix if present
           sed -i.bak "s/^version = .*/version = \"$version\"/" Cargo.toml
 
-      - name: Build CLI binary
+      - name: Build binaries
         run: |
-          cargo build --release --target ${{ matrix.target }} --package markdown-neuraxis-cli
-
-      - name: Build Dioxus binary
-        run: |
-          cargo build --release --target ${{ matrix.target }} --package markdown-neuraxis-dioxus
+          cargo build --release --target ${{ matrix.target }} \
+            --package markdown-neuraxis-cli \
+            --package markdown-neuraxis-dioxus
 
       - name: Run tests
         run: cargo test --release --target ${{ matrix.target }}
