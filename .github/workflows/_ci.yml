@@ -177,6 +177,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
@@ -222,15 +227,10 @@ jobs:
           version="${version#v}"
           sed -i "s/versionName = .*/versionName = \"$version\"/" android/app/build.gradle.kts
 
-      - name: Generate gradle wrapper
-        run: |
-          cd android
-          gradle wrapper --gradle-version 8.9
-
       - name: Build Android APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          gradle assembleDebug
 
       - name: Prepare artifacts
         run: |
