@@ -12,6 +12,7 @@ pub fn CollapseToggle(
     block_id: AnchorId,
     is_collapsed: bool,
     collapsed_ids: Signal<HashSet<AnchorId>>,
+    on_context_menu: Option<Callback<(AnchorId, f64, f64)>>,
 ) -> Element {
     rsx! {
         span {
@@ -28,6 +29,14 @@ pub fn CollapseToggle(
                     }
                 }
             },
+            oncontextmenu: move |evt: Event<MouseData>| {
+                evt.prevent_default();
+                evt.stop_propagation();
+                if let Some(ref cb) = on_context_menu {
+                    let coords = evt.client_coordinates();
+                    cb.call((block_id, coords.x, coords.y));
+                }
+            },
             if is_collapsed { "▶" } else { "▼" }
         }
     }
@@ -39,6 +48,7 @@ pub fn BlockRenderer(
     source: String,
     focused_anchor_id: Signal<Option<AnchorId>>,
     collapsed_ids: Signal<HashSet<AnchorId>>,
+    on_context_menu: Option<Callback<(AnchorId, f64, f64)>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
@@ -57,6 +67,7 @@ pub fn BlockRenderer(
                             source: source.clone(),
                             focused_anchor_id,
                             collapsed_ids,
+                            on_context_menu,
                             on_command,
                             on_wikilink_click
                         }
@@ -80,6 +91,7 @@ pub fn BlockRenderer(
                                     source: source.clone(),
                                     focused_anchor_id,
                                     collapsed_ids,
+                                    on_context_menu,
                                     on_command,
                                     on_wikilink_click
                                 }
@@ -97,6 +109,7 @@ pub fn BlockRenderer(
                                     source: source.clone(),
                                     focused_anchor_id,
                                     collapsed_ids,
+                                    on_context_menu,
                                     on_command,
                                     on_wikilink_click
                                 }
@@ -122,7 +135,7 @@ pub fn BlockRenderer(
                     li {
                         class: "list-item",
                         if has_children {
-                            CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                            CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                         }
                         EditorBlock {
                             block: block_clone,
@@ -144,6 +157,7 @@ pub fn BlockRenderer(
                                         source: source.clone(),
                                         focused_anchor_id,
                                         collapsed_ids,
+                                        on_context_menu,
                                         on_command,
                                         on_wikilink_click
                                     }
@@ -158,7 +172,7 @@ pub fn BlockRenderer(
                     li {
                         class: "list-item",
                         if has_children {
-                            CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                            CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                         }
                         span {
                             class: "list-item-content clickable-block",
@@ -184,6 +198,7 @@ pub fn BlockRenderer(
                                         source: source.clone(),
                                         focused_anchor_id,
                                         collapsed_ids,
+                                        on_context_menu,
                                         on_command,
                                         on_wikilink_click
                                     }
@@ -201,6 +216,7 @@ pub fn BlockRenderer(
                 level: *level,
                 focused_anchor_id,
                 collapsed_ids,
+                on_context_menu,
                 on_command,
                 on_wikilink_click
             }

@@ -12,6 +12,7 @@ pub fn Heading(
     level: u8,
     focused_anchor_id: Signal<Option<AnchorId>>,
     collapsed_ids: Signal<HashSet<AnchorId>>,
+    on_context_menu: Option<Callback<(AnchorId, f64, f64)>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
@@ -54,7 +55,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
-                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -68,7 +69,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
-                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -82,7 +83,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
-                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -96,7 +97,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
-                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -110,7 +111,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
-                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -124,7 +125,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
-                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },

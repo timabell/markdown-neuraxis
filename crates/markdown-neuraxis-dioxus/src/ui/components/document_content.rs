@@ -1,3 +1,4 @@
+use crate::ui::components::CollapseContextMenu;
 use crate::ui::components::block::BlockRenderer;
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockKind, Cmd, Document, Snapshot};
@@ -14,12 +15,23 @@ pub fn DocumentContent(
     document: Arc<Document>,
     focused_anchor_id: Signal<Option<AnchorId>>,
     collapsed_ids: Signal<HashSet<AnchorId>>,
+    mut context_menu_position: Signal<Option<(f64, f64)>>,
+    mut context_menu_block: Signal<Option<AnchorId>>,
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
     // Compute which block indices are hidden due to heading collapse
     let hidden_indices = compute_hidden_heading_sections(&snapshot.blocks, &collapsed_ids.read());
+
+    // Create callback for context menu
+    let on_context_menu = Callback::new(move |(block_id, x, y): (AnchorId, f64, f64)| {
+        context_menu_position.set(Some((x, y)));
+        context_menu_block.set(Some(block_id));
+    });
+
+    // Clone snapshot for context menu
+    let snapshot_for_menu = snapshot.clone();
 
     rsx! {
         div {
@@ -32,9 +44,23 @@ pub fn DocumentContent(
                         source: source.clone(),
                         focused_anchor_id,
                         collapsed_ids,
+                        on_context_menu: Some(on_context_menu),
                         on_command,
                         on_wikilink_click
                     }
+                }
+            }
+            // Render context menu if active
+            if let (Some(pos), Some(block_id)) = (*context_menu_position.read(), *context_menu_block.read()) {
+                CollapseContextMenu {
+                    position: pos,
+                    block_id,
+                    snapshot: snapshot_for_menu.clone(),
+                    collapsed_ids,
+                    on_close: Callback::new(move |_| {
+                        context_menu_position.set(None);
+                        context_menu_block.set(None);
+                    })
                 }
             }
         }

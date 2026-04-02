@@ -780,3 +780,42 @@ hr {
     top: 0.9em;
     left: -40px;
 }
+
+/* Context menu for collapse toggles */
+.collapse-context-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+}
+
+.collapse-context-menu {
+    position: fixed;
+    background: var(--base3);
+    border: 1px solid var(--base1);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 150px;
+    padding: 4px 0;
+}
+
+.collapse-context-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--base01);
+    font-size: 14px;
+}
+
+.collapse-context-menu-item:hover {
+    background: var(--base2);
+}
+
+.collapse-context-menu-separator {
+    height: 1px;
+    background: var(--base1);
+    margin: 4px 0;
+}

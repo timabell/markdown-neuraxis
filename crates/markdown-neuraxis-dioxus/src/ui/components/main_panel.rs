@@ -19,6 +19,8 @@ pub fn MainPanel(
 ) -> Element {
     let mut focused_anchor_id = use_signal(|| None::<AnchorId>);
     let collapsed_ids = use_signal(HashSet::<AnchorId>::new);
+    let context_menu_position = use_signal(|| None::<(f64, f64)>);
+    let context_menu_block = use_signal(|| None::<AnchorId>);
     let snapshot_clone = snapshot.clone();
     let mut navigate_to_block = create_navigation_handler(focused_anchor_id, snapshot_clone);
     let display_name = file.display_path();
@@ -46,6 +48,8 @@ pub fn MainPanel(
                     document,
                     focused_anchor_id,
                     collapsed_ids,
+                    context_menu_position,
+                    context_menu_block,
                     on_file_select,
                     on_command,
                     on_wikilink_click
