@@ -14,6 +14,7 @@ pub mod thematic_break;
 pub mod tree_view;
 pub mod tree_view_item;
 
+pub use block::CollapseToggle;
 pub use empty_document::*;
 pub use error_screen::*;
 pub use main_panel::*;

@@ -187,6 +187,7 @@ hr {
 .document-content {
     max-width: 800px;
     line-height: 1.6;
+    margin-left: 20px; /* Room for collapse toggles */
 }
 
 .empty-document {
@@ -199,6 +200,7 @@ hr {
     margin: 24px 0 16px 0;
     color: var(--base02);
     font-weight: 600;
+    position: relative;
 }
 
 .heading.level-1 {
@@ -243,6 +245,7 @@ hr {
 .list-item {
     margin: 4px 0;
     line-height: 1.5;
+    position: relative;
 }
 
 .list-item-content {
@@ -748,4 +751,32 @@ hr {
     .mobile-bottom-bar {
         display: none;
     }
+}
+
+/* Collapse toggle for outliner */
+.collapse-toggle {
+    position: absolute;
+    left: -17px;
+    width: 16px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--base01);
+    font-size: 10px;
+    text-align: center;
+}
+
+.collapse-toggle:hover {
+    color: var(--blue);
+}
+
+/* Heading toggles - vertically centered */
+.heading .collapse-toggle {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* List item toggles - align with first line */
+.list-item > .collapse-toggle {
+    top: 0.9em;
+    left: -40px;
 }

@@ -1,6 +1,9 @@
-use crate::ui::components::{editor_block::EditorBlock, text_segment::InlineSegments};
+use crate::ui::components::{
+    CollapseToggle, editor_block::EditorBlock, text_segment::InlineSegments,
+};
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Block, Cmd};
+use std::collections::HashSet;
 
 #[component]
 pub fn Heading(
@@ -8,10 +11,13 @@ pub fn Heading(
     source: String,
     level: u8,
     focused_anchor_id: Signal<Option<AnchorId>>,
+    collapsed_ids: Signal<HashSet<AnchorId>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
     let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
+    let is_collapsed = collapsed_ids.read().contains(&block.id);
+    let block_id = block.id;
     let class_name = format!("heading level-{level} clickable-block");
 
     if is_focused {
@@ -36,7 +42,6 @@ pub fn Heading(
         }
     } else {
         let segments = block.segments.clone();
-        let block_id = block.id;
 
         match level {
             1 => rsx! {
@@ -49,6 +54,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -62,6 +68,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -75,6 +82,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -88,6 +96,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -101,6 +110,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },
@@ -114,6 +124,7 @@ pub fn Heading(
                             focused_anchor_id.set(Some(block_id))
                         }
                     },
+                    CollapseToggle { block_id, is_collapsed, collapsed_ids }
                     InlineSegments { segments, on_wikilink_click }
                 }
             },

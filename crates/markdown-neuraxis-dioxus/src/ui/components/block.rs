@@ -4,16 +4,46 @@ use crate::ui::components::{
 };
 use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, BlockKind, Cmd};
+use std::collections::HashSet;
+
+/// Collapse toggle component for blocks with children
+#[component]
+pub fn CollapseToggle(
+    block_id: AnchorId,
+    is_collapsed: bool,
+    collapsed_ids: Signal<HashSet<AnchorId>>,
+) -> Element {
+    rsx! {
+        span {
+            class: "collapse-toggle",
+            onclick: {
+                let mut collapsed_ids = collapsed_ids;
+                move |evt| {
+                    evt.stop_propagation();
+                    let mut ids = collapsed_ids.write();
+                    if ids.contains(&block_id) {
+                        ids.remove(&block_id);
+                    } else {
+                        ids.insert(block_id);
+                    }
+                }
+            },
+            if is_collapsed { "▶" } else { "▼" }
+        }
+    }
+}
 
 #[component]
 pub fn BlockRenderer(
     block: Block,
     source: String,
     focused_anchor_id: Signal<Option<AnchorId>>,
+    collapsed_ids: Signal<HashSet<AnchorId>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
     let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
+    let is_collapsed = collapsed_ids.read().contains(&block.id);
 
     match &block.kind {
         BlockKind::Root => {
@@ -26,6 +56,7 @@ pub fn BlockRenderer(
                             block: child.clone(),
                             source: source.clone(),
                             focused_anchor_id,
+                            collapsed_ids,
                             on_command,
                             on_wikilink_click
                         }
@@ -48,6 +79,7 @@ pub fn BlockRenderer(
                                     block: child.clone(),
                                     source: source.clone(),
                                     focused_anchor_id,
+                                    collapsed_ids,
                                     on_command,
                                     on_wikilink_click
                                 }
@@ -64,6 +96,7 @@ pub fn BlockRenderer(
                                     block: child.clone(),
                                     source: source.clone(),
                                     focused_anchor_id,
+                                    collapsed_ids,
                                     on_command,
                                     on_wikilink_click
                                 }
@@ -76,6 +109,9 @@ pub fn BlockRenderer(
             }
         }
         BlockKind::ListItem { .. } => {
+            let has_children = matches!(&block.content, BlockContent::Children(c) if !c.is_empty());
+            let block_id = block.id;
+
             if is_focused {
                 // Use content_range() - excludes nested children
                 let edit_range = block.content_range();
@@ -85,6 +121,9 @@ pub fn BlockRenderer(
                 rsx! {
                     li {
                         class: "list-item",
+                        if has_children {
+                            CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                        }
                         EditorBlock {
                             block: block_clone,
                             content_text,
@@ -95,16 +134,19 @@ pub fn BlockRenderer(
                                 move |_| focused_anchor_id.set(None)
                             }
                         }
-                        // Still render nested children below the editor
-                        if let BlockContent::Children(children) = &block.content {
-                            for (i, child) in children.iter().enumerate() {
-                                BlockRenderer {
-                                    key: "{i}",
-                                    block: child.clone(),
-                                    source: source.clone(),
-                                    focused_anchor_id,
-                                    on_command,
-                                    on_wikilink_click
+                        // Still render nested children below the editor (unless collapsed)
+                        if !is_collapsed {
+                            if let BlockContent::Children(children) = &block.content {
+                                for (i, child) in children.iter().enumerate() {
+                                    BlockRenderer {
+                                        key: "{i}",
+                                        block: child.clone(),
+                                        source: source.clone(),
+                                        focused_anchor_id,
+                                        collapsed_ids,
+                                        on_command,
+                                        on_wikilink_click
+                                    }
                                 }
                             }
                         }
@@ -112,10 +154,12 @@ pub fn BlockRenderer(
                 }
             } else {
                 let segments = block.segments.clone();
-                let block_id = block.id;
                 rsx! {
                     li {
                         class: "list-item",
+                        if has_children {
+                            CollapseToggle { block_id, is_collapsed, collapsed_ids }
+                        }
                         span {
                             class: "list-item-content clickable-block",
                             onclick: {
@@ -130,16 +174,19 @@ pub fn BlockRenderer(
                                 on_wikilink_click
                             }
                         }
-                        // Render nested children (nested lists)
-                        if let BlockContent::Children(children) = &block.content {
-                            for (i, child) in children.iter().enumerate() {
-                                BlockRenderer {
-                                    key: "{i}",
-                                    block: child.clone(),
-                                    source: source.clone(),
-                                    focused_anchor_id,
-                                    on_command,
-                                    on_wikilink_click
+                        // Render nested children (nested lists) unless collapsed
+                        if !is_collapsed {
+                            if let BlockContent::Children(children) = &block.content {
+                                for (i, child) in children.iter().enumerate() {
+                                    BlockRenderer {
+                                        key: "{i}",
+                                        block: child.clone(),
+                                        source: source.clone(),
+                                        focused_anchor_id,
+                                        collapsed_ids,
+                                        on_command,
+                                        on_wikilink_click
+                                    }
                                 }
                             }
                         }
@@ -153,6 +200,7 @@ pub fn BlockRenderer(
                 source: source.clone(),
                 level: *level,
                 focused_anchor_id,
+                collapsed_ids,
                 on_command,
                 on_wikilink_click
             }
