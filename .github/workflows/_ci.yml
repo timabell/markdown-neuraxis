@@ -199,8 +199,8 @@ jobs:
 
       - name: Build Rust FFI for Android
         run: |
-          cargo ndk -t aarch64-linux-android build --release -p markdown-neuraxis-ffi
-          cargo ndk -t x86_64-linux-android build --release -p markdown-neuraxis-ffi
+          cargo ndk -t aarch64-linux-android -t x86_64-linux-android \
+            build --release -p markdown-neuraxis-ffi
 
       - name: Copy native libraries
         run: |
