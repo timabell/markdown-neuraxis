@@ -120,6 +120,7 @@ fun FileViewScreen(
 
 /**
  * Recursively render a list of blocks and their children.
+ * List blocks handle their own children (for proper index-based markers).
  */
 @Composable
 private fun RenderBlockTree(
@@ -129,7 +130,8 @@ private fun RenderBlockTree(
 ) {
     for (block in blocks) {
         RenderBlock(block, depth, onWikiLinkClick)
-        if (block.children.isNotEmpty()) {
+        // List blocks handle their own children internally
+        if (block.kind != "list" && block.children.isNotEmpty()) {
             RenderBlockTree(block.children, depth + 1, onWikiLinkClick)
         }
     }
@@ -205,8 +207,6 @@ private fun RenderSegments(
 
 @Composable
 private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -> Unit) {
-    val indent = (depth * 16).dp
-
     when (block.kind) {
         "heading" -> {
             val style = when (block.headingLevel.toInt()) {
@@ -224,17 +224,36 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
                 onWikiLinkClick = onWikiLinkClick
             )
         }
-        "list_item" -> {
-            Row(modifier = Modifier.padding(start = indent, top = 4.dp, bottom = 4.dp)) {
-                Text(
-                    text = block.listMarker ?: "-",
-                    modifier = Modifier.width(24.dp)
-                )
-                RenderSegments(
-                    segments = block.segments,
-                    onWikiLinkClick = onWikiLinkClick
-                )
+        "list" -> {
+            // List container renders its children with index-generated markers
+            // Nesting indent comes from marker width - nested content is after marker
+            val ordered = block.listOrdered == true
+            Column {
+                block.children.forEachIndexed { index, item ->
+                    val marker = if (ordered) "${index + 1}." else "•"
+                    val markerWidth = if (ordered) 24.dp else 16.dp
+                    Row(modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
+                        Text(
+                            text = marker,
+                            modifier = Modifier.width(markerWidth)
+                        )
+                        Column {
+                            RenderSegments(
+                                segments = item.segments,
+                                onWikiLinkClick = onWikiLinkClick
+                            )
+                            // Render nested content (e.g., nested lists)
+                            if (item.children.isNotEmpty()) {
+                                RenderBlockTree(item.children, depth + 1, onWikiLinkClick)
+                            }
+                        }
+                    }
+                }
             }
+        }
+        "list_item" -> {
+            // Standalone list_item should never happen - list container handles its items
+            error("list_item rendered outside of list container - invalid block structure")
         }
         "paragraph" -> {
             RenderSegments(

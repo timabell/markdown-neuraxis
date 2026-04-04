@@ -98,29 +98,28 @@ fn convert_blocks(blocks: &[Block]) -> Vec<BlockDto> {
 }
 
 /// Convert a single engine block to DTOs, appending to the result vector.
-/// Some blocks (List, Root) are "unwrapped" and their children are added directly.
+/// Root blocks are "unwrapped" and their children are added directly.
+/// List blocks are preserved with their ordered flag.
 fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
-    match &block.kind {
-        BlockKind::Root | BlockKind::List { .. } => {
-            // Unwrap containers: add children directly to result
-            if let BlockContent::Children(children) = &block.content {
-                for child in children {
-                    convert_block_into(child, result);
-                }
+    if block.kind == BlockKind::Root {
+        // Unwrap root container: add children directly to result
+        if let BlockContent::Children(children) = &block.content {
+            for child in children {
+                convert_block_into(child, result);
             }
-            return;
         }
-        _ => {}
+        return;
     }
 
-    let (kind, heading_level, list_marker) = match &block.kind {
-        BlockKind::Root | BlockKind::List { .. } => unreachable!(), // Handled above
-        BlockKind::Paragraph => ("paragraph".to_string(), 0, None),
-        BlockKind::Heading { level } => ("heading".to_string(), *level, None),
-        BlockKind::ListItem { marker } => ("list_item".to_string(), 0, Some(marker.clone())),
-        BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None),
-        BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None),
-        BlockKind::BlockQuote => ("block_quote".to_string(), 0, None),
+    let (kind, heading_level, list_marker, list_ordered) = match &block.kind {
+        BlockKind::Root => unreachable!(), // Handled above
+        BlockKind::Paragraph => ("paragraph".to_string(), 0, None, None),
+        BlockKind::Heading { level } => ("heading".to_string(), *level, None, None),
+        BlockKind::List { ordered } => ("list".to_string(), 0, None, Some(*ordered)),
+        BlockKind::ListItem { marker } => ("list_item".to_string(), 0, Some(marker.clone()), None),
+        BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None, None),
+        BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None, None),
+        BlockKind::BlockQuote => ("block_quote".to_string(), 0, None, None),
     };
 
     // Convert engine segments to DTOs (engine now provides flat segments)
@@ -142,6 +141,7 @@ fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
         kind,
         heading_level,
         list_marker,
+        list_ordered,
         segments,
         children,
     });
@@ -152,12 +152,14 @@ fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
 pub struct BlockDto {
     /// Stable identifier for this block (persists across edits)
     pub id: String,
-    /// Block type (e.g., "heading", "list_item", "paragraph")
+    /// Block type (e.g., "heading", "list_item", "paragraph", "list")
     pub kind: String,
     /// Heading level (1-6) if this is a heading, 0 otherwise
     pub heading_level: u8,
     /// List marker if this is a list item
     pub list_marker: Option<String>,
+    /// Whether this is an ordered list (only set for kind="list")
+    pub list_ordered: Option<bool>,
     /// Parsed inline segments (wiki-links, URLs, plain text)
     pub segments: Vec<TextSegmentDto>,
     /// Child blocks (e.g., nested list items)
@@ -417,41 +419,45 @@ mod tests {
 
     #[test]
     fn test_nested_list_tree_structure() {
-        // Verify nested lists produce a proper tree, not a flat list
+        // Verify nested lists produce a proper tree with list containers preserved
         let content = "- parent\n  - child 1\n  - child 2\n    - grandchild";
         let doc = DocumentHandle::from_string(content.to_string()).unwrap();
         let snapshot = doc.get_snapshot();
 
-        // Top level should have the parent list item
+        // Top level should be a list container
         assert_eq!(snapshot.blocks.len(), 1);
-        let parent = &snapshot.blocks[0];
+        let list = &snapshot.blocks[0];
+        assert_eq!(list.kind, "list");
+        assert_eq!(list.list_ordered, Some(false));
+
+        // List should contain the parent list_item
+        assert_eq!(list.children.len(), 1);
+        let parent = &list.children[0];
         assert_eq!(parent.kind, "list_item");
-        // Content is now extracted from segments
         assert!(segments_to_text(&parent.segments).contains("parent"));
 
-        // Parent should have nested items
+        // Parent should have a nested list container
         assert!(
             !parent.children.is_empty(),
-            "Parent should have nested items"
+            "Parent should have nested content"
         );
+        let nested_list = &parent.children[0];
+        assert_eq!(nested_list.kind, "list");
 
-        // Count total nested list items (child 1, child 2, grandchild)
-        let all_nested = collect_all_blocks(&parent.children);
-        let nested_list_items: Vec<_> = all_nested
+        // Count total list items in tree (parent, child 1, child 2, grandchild)
+        let all_blocks = collect_all_blocks(&snapshot.blocks);
+        let all_list_items: Vec<_> = all_blocks
             .iter()
             .filter(|b| b.kind == "list_item")
             .collect();
         assert_eq!(
-            nested_list_items.len(),
-            3,
-            "Should have 3 nested items total (child 1, child 2, grandchild)"
+            all_list_items.len(),
+            4,
+            "Should have 4 list items total (parent, child 1, child 2, grandchild)"
         );
 
-        // Verify we can traverse to find specific items
-        // FFI layer "unwraps" List containers, so list items are direct children.
-        // Correct structure: parent.children = [child1, child2] where child2.children = [grandchild]
-        // child1 and child2 are siblings in parent.children, not nested under each other
-        let nested_items: Vec<_> = parent
+        // Nested list should have child 1 and child 2 as direct children
+        let nested_items: Vec<_> = nested_list
             .children
             .iter()
             .filter(|b| b.kind == "list_item")
@@ -459,10 +465,10 @@ mod tests {
         assert_eq!(
             nested_items.len(),
             2,
-            "Parent should have 2 direct child items (child 1, child 2)"
+            "Nested list should have 2 direct child items (child 1, child 2)"
         );
 
-        // child 2 should have the grandchild
+        // child 2 should have a nested list with the grandchild
         let child2 = nested_items
             .iter()
             .find(|b| segments_to_text(&b.segments).contains("child 2"));
@@ -484,5 +490,65 @@ mod tests {
         assert_eq!(quote.kind, "block_quote");
         // Content is now extracted from segments
         assert_eq!(segments_to_text(&quote.segments), "This is a quote");
+    }
+
+    #[test]
+    fn test_list_container_preserved() {
+        // Verify list containers are preserved with ordered flag
+        let content = "- item 1\n- item 2";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        // Top level should be a list, not a list_item
+        assert_eq!(snapshot.blocks.len(), 1);
+        assert_eq!(snapshot.blocks[0].kind, "list");
+        assert_eq!(snapshot.blocks[0].list_ordered, Some(false));
+
+        // List should contain the list items as children
+        assert_eq!(snapshot.blocks[0].children.len(), 2);
+        let item1 = &snapshot.blocks[0].children[0];
+        let item2 = &snapshot.blocks[0].children[1];
+        assert_eq!(item1.kind, "list_item");
+        assert_eq!(item2.kind, "list_item");
+
+        // Segments should NOT contain the marker (no duplication)
+        assert_eq!(segments_to_text(&item1.segments), "item 1");
+        assert_eq!(segments_to_text(&item2.segments), "item 2");
+
+        // Marker should be separate
+        assert_eq!(item1.list_marker, Some("- ".to_string()));
+    }
+
+    #[test]
+    fn test_ordered_list_container() {
+        // Verify ordered lists have list_ordered = true
+        let content = "1. first\n2. second";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        assert_eq!(snapshot.blocks.len(), 1);
+        assert_eq!(snapshot.blocks[0].kind, "list");
+        assert_eq!(snapshot.blocks[0].list_ordered, Some(true));
+    }
+
+    #[test]
+    fn test_mixed_ordered_unordered_lists() {
+        // Verify document with both ordered and unordered lists
+        let content = "# Header\n\n- bullet 1\n- bullet 2\n\n1. numbered 1\n2. numbered 2";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        // Should have: heading, unordered list, ordered list
+        assert_eq!(snapshot.blocks.len(), 3);
+
+        assert_eq!(snapshot.blocks[0].kind, "heading");
+
+        assert_eq!(snapshot.blocks[1].kind, "list");
+        assert_eq!(snapshot.blocks[1].list_ordered, Some(false));
+        assert_eq!(snapshot.blocks[1].children.len(), 2);
+
+        assert_eq!(snapshot.blocks[2].kind, "list");
+        assert_eq!(snapshot.blocks[2].list_ordered, Some(true));
+        assert_eq!(snapshot.blocks[2].children.len(), 2);
     }
 }
