@@ -506,8 +506,17 @@ mod tests {
 
         // List should contain the list items as children
         assert_eq!(snapshot.blocks[0].children.len(), 2);
-        assert_eq!(snapshot.blocks[0].children[0].kind, "list_item");
-        assert_eq!(snapshot.blocks[0].children[1].kind, "list_item");
+        let item1 = &snapshot.blocks[0].children[0];
+        let item2 = &snapshot.blocks[0].children[1];
+        assert_eq!(item1.kind, "list_item");
+        assert_eq!(item2.kind, "list_item");
+
+        // Segments should NOT contain the marker (no duplication)
+        assert_eq!(segments_to_text(&item1.segments), "item 1");
+        assert_eq!(segments_to_text(&item2.segments), "item 2");
+
+        // Marker should be separate
+        assert_eq!(item1.list_marker, Some("- ".to_string()));
     }
 
     #[test]
