@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..15]
+  segments:
+    Text [0..14] "Time: 10:30 AM"

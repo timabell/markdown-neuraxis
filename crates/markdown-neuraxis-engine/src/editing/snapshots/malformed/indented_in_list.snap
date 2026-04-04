@@ -1,0 +1,9 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..20]
+  children:
+    ListItem { marker: "- " } [0..20]
+      segments:
+        Text [2..19] "Item\n    not code"

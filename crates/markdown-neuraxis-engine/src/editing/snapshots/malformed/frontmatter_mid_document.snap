@@ -1,0 +1,11 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..11]
+  segments:
+    Text [0..10] "Some text."
+ThematicBreak [12..16]
+Paragraph [16..27]
+  segments:
+    Text [16..26] "More text."

@@ -1,0 +1,63 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..191]
+  children:
+    ListItem { marker: "- " } [0..191]
+      segments:
+        Text [2..9] "Level 1"
+      children:
+        List { ordered: false } [12..191]
+          children:
+            ListItem { marker: "- " } [12..191]
+              segments:
+                Text [14..21] "Level 2"
+              children:
+                List { ordered: false } [26..191]
+                  children:
+                    ListItem { marker: "- " } [26..191]
+                      segments:
+                        Text [28..35] "Level 3"
+                      children:
+                        List { ordered: false } [42..191]
+                          children:
+                            ListItem { marker: "- " } [42..191]
+                              segments:
+                                Text [44..51] "Level 4"
+                              children:
+                                List { ordered: false } [60..191]
+                                  children:
+                                    ListItem { marker: "- " } [60..191]
+                                      segments:
+                                        Text [62..69] "Level 5"
+                                      children:
+                                        List { ordered: false } [80..191]
+                                          children:
+                                            ListItem { marker: "- " } [80..191]
+                                              segments:
+                                                Text [82..89] "Level 6"
+                                              children:
+                                                List { ordered: false } [102..191]
+                                                  children:
+                                                    ListItem { marker: "- " } [102..191]
+                                                      segments:
+                                                        Text [104..111] "Level 7"
+                                                      children:
+                                                        List { ordered: false } [126..191]
+                                                          children:
+                                                            ListItem { marker: "- " } [126..191]
+                                                              segments:
+                                                                Text [128..135] "Level 8"
+                                                              children:
+                                                                List { ordered: false } [152..191]
+                                                                  children:
+                                                                    ListItem { marker: "- " } [152..191]
+                                                                      segments:
+                                                                        Text [154..161] "Level 9"
+                                                                      children:
+                                                                        List { ordered: false } [180..191]
+                                                                          children:
+                                                                            ListItem { marker: "- " } [180..191]
+                                                                              segments:
+                                                                                Text [182..190] "Level 10"

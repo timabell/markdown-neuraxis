@@ -1,0 +1,10 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..17]
+  segments:
+    Strong [0..8]
+      Text "bold"
+    Emphasis [8..16]
+      Text "italic"

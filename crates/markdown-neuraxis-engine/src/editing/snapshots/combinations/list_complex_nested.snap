@@ -1,0 +1,33 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..234]
+  children:
+    ListItem { marker: "- " } [0..14]
+      segments:
+        Text [2..13] "Simple item"
+    ListItem { marker: "- " } [14..132]
+      segments:
+        Text [16..68] "Multi-line item that has\n  a hard wrap in the middle"
+      children:
+        List { ordered: false } [71..132]
+          children:
+            ListItem { marker: "- " } [71..108]
+              segments:
+                Text [73..107] "Nested item under multiline parent"
+            ListItem { marker: "- " } [110..132]
+              segments:
+                Text [112..131] "Another nested item"
+    ListItem { marker: "- " } [132..154]
+      segments:
+        Text [134..153] "Another simple item"
+    ListItem { marker: "- " } [154..234]
+      segments:
+        Text [156..212] "Final item with\n  multiple lines and\n  even more content"
+      children:
+        List { ordered: false } [215..234]
+          children:
+            ListItem { marker: "- " } [215..234]
+              segments:
+                Text [217..233] "Deep nested item"

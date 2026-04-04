@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..24]
+  segments:
+    Text [0..23] "Less than 5 < 10 works."

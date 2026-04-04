@@ -1,0 +1,8 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+ThematicBreak [0..4]
+Paragraph [4..27]
+  segments:
+    Text [4..26] "title: Test\nno closing"

@@ -1,0 +1,17 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..20
+  UNORDERED_LIST@0..20
+    LIST_ITEM@0..20
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..20
+        TEXT@2..6 "Item"
+        NEWLINE@6..7 "\\n"
+        WHITESPACE@7..11 "    "
+        TEXT@11..14 "not"
+        WHITESPACE@14..15 " "
+        TEXT@15..19 "code"
+        NEWLINE@19..20 "\\n"

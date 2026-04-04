@@ -1,0 +1,24 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..28
+  UNORDERED_LIST@0..14
+    LIST_ITEM@0..13
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..13
+        TEXT@2..7 "First"
+        WHITESPACE@7..8 " "
+        TEXT@8..12 "list"
+        NEWLINE@12..13 "\\n"
+    NEWLINE@13..14 "\\n"
+  UNORDERED_LIST@14..28
+    LIST_ITEM@14..28
+      DASH@14..15 "-"
+      WHITESPACE@15..16 " "
+      PARAGRAPH@16..28
+        TEXT@16..22 "Second"
+        WHITESPACE@22..23 " "
+        TEXT@23..27 "list"
+        NEWLINE@27..28 "\\n"
