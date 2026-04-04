@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [69..96]
+  segments:
+    Text [69..95] "Content after frontmatter."

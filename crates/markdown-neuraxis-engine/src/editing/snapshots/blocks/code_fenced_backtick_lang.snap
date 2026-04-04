@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+FencedCode { language: Some("rust") } [0..49]
+  segments:
+    Text [8..44] "fn main() {\n    println!(\"Hello\");\n}"

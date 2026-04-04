@@ -1,0 +1,19 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..23
+  HEADING@0..23
+    HASH@0..1 "#"
+    HASH@1..2 "#"
+    HASH@2..3 "#"
+    HASH@3..4 "#"
+    HASH@4..5 "#"
+    HASH@5..6 "#"
+    WHITESPACE@6..7 " "
+    TEXT@7..12 "Level"
+    WHITESPACE@12..13 " "
+    TEXT@13..14 "6"
+    WHITESPACE@14..15 " "
+    TEXT@15..22 "Heading"
+    NEWLINE@22..23 "\\n"

@@ -1,0 +1,15 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..22
+  PARAGRAPH@0..22
+    AUTOLINK@0..21
+      LT@0..1 "<"
+      TEXT@1..6 "https"
+      COLON@6..7 ":"
+      TEXT@7..16 "//example"
+      DOT@16..17 "."
+      TEXT@17..20 "com"
+      GT@20..21 ">"
+    NEWLINE@21..22 "\\n"

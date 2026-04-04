@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Heading { level: 6 } [0..23]
+  segments:
+    Text [7..22] "Level 6 Heading"

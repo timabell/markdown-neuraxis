@@ -1,0 +1,9 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..18]
+  segments:
+    Strong [0..17]
+      Text "bold "
+      WikiLink target:"link"

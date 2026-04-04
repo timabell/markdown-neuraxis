@@ -1,0 +1,9 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..58]
+  segments:
+    Text [0..29] "Line one with trailing spaces"
+    HardBreak [29..32]
+    Text [32..57] "Line two after hard break"

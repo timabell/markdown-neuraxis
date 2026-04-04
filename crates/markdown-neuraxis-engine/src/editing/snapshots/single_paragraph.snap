@@ -1,7 +1,0 @@
----
-source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
-expression: formatted
----
-Paragraph [0..43]
-  segments:
-    Text [0..42] "This is a simple paragraph with some text."

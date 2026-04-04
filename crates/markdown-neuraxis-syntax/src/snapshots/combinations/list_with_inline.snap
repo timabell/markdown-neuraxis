@@ -1,0 +1,63 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..91
+  UNORDERED_LIST@0..91
+    LIST_ITEM@0..23
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..23
+        TEXT@2..6 "Item"
+        WHITESPACE@6..7 " "
+        TEXT@7..11 "with"
+        WHITESPACE@11..12 " "
+        EMPHASIS@12..22
+          STAR@12..13 "*"
+          TEXT@13..21 "emphasis"
+          STAR@21..22 "*"
+        NEWLINE@22..23 "\\n"
+    LIST_ITEM@23..47
+      DASH@23..24 "-"
+      WHITESPACE@24..25 " "
+      PARAGRAPH@25..47
+        TEXT@25..29 "Item"
+        WHITESPACE@29..30 " "
+        TEXT@30..34 "with"
+        WHITESPACE@34..35 " "
+        LINK@35..46
+          LBRACKET@35..36 "["
+          TEXT@36..40 "link"
+          RBRACKET@40..41 "]"
+          LPAREN@41..42 "("
+          TEXT@42..45 "url"
+          RPAREN@45..46 ")"
+        NEWLINE@46..47 "\\n"
+    LIST_ITEM@47..66
+      DASH@47..48 "-"
+      WHITESPACE@48..49 " "
+      PARAGRAPH@49..66
+        TEXT@49..53 "Item"
+        WHITESPACE@53..54 " "
+        TEXT@54..58 "with"
+        WHITESPACE@58..59 " "
+        CODE_SPAN@59..65
+          BACKTICK@59..60 "`"
+          TEXT@60..64 "code"
+          BACKTICK@64..65 "`"
+        NEWLINE@65..66 "\\n"
+    LIST_ITEM@66..91
+      DASH@66..67 "-"
+      WHITESPACE@67..68 " "
+      PARAGRAPH@68..91
+        TEXT@68..72 "Item"
+        WHITESPACE@72..73 " "
+        TEXT@73..77 "with"
+        WHITESPACE@77..78 " "
+        WIKILINK@78..90
+          LBRACKET@78..79 "["
+          LBRACKET@79..80 "["
+          TEXT@80..88 "wikilink"
+          RBRACKET@88..89 "]"
+          RBRACKET@89..90 "]"
+        NEWLINE@90..91 "\\n"

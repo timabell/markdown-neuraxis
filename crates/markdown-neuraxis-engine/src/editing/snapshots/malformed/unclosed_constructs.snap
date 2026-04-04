@@ -1,0 +1,23 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Heading { level: 1 } [0..14]
+  segments:
+    Text [2..13] "Draft notes"
+Paragraph [15..51]
+  segments:
+    Text [15..25] "Check out "
+    WikiLink [25..50] target:"this page for more in"
+Paragraph [52..86]
+  segments:
+    Text [52..85] "Also see [broken link without url"
+Paragraph [87..112]
+  segments:
+    Text [87..111] "Some *half done emphasis"
+Paragraph [113..137]
+  segments:
+    Text [113..136] "And `unclosed code span"
+Paragraph [138..154]
+  segments:
+    Text [138..153] "More text here."

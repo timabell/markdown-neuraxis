@@ -1,0 +1,21 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..36
+  PARAGRAPH@0..36
+    TEXT@0..4 "This"
+    WHITESPACE@4..5 " "
+    TEXT@5..7 "is"
+    WHITESPACE@7..8 " "
+    TEXT@8..9 "a"
+    WHITESPACE@9..10 " "
+    TEXT@10..16 "simple"
+    WHITESPACE@16..17 " "
+    TEXT@17..26 "paragraph"
+    WHITESPACE@26..27 " "
+    TEXT@27..29 "of"
+    WHITESPACE@29..30 " "
+    TEXT@30..34 "text"
+    DOT@34..35 "."
+    NEWLINE@35..36 "\\n"

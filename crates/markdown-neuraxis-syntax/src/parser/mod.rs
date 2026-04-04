@@ -358,31 +358,9 @@ pub fn parse(source: &str) -> SyntaxNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
 
-    #[test]
-    fn parse_empty_input() {
-        let tree = parse("");
-        assert_eq!(tree.kind(), SyntaxKind::ROOT);
-        assert_eq!(tree.children().count(), 0);
-    }
-
-    #[test]
-    fn parse_preserves_all_text() {
-        let input = "Hello, world!";
-        let tree = parse(input);
-        assert_eq!(tree.text(), input);
-    }
-
-    #[test]
-    fn parse_simple_paragraph() {
-        let input = "Hello";
-        let tree = parse(input);
-
-        assert_eq!(tree.kind(), SyntaxKind::ROOT);
-        let para = tree.children().next().unwrap();
-        assert_eq!(para.kind(), SyntaxKind::PARAGRAPH);
-    }
+    // Internal API contract tests - these verify Marker behavior that can't be
+    // observed through snapshot tests.
 
     #[test]
     fn marker_must_be_completed() {

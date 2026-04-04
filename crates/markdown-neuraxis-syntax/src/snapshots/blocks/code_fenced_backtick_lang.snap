@@ -1,0 +1,33 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..49
+  FENCED_CODE@0..49
+    BACKTICK@0..1 "`"
+    BACKTICK@1..2 "`"
+    BACKTICK@2..3 "`"
+    TEXT@3..7 "rust"
+    NEWLINE@7..8 "\\n"
+    TEXT@8..10 "fn"
+    WHITESPACE@10..11 " "
+    TEXT@11..15 "main"
+    LPAREN@15..16 "("
+    RPAREN@16..17 ")"
+    WHITESPACE@17..18 " "
+    TEXT@18..19 "{"
+    NEWLINE@19..20 "\\n"
+    WHITESPACE@20..24 "    "
+    TEXT@24..31 "println"
+    EXCLAIM@31..32 "!"
+    LPAREN@32..33 "("
+    TEXT@33..40 "\"Hello\""
+    RPAREN@40..41 ")"
+    TEXT@41..42 ";"
+    NEWLINE@42..43 "\\n"
+    TEXT@43..44 "}"
+    NEWLINE@44..45 "\\n"
+    BACKTICK@45..46 "`"
+    BACKTICK@46..47 "`"
+    BACKTICK@47..48 "`"
+    NEWLINE@48..49 "\\n"

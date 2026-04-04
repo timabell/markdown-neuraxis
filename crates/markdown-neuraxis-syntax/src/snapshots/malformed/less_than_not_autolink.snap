@@ -1,0 +1,20 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..24
+  PARAGRAPH@0..24
+    TEXT@0..4 "Less"
+    WHITESPACE@4..5 " "
+    TEXT@5..9 "than"
+    WHITESPACE@9..10 " "
+    TEXT@10..11 "5"
+    WHITESPACE@11..12 " "
+    INLINE@12..23
+      LT@12..13 "<"
+      WHITESPACE@13..14 " "
+      TEXT@14..16 "10"
+      WHITESPACE@16..17 " "
+      TEXT@17..22 "works"
+      DOT@22..23 "."
+    NEWLINE@23..24 "\\n"

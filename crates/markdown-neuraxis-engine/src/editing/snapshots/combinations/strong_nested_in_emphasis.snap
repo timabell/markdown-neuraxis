@@ -1,0 +1,11 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..30]
+  segments:
+    Emphasis [0..29]
+      Text "italic with "
+      Strong
+        Text "nested"
+      Text " text"

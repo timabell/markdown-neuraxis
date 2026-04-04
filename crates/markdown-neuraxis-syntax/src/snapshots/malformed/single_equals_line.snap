@@ -1,0 +1,10 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..7
+  PARAGRAPH@0..7
+    TEXT@0..4 "Text"
+    NEWLINE@4..5 "\\n"
+    EQUALS@5..6 "="
+    NEWLINE@6..7 "\\n"

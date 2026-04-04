@@ -1,0 +1,104 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..191
+  UNORDERED_LIST@0..191
+    LIST_ITEM@0..191
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..10
+        TEXT@2..7 "Level"
+        WHITESPACE@7..8 " "
+        TEXT@8..9 "1"
+        NEWLINE@9..10 "\\n"
+      WHITESPACE@10..12 "  "
+      UNORDERED_LIST@12..191
+        LIST_ITEM@12..191
+          DASH@12..13 "-"
+          WHITESPACE@13..14 " "
+          PARAGRAPH@14..22
+            TEXT@14..19 "Level"
+            WHITESPACE@19..20 " "
+            TEXT@20..21 "2"
+            NEWLINE@21..22 "\\n"
+          WHITESPACE@22..26 "    "
+          UNORDERED_LIST@26..191
+            LIST_ITEM@26..191
+              DASH@26..27 "-"
+              WHITESPACE@27..28 " "
+              PARAGRAPH@28..36
+                TEXT@28..33 "Level"
+                WHITESPACE@33..34 " "
+                TEXT@34..35 "3"
+                NEWLINE@35..36 "\\n"
+              WHITESPACE@36..42 "      "
+              UNORDERED_LIST@42..191
+                LIST_ITEM@42..191
+                  DASH@42..43 "-"
+                  WHITESPACE@43..44 " "
+                  PARAGRAPH@44..52
+                    TEXT@44..49 "Level"
+                    WHITESPACE@49..50 " "
+                    TEXT@50..51 "4"
+                    NEWLINE@51..52 "\\n"
+                  WHITESPACE@52..60 "        "
+                  UNORDERED_LIST@60..191
+                    LIST_ITEM@60..191
+                      DASH@60..61 "-"
+                      WHITESPACE@61..62 " "
+                      PARAGRAPH@62..70
+                        TEXT@62..67 "Level"
+                        WHITESPACE@67..68 " "
+                        TEXT@68..69 "5"
+                        NEWLINE@69..70 "\\n"
+                      WHITESPACE@70..80 "          "
+                      UNORDERED_LIST@80..191
+                        LIST_ITEM@80..191
+                          DASH@80..81 "-"
+                          WHITESPACE@81..82 " "
+                          PARAGRAPH@82..90
+                            TEXT@82..87 "Level"
+                            WHITESPACE@87..88 " "
+                            TEXT@88..89 "6"
+                            NEWLINE@89..90 "\\n"
+                          WHITESPACE@90..102 "            "
+                          UNORDERED_LIST@102..191
+                            LIST_ITEM@102..191
+                              DASH@102..103 "-"
+                              WHITESPACE@103..104 " "
+                              PARAGRAPH@104..112
+                                TEXT@104..109 "Level"
+                                WHITESPACE@109..110 " "
+                                TEXT@110..111 "7"
+                                NEWLINE@111..112 "\\n"
+                              WHITESPACE@112..126 "              "
+                              UNORDERED_LIST@126..191
+                                LIST_ITEM@126..191
+                                  DASH@126..127 "-"
+                                  WHITESPACE@127..128 " "
+                                  PARAGRAPH@128..136
+                                    TEXT@128..133 "Level"
+                                    WHITESPACE@133..134 " "
+                                    TEXT@134..135 "8"
+                                    NEWLINE@135..136 "\\n"
+                                  WHITESPACE@136..152 "                "
+                                  UNORDERED_LIST@152..191
+                                    LIST_ITEM@152..191
+                                      DASH@152..153 "-"
+                                      WHITESPACE@153..154 " "
+                                      PARAGRAPH@154..162
+                                        TEXT@154..159 "Level"
+                                        WHITESPACE@159..160 " "
+                                        TEXT@160..161 "9"
+                                        NEWLINE@161..162 "\\n"
+                                      WHITESPACE@162..180 "                  "
+                                      UNORDERED_LIST@180..191
+                                        LIST_ITEM@180..191
+                                          DASH@180..181 "-"
+                                          WHITESPACE@181..182 " "
+                                          PARAGRAPH@182..191
+                                            TEXT@182..187 "Level"
+                                            WHITESPACE@187..188 " "
+                                            TEXT@188..190 "10"
+                                            NEWLINE@190..191 "\\n"

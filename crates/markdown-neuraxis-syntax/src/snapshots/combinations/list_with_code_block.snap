@@ -1,0 +1,43 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..68
+  UNORDERED_LIST@0..68
+    LIST_ITEM@0..53
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      PARAGRAPH@2..18
+        TEXT@2..6 "Item"
+        WHITESPACE@6..7 " "
+        TEXT@7..11 "with"
+        WHITESPACE@11..12 " "
+        TEXT@12..16 "code"
+        COLON@16..17 ":"
+        NEWLINE@17..18 "\\n"
+      WHITESPACE@18..20 "  "
+      FENCED_CODE@20..53
+        BACKTICK@20..21 "`"
+        BACKTICK@21..22 "`"
+        BACKTICK@22..23 "`"
+        TEXT@23..29 "python"
+        NEWLINE@29..30 "\\n"
+        WHITESPACE@30..32 "  "
+        TEXT@32..37 "print"
+        LPAREN@37..38 "("
+        TEXT@38..45 "\"hello\""
+        RPAREN@45..46 ")"
+        NEWLINE@46..47 "\\n"
+        WHITESPACE@47..49 "  "
+        BACKTICK@49..50 "`"
+        BACKTICK@50..51 "`"
+        BACKTICK@51..52 "`"
+        NEWLINE@52..53 "\\n"
+    LIST_ITEM@53..68
+      DASH@53..54 "-"
+      WHITESPACE@54..55 " "
+      PARAGRAPH@55..68
+        TEXT@55..62 "Another"
+        WHITESPACE@62..63 " "
+        TEXT@63..67 "item"
+        NEWLINE@67..68 "\\n"

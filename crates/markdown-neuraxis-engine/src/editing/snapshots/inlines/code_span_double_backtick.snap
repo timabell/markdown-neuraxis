@@ -1,0 +1,9 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..35]
+  segments:
+    Text [0..4] "Use "
+    Code [4..28] "`code with ` backtick`"
+    Text [28..34] " here."

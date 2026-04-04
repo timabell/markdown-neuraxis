@@ -1,0 +1,32 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..45
+  UNORDERED_LIST@0..45
+    LIST_ITEM@0..21
+      DASH@0..1 "-"
+      WHITESPACE@1..2 " "
+      CHECKBOX@2..5
+        LBRACKET@2..3 "["
+        WHITESPACE@3..4 " "
+        RBRACKET@4..5 "]"
+      WHITESPACE@5..6 " "
+      PARAGRAPH@6..21
+        TEXT@6..15 "Unchecked"
+        WHITESPACE@15..16 " "
+        TEXT@16..20 "task"
+        NEWLINE@20..21 "\\n"
+    LIST_ITEM@21..45
+      DASH@21..22 "-"
+      WHITESPACE@22..23 " "
+      CHECKBOX@23..26
+        LBRACKET@23..24 "["
+        WHITESPACE@24..25 " "
+        RBRACKET@25..26 "]"
+      WHITESPACE@26..27 " "
+      PARAGRAPH@27..45
+        TEXT@27..34 "Another"
+        WHITESPACE@34..35 " "
+        TEXT@35..44 "unchecked"
+        NEWLINE@44..45 "\\n"

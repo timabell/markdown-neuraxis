@@ -1,0 +1,49 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..80
+  HEADING@0..26
+    HASH@0..1 "#"
+    WHITESPACE@1..2 " "
+    TEXT@2..9 "Heading"
+    WHITESPACE@9..10 " "
+    TEXT@10..14 "with"
+    WHITESPACE@14..15 " "
+    EMPHASIS@15..25
+      STAR@15..16 "*"
+      TEXT@16..24 "emphasis"
+      STAR@24..25 "*"
+    NEWLINE@25..26 "\\n"
+  NEWLINE@26..27 "\\n"
+  HEADING@27..55
+    HASH@27..28 "#"
+    HASH@28..29 "#"
+    WHITESPACE@29..30 " "
+    TEXT@30..37 "Heading"
+    WHITESPACE@37..38 " "
+    TEXT@38..42 "with"
+    WHITESPACE@42..43 " "
+    LINK@43..54
+      LBRACKET@43..44 "["
+      TEXT@44..48 "link"
+      RBRACKET@48..49 "]"
+      LPAREN@49..50 "("
+      TEXT@50..53 "url"
+      RPAREN@53..54 ")"
+    NEWLINE@54..55 "\\n"
+  NEWLINE@55..56 "\\n"
+  HEADING@56..80
+    HASH@56..57 "#"
+    HASH@57..58 "#"
+    HASH@58..59 "#"
+    WHITESPACE@59..60 " "
+    TEXT@60..67 "Heading"
+    WHITESPACE@67..68 " "
+    TEXT@68..72 "with"
+    WHITESPACE@72..73 " "
+    CODE_SPAN@73..79
+      BACKTICK@73..74 "`"
+      TEXT@74..78 "code"
+      BACKTICK@78..79 "`"
+    NEWLINE@79..80 "\\n"

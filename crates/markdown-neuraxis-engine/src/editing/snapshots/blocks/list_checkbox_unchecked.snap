@@ -1,0 +1,12 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..45]
+  children:
+    ListItem { marker: "- " } [0..21]
+      segments:
+        Text [6..20] "Unchecked task"
+    ListItem { marker: "- " } [21..45]
+      segments:
+        Text [27..44] "Another unchecked"

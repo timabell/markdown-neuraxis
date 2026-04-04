@@ -1,0 +1,38 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..64
+  PARAGRAPH@0..25
+    TEXT@0..4 "Some"
+    WHITESPACE@4..5 " "
+    CODE_SPAN@5..18
+      BACKTICK@5..6 "`"
+      TEXT@6..12 "inline"
+      WHITESPACE@12..13 " "
+      TEXT@13..17 "code"
+      BACKTICK@17..18 "`"
+    WHITESPACE@18..19 " "
+    TEXT@19..23 "here"
+    DOT@23..24 "."
+    NEWLINE@24..25 "\\n"
+  NEWLINE@25..26 "\\n"
+  PARAGRAPH@26..64
+    TEXT@26..29 "And"
+    WHITESPACE@29..30 " "
+    CODE_SPAN@30..62
+      BACKTICK@30..31 "`"
+      BACKTICK@31..32 "`"
+      TEXT@32..36 "code"
+      WHITESPACE@36..37 " "
+      TEXT@37..41 "with"
+      WHITESPACE@41..42 " "
+      BACKTICK@42..43 "`"
+      TEXT@43..52 "backticks"
+      BACKTICK@52..53 "`"
+      WHITESPACE@53..54 " "
+      TEXT@54..60 "inside"
+      BACKTICK@60..61 "`"
+      BACKTICK@61..62 "`"
+    DOT@62..63 "."
+    NEWLINE@63..64 "\\n"

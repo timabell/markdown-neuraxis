@@ -1,0 +1,10 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..11]
+  segments:
+    Text [0..10] "First line"
+Paragraph [12..23]
+  segments:
+    Text [12..22] "Third line"

@@ -1,0 +1,22 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..28
+  PARAGRAPH@0..28
+    STRONG@0..27
+      STAR@0..1 "*"
+      STAR@1..2 "*"
+      TEXT@2..6 "bold"
+      WHITESPACE@6..7 " "
+      TEXT@7..11 "with"
+      WHITESPACE@11..12 " "
+      EMPHASIS@12..20
+        STAR@12..13 "*"
+        TEXT@13..19 "nested"
+        STAR@19..20 "*"
+      WHITESPACE@20..21 " "
+      TEXT@21..25 "text"
+      STAR@25..26 "*"
+      STAR@26..27 "*"
+    NEWLINE@27..28 "\\n"

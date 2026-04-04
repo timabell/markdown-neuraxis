@@ -1,7 +1,0 @@
----
-source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
-expression: formatted
----
-FencedCode { language: None } [0..33]
-  segments:
-    Text [4..28] "some code here\nmore code"

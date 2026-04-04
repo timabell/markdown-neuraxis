@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..27]
+  segments:
+    Text [0..26] "Normal (parentheses) here."

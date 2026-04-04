@@ -1,0 +1,42 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Heading { level: 1 } [0..13]
+  segments:
+    Text [2..12] "Main Title"
+Paragraph [14..79]
+  segments:
+    Text [14..39] "This is a paragraph with "
+    WikiLink [39..52] target:"wikilinks"
+    Text [52..57] " and "
+    Link [57..77] text:"regular links" url:"url"
+    Text [77..78] "."
+Heading { level: 2 } [80..96]
+  segments:
+    Text [83..95] "Code Example"
+FencedCode { language: Some("rust") } [97..146]
+  segments:
+    Text [105..141] "fn main() {\n    println!(\"Hello\");\n}"
+BlockQuote [147..179]
+  segments:
+    Text [149..167] "A blockquote with "
+    Emphasis [167..177]
+      Text "emphasis"
+    Text [177..178] "."
+List { ordered: false } [180..228]
+  children:
+    ListItem { marker: "- " } [180..193]
+      segments:
+        Text [182..192] "First item"
+    ListItem { marker: "- " } [193..207]
+      segments:
+        Text [195..206] "Second item"
+    ListItem { marker: "- " } [207..227]
+      segments:
+        Text [209..220] "Third with "
+        Code [220..226] "code"
+ThematicBreak [228..232]
+Paragraph [233..250]
+  segments:
+    Text [233..249] "Final paragraph."

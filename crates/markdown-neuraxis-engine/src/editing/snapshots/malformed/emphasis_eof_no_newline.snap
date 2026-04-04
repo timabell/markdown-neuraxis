@@ -1,0 +1,8 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..10]
+  segments:
+    Emphasis [0..10]
+      Text "emphasis"

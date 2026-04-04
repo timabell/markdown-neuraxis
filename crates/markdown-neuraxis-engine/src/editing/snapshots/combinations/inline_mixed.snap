@@ -1,0 +1,15 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..48]
+  segments:
+    Text [0..10] "Text with "
+    Code [10..16] "code"
+    Text [16..21] " and "
+    Emphasis [21..31]
+      Text "emphasis"
+    Text [31..36] " and "
+    Strong [36..46]
+      Text "strong"
+    Text [46..47] "."

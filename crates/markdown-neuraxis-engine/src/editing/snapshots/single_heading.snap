@@ -1,7 +1,0 @@
----
-source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
-expression: formatted
----
-Heading { level: 1 } [0..17]
-  segments:
-    Text [2..16] "Just a heading"

@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..23]
+  segments:
+    Image [0..22] alt:"alt text" url:"image.png"
