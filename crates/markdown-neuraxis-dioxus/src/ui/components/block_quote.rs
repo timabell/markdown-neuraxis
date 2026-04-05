@@ -2,7 +2,7 @@ use crate::ui::components::{
     block::BlockRenderer, editor_block::EditorBlock, text_segment::InlineSegments,
 };
 use dioxus::prelude::*;
-use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, Cmd};
+use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, BlockKind, Cmd};
 use std::collections::HashSet;
 
 #[component]
@@ -17,17 +17,27 @@ pub fn BlockQuote(
 ) -> Element {
     let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
 
+    // Separate paragraph children (this level's content) from nested blockquotes
+    let (paragraphs, nested_quotes): (Vec<_>, Vec<_>) =
+        if let BlockContent::Children(c) = &block.content {
+            c.iter()
+                .cloned()
+                .partition(|child| matches!(child.kind, BlockKind::Paragraph))
+        } else {
+            (vec![], vec![])
+        };
+
     if is_focused {
-        // Use content_range() - excludes nested children
-        let edit_range = block.content_range();
+        // Calculate edit range covering only paragraphs (not nested blockquotes)
+        let edit_range = if let (Some(first), Some(last)) = (paragraphs.first(), paragraphs.last())
+        {
+            first.node_range.start..last.node_range.end
+        } else {
+            block.node_range.clone()
+        };
         let content_text = source.get(edit_range.clone()).unwrap_or("").to_string();
         let edit_range = Some(edit_range);
         let block_clone = block.clone();
-        let children = if let BlockContent::Children(c) = &block.content {
-            Some(c.clone())
-        } else {
-            None
-        };
 
         rsx! {
             blockquote {
@@ -42,72 +52,70 @@ pub fn BlockQuote(
                         move |_| focused_anchor_id.set(None)
                     }
                 }
-                // Still render nested children below the editor
-                if let Some(children) = children {
-                    for (i, child) in children.iter().enumerate() {
-                        BlockRenderer {
-                            key: "{i}",
-                            block: child.clone(),
-                            source: source.clone(),
-                            focused_anchor_id,
-                            collapsed_ids,
-                            on_context_menu,
-                            on_command,
-                            on_wikilink_click
-                        }
+                // Render nested blockquotes below editor
+                for (i, child) in nested_quotes.iter().enumerate() {
+                    BlockRenderer {
+                        key: "{i}",
+                        block: child.clone(),
+                        source: source.clone(),
+                        focused_anchor_id,
+                        collapsed_ids,
+                        on_context_menu,
+                        on_command,
+                        on_wikilink_click
                     }
                 }
             }
         }
     } else {
         let block_id = block.id;
-        let children = if let BlockContent::Children(c) = &block.content {
-            Some(c.clone())
-        } else {
-            None
-        };
 
         rsx! {
             blockquote {
                 class: "block-quote",
-                // Clickable span for this level's content only
-                span {
-                    class: "block-quote-content clickable-block",
-                    tabindex: "0",
-                    onclick: {
-                        let mut focused_anchor_id = focused_anchor_id;
-                        move |evt| {
-                            evt.stop_propagation();
-                            focused_anchor_id.set(Some(block_id))
-                        }
-                    },
-                    onkeydown: {
-                        let mut focused_anchor_id = focused_anchor_id;
-                        move |evt| {
-                            if evt.key() == Key::Enter {
-                                focused_anchor_id.set(Some(block_id));
+                // All paragraphs in one clickable container (hover applies to all)
+                if !paragraphs.is_empty() {
+                    span {
+                        class: "block-quote-content clickable-block",
+                        tabindex: "0",
+                        onclick: {
+                            let mut focused_anchor_id = focused_anchor_id;
+                            move |evt| {
+                                evt.stop_propagation();
+                                focused_anchor_id.set(Some(block_id))
+                            }
+                        },
+                        onkeydown: {
+                            let mut focused_anchor_id = focused_anchor_id;
+                            move |evt| {
+                                if evt.key() == Key::Enter {
+                                    focused_anchor_id.set(Some(block_id));
+                                }
+                            }
+                        },
+                        for (i, para) in paragraphs.iter().enumerate() {
+                            p {
+                                key: "{i}",
+                                class: "block-quote-paragraph",
+                                InlineSegments {
+                                    segments: para.segments.clone(),
+                                    on_wikilink_click
+                                }
                             }
                         }
-                    },
-                    // Render inline segments (this level's content)
-                    InlineSegments {
-                        segments: block.segments.clone(),
-                        on_wikilink_click
                     }
                 }
-                // Render nested children (deeper blockquote levels) outside clickable area
-                if let Some(children) = children {
-                    for (i, child) in children.iter().enumerate() {
-                        BlockRenderer {
-                            key: "{i}",
-                            block: child.clone(),
-                            source: source.clone(),
-                            focused_anchor_id,
-                            collapsed_ids,
-                            on_context_menu,
-                            on_command,
-                            on_wikilink_click
-                        }
+                // Nested blockquotes outside clickable area (handle their own clicks)
+                for (i, child) in nested_quotes.iter().enumerate() {
+                    BlockRenderer {
+                        key: "nested-{i}",
+                        block: child.clone(),
+                        source: source.clone(),
+                        focused_anchor_id,
+                        collapsed_ids,
+                        on_context_menu,
+                        on_command,
+                        on_wikilink_click
                     }
                 }
             }
