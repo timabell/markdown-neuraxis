@@ -11,6 +11,7 @@ List { ordered: false } [0..94]
         BlockQuote [32..80]
           segments:
             Text [34..45] "quoted part"
+            SoftBreak [45..45]
             Text [50..60] "more quote"
           children:
             BlockQuote [64..80]
