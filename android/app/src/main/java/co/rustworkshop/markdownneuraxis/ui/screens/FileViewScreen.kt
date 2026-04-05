@@ -27,15 +27,15 @@ import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
 import co.rustworkshop.markdownneuraxis.model.FileTree
-import uniffi.markdown_neuraxis_ffi.BlockDto
+import uniffi.markdown_neuraxis_ffi.Block
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
-import uniffi.markdown_neuraxis_ffi.TextSegmentDto
+import uniffi.markdown_neuraxis_ffi.TextSegment
 import uniffi.markdown_neuraxis_ffi.resolveWikilink
 
 private const val TAG = "MarkdownNeuraxis"
 
 /** Extract plain text from segments recursively */
-private fun segmentsToText(segments: List<TextSegmentDto>): String {
+private fun segmentsToText(segments: List<TextSegment>): String {
     return segments.joinToString("") { segment ->
         when (segment.kind) {
             "text", "code", "strikethrough", "wiki_link" -> segment.content
@@ -124,7 +124,7 @@ fun FileViewScreen(
  */
 @Composable
 private fun RenderBlockTree(
-    blocks: List<BlockDto>,
+    blocks: List<Block>,
     depth: Int,
     onWikiLinkClick: (String) -> Unit
 ) {
@@ -139,7 +139,7 @@ private fun RenderBlockTree(
 
 @Composable
 private fun RenderSegments(
-    segments: List<TextSegmentDto>,
+    segments: List<TextSegment>,
     style: TextStyle = LocalTextStyle.current,
     modifier: Modifier = Modifier,
     onWikiLinkClick: (String) -> Unit
@@ -206,7 +206,7 @@ private fun RenderSegments(
 }
 
 @Composable
-private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -> Unit) {
+private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> Unit) {
     when (block.kind) {
         "heading" -> {
             val style = when (block.headingLevel.toInt()) {
@@ -305,7 +305,7 @@ private fun RenderBlock(block: BlockDto, depth: Int, onWikiLinkClick: (String) -
     }
 }
 
-private fun parseDocument(content: String): List<BlockDto>? {
+private fun parseDocument(content: String): List<Block>? {
     return try {
         val doc = DocumentHandle.fromString(content)
         doc.getSnapshot().blocks

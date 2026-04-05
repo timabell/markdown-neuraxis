@@ -24,11 +24,11 @@
 //!
 //! - [`DocumentHandle`]: Main entry point - wraps the engine's `Document` and provides
 //!   thread-safe access for parsing and snapshot retrieval
-//! - [`SnapshotDto`]: UI-ready projection of the document tree, containing hierarchical
+//! - [`Snapshot`]: UI-ready projection of the document tree, containing hierarchical
 //!   blocks for rendering
-//! - [`BlockDto`]: A single block (heading, paragraph, list, etc.) with inline segments
+//! - [`Block`]: A single block (heading, paragraph, list, etc.) with inline segments
 //!   and nested children
-//! - [`TextSegmentDto`]: Inline content segment (plain text, wiki-links, emphasis, etc.)
+//! - [`TextSegment`]: Inline content segment (plain text, wiki-links, emphasis, etc.)
 //!   supporting nested formatting per ADR-0013
 //!
 //! # Usage from Kotlin
@@ -63,7 +63,7 @@
 
 use markdown_neuraxis_engine::Document;
 use markdown_neuraxis_engine::editing::snapshot::{
-    Block, BlockContent, BlockKind, InlineNode, InlineSegment, Snapshot,
+    self as engine, BlockContent, BlockKind, InlineNode, InlineSegment,
 };
 use std::sync::Mutex;
 
@@ -112,27 +112,27 @@ impl DocumentHandle {
     }
 
     /// Get a snapshot of the document for UI rendering.
-    pub fn get_snapshot(&self) -> SnapshotDto {
+    pub fn get_snapshot(&self) -> Snapshot {
         // Recover from poisoned mutex (another thread panicked while holding lock)
         let doc = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let snapshot = doc.snapshot();
-        SnapshotDto::from_engine(snapshot)
+        Snapshot::from_engine(snapshot)
     }
 }
 
-// ============ DTOs ============
+// ============ FFI Types ============
 
 /// UI-ready snapshot of a document.
 #[derive(uniffi::Record)]
-pub struct SnapshotDto {
+pub struct Snapshot {
     /// Document version for change detection (placeholder - always 0 for now)
     pub version: u64,
     /// Hierarchical tree of blocks for rendering
-    pub blocks: Vec<BlockDto>,
+    pub blocks: Vec<Block>,
 }
 
-impl SnapshotDto {
-    fn from_engine(snapshot: Snapshot) -> Self {
+impl Snapshot {
+    fn from_engine(snapshot: engine::Snapshot) -> Self {
         let blocks = convert_blocks(&snapshot.blocks);
         Self {
             version: 0, // TODO: Add version to Snapshot when needed
@@ -141,9 +141,9 @@ impl SnapshotDto {
     }
 }
 
-/// Convert engine blocks to DTOs recursively, preserving tree structure.
+/// Convert engine blocks recursively, preserving tree structure.
 /// List containers are "unwrapped" - their children are promoted to the parent level.
-fn convert_blocks(blocks: &[Block]) -> Vec<BlockDto> {
+fn convert_blocks(blocks: &[engine::Block]) -> Vec<Block> {
     let mut result = Vec::new();
     for block in blocks {
         convert_block_into(block, &mut result);
@@ -151,10 +151,10 @@ fn convert_blocks(blocks: &[Block]) -> Vec<BlockDto> {
     result
 }
 
-/// Convert a single engine block to DTOs, appending to the result vector.
+/// Convert a single engine block, appending to the result vector.
 /// Root blocks are "unwrapped" and their children are added directly.
 /// List blocks are preserved with their ordered flag.
-fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
+fn convert_block_into(block: &engine::Block, result: &mut Vec<Block>) {
     if block.kind == BlockKind::Root {
         // Unwrap root container: add children directly to result
         if let BlockContent::Children(children) = &block.content {
@@ -176,11 +176,11 @@ fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
         BlockKind::BlockQuote => ("block_quote".to_string(), 0, None, None),
     };
 
-    // Convert engine segments to DTOs (engine now provides flat segments)
-    let segments: Vec<TextSegmentDto> = block
+    // Convert engine segments (engine now provides flat segments)
+    let segments: Vec<TextSegment> = block
         .segments
         .iter()
-        .map(TextSegmentDto::from_segment)
+        .map(TextSegment::from_segment)
         .collect();
 
     // Process children recursively
@@ -190,7 +190,7 @@ fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
         Vec::new()
     };
 
-    result.push(BlockDto {
+    result.push(Block {
         id: block.id.0.to_string(),
         kind,
         heading_level,
@@ -203,7 +203,7 @@ fn convert_block_into(block: &Block, result: &mut Vec<BlockDto>) {
 
 /// A single block in the document tree.
 #[derive(uniffi::Record)]
-pub struct BlockDto {
+pub struct Block {
     /// Stable identifier for this block (persists across edits)
     pub id: String,
     /// Block type (e.g., "heading", "list_item", "paragraph", "list")
@@ -215,24 +215,24 @@ pub struct BlockDto {
     /// Whether this is an ordered list (only set for kind="list")
     pub list_ordered: Option<bool>,
     /// Parsed inline segments (wiki-links, URLs, plain text)
-    pub segments: Vec<TextSegmentDto>,
+    pub segments: Vec<TextSegment>,
     /// Child blocks (e.g., nested list items)
-    pub children: Vec<BlockDto>,
+    pub children: Vec<Block>,
 }
 
 /// A segment of inline content within a block.
 /// Supports recursive structure for nested formatting (ADR-0013).
 #[derive(uniffi::Record)]
-pub struct TextSegmentDto {
+pub struct TextSegment {
     /// Segment type: "text", "wiki_link", "url", "emphasis", "strong", "code", "link", "image"
     pub kind: String,
     /// The text content or link target (for leaf nodes like text, code, etc.)
     pub content: String,
     /// Child segments for container nodes (emphasis, strong)
-    pub children: Vec<TextSegmentDto>,
+    pub children: Vec<TextSegment>,
 }
 
-impl TextSegmentDto {
+impl TextSegment {
     fn from_segment(segment: &InlineSegment) -> Self {
         Self::from_inline_node(&segment.kind)
     }
@@ -318,7 +318,7 @@ mod tests {
     use super::*;
 
     /// Recursively collect all blocks from the tree into a flat list
-    fn collect_all_blocks(blocks: &[BlockDto]) -> Vec<&BlockDto> {
+    fn collect_all_blocks(blocks: &[Block]) -> Vec<&Block> {
         let mut result = Vec::new();
         for block in blocks {
             result.push(block);
@@ -328,7 +328,7 @@ mod tests {
     }
 
     /// Find a block by kind in the tree (depth-first)
-    fn find_block_by_kind<'a>(blocks: &'a [BlockDto], kind: &str) -> Option<&'a BlockDto> {
+    fn find_block_by_kind<'a>(blocks: &'a [Block], kind: &str) -> Option<&'a Block> {
         for block in blocks {
             if block.kind == kind {
                 return Some(block);
@@ -341,11 +341,11 @@ mod tests {
     }
 
     /// Extract plain text from segments (test helper)
-    fn segments_to_text(segments: &[TextSegmentDto]) -> String {
+    fn segments_to_text(segments: &[TextSegment]) -> String {
         segments.iter().map(segment_to_text).collect()
     }
 
-    fn segment_to_text(segment: &TextSegmentDto) -> String {
+    fn segment_to_text(segment: &TextSegment) -> String {
         match segment.kind.as_str() {
             "text" | "code" | "strikethrough" | "wiki_link" => segment.content.clone(),
             "emphasis" | "strong" => segments_to_text(&segment.children),
@@ -382,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn test_block_dto_kinds() {
+    fn test_block_kinds() {
         let content = "# H1\n## H2\n\n- Dash\n* Star\n+ Plus\n1. Numbered\n\n---\n\n> Quote\n\n```rust\ncode\n```";
         let doc = DocumentHandle::from_string(content.to_string()).unwrap();
         let snapshot = doc.get_snapshot();
