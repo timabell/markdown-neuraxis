@@ -2,7 +2,7 @@
 source: crates/markdown-neuraxis-syntax/src/lib.rs
 expression: "insta_format_tree(&tree, 0)"
 ---
-ROOT@0..36
+ROOT@0..102
   PARAGRAPH@0..36
     TEXT@0..4 "This"
     WHITESPACE@4..5 " "
@@ -19,3 +19,33 @@ ROOT@0..36
     TEXT@30..34 "text"
     DOT@34..35 "."
     NEWLINE@35..36 "\\n"
+  NEWLINE@36..37 "\\n"
+  PARAGRAPH@37..56
+    TEXT@37..44 "Another"
+    WHITESPACE@44..45 " "
+    TEXT@45..54 "paragraph"
+    DOT@54..55 "."
+    NEWLINE@55..56 "\\n"
+  NEWLINE@56..57 "\\n"
+  PARAGRAPH@57..78
+    TEXT@57..58 "A"
+    WHITESPACE@58..59 " "
+    TEXT@59..63 "soft"
+    NEWLINE@63..64 "\\n"
+    TEXT@64..71 "wrapped"
+    WHITESPACE@71..72 " "
+    TEXT@72..76 "para"
+    DOT@76..77 "."
+    NEWLINE@77..78 "\\n"
+  NEWLINE@78..79 "\\n"
+  PARAGRAPH@79..102
+    TEXT@79..80 "A"
+    WHITESPACE@80..81 " "
+    TEXT@81..85 "hard"
+    WHITESPACE@85..87 "  "
+    NEWLINE@87..88 "\\n"
+    TEXT@88..95 "wrapped"
+    WHITESPACE@95..96 " "
+    TEXT@96..100 "para"
+    DOT@100..101 "."
+    NEWLINE@101..102 "\\n"
