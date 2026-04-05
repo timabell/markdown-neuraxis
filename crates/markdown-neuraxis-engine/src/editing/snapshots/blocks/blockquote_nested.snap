@@ -7,11 +7,9 @@ BlockQuote [0..202]
     Text [2..12] "Blockquote"
     SoftBreak [12..12]
     Text [15..24] "multiline"
-    SoftBreak [24..24]
     Text [30..72] "...continued after trailing space and with"
     HardBreak [72..75]
     Text [77..86] "hardbreak"
-    SoftBreak [86..86]
     Text [91..128] "... continued without trailing space."
     SoftBreak [128..128]
     Text [131..145] "Nested quotes:"

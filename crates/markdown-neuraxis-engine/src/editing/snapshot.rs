@@ -325,19 +325,26 @@ fn merge_blockquote_run_unchecked(blocks: &[Block], source: &str) -> Block {
 
     let mut merged_segments = Vec::new();
     let mut merged_children = Vec::new();
+    // Track if we've seen an empty blockquote line (paragraph separator) since last content
+    let mut saw_empty_since_content = false;
 
     for block in blocks {
-        // Insert SoftBreak between segments from different source lines,
-        // but not after HardBreak (which already provides the line break)
-        if !merged_segments.is_empty() && !block.segments.is_empty() {
-            let last_is_hardbreak = merged_segments
-                .last()
-                .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
-            if !last_is_hardbreak {
-                merged_segments.push(soft_break_segment(&merged_segments));
+        if block.segments.is_empty() {
+            // Empty blockquote line acts as paragraph separator
+            saw_empty_since_content = true;
+        } else {
+            // Insert SoftBreak only for consecutive content lines (no empty line between)
+            if !merged_segments.is_empty() && !saw_empty_since_content {
+                let last_is_hardbreak = merged_segments
+                    .last()
+                    .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
+                if !last_is_hardbreak {
+                    merged_segments.push(soft_break_segment(&merged_segments));
+                }
             }
+            merged_segments.extend(block.segments.clone());
+            saw_empty_since_content = false;
         }
-        merged_segments.extend(block.segments.clone());
         if let BlockContent::Children(children) = &block.content {
             merged_children.extend(children.clone());
         }
@@ -372,19 +379,26 @@ fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
     // Collect segments from leaf blockquotes and children from nested ones
     let mut merged_segments = Vec::new();
     let mut merged_children = Vec::new();
+    // Track if we've seen an empty blockquote line (paragraph separator) since last content
+    let mut saw_empty_since_content = false;
 
     for block in blocks {
-        // Insert SoftBreak between segments from different source lines,
-        // but not after HardBreak (which already provides the line break)
-        if !merged_segments.is_empty() && !block.segments.is_empty() {
-            let last_is_hardbreak = merged_segments
-                .last()
-                .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
-            if !last_is_hardbreak {
-                merged_segments.push(soft_break_segment(&merged_segments));
+        if block.segments.is_empty() {
+            // Empty blockquote line acts as paragraph separator
+            saw_empty_since_content = true;
+        } else {
+            // Insert SoftBreak only for consecutive content lines (no empty line between)
+            if !merged_segments.is_empty() && !saw_empty_since_content {
+                let last_is_hardbreak = merged_segments
+                    .last()
+                    .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
+                if !last_is_hardbreak {
+                    merged_segments.push(soft_break_segment(&merged_segments));
+                }
             }
+            merged_segments.extend(block.segments.clone());
+            saw_empty_since_content = false;
         }
-        merged_segments.extend(block.segments.clone());
 
         // Add this block's children (if any)
         if let BlockContent::Children(children) = &block.content {
