@@ -49,8 +49,8 @@ commit_parsers = [
 ]
 
 # false = include commits that don't match any parser (as ungrouped)
-# true = exclude commits that don't match any parser
-filter_commits = false
+# true = exclude commits that don't match any parser (only release-worthy commits)
+filter_commits = true
 
 tag_pattern = "v[0-9]*"
 # Skip pre-release tags like v1.0.0-beta.1

@@ -32,9 +32,10 @@ jobs:
 
       - name: Check for release-worthy changes
         id: check_changes
-        # git-cliff only includes section headers when there are conventional commits
+        # git-cliff outputs ### section headers only when there are matching commits
+        # (## [unreleased] header is always output, so we check for ### specifically)
         run: |
-          if echo "${{ steps.changelog.outputs.content }}" | grep -q '#'; then
+          if echo "${{ steps.changelog.outputs.content }}" | grep -q '###'; then
             echo "Release-worthy changes found"
             echo "should_release=true" >> $GITHUB_OUTPUT
           else
