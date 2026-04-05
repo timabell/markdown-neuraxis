@@ -18,21 +18,43 @@ pub fn BlockQuote(
     let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
 
     if is_focused {
-        let content_text = source
-            .get(block.node_range.clone())
-            .unwrap_or("")
-            .to_string();
+        // Use content_range() - excludes nested children
+        let edit_range = block.content_range();
+        let content_text = source.get(edit_range.clone()).unwrap_or("").to_string();
+        let edit_range = Some(edit_range);
         let block_clone = block.clone();
+        let children = if let BlockContent::Children(c) = &block.content {
+            Some(c.clone())
+        } else {
+            None
+        };
+
         rsx! {
-            div {
+            blockquote {
                 class: "block-quote",
                 EditorBlock {
                     block: block_clone,
                     content_text,
+                    edit_range,
                     on_command,
                     on_cancel: {
                         let mut focused_anchor_id = focused_anchor_id;
                         move |_| focused_anchor_id.set(None)
+                    }
+                }
+                // Still render nested children below the editor
+                if let Some(children) = children {
+                    for (i, child) in children.iter().enumerate() {
+                        BlockRenderer {
+                            key: "{i}",
+                            block: child.clone(),
+                            source: source.clone(),
+                            focused_anchor_id,
+                            collapsed_ids,
+                            on_context_menu,
+                            on_command,
+                            on_wikilink_click
+                        }
                     }
                 }
             }
