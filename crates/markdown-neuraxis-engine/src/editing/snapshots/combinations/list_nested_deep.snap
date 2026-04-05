@@ -50,7 +50,6 @@ List { ordered: false } [228..437]
             Text [251..260] "level one"
             SoftBreak [260..260]
             Text [265..274] "continued"
-            SoftBreak [274..274]
             Text [406..423] "back to level one"
           children:
             BlockQuote [278..402]

@@ -5,5 +5,4 @@ expression: formatted
 BlockQuote [0..18]
   segments:
     Text [2..7] "First"
-    SoftBreak [7..7]
     Text [12..17] "Third"
