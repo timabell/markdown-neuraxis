@@ -285,6 +285,11 @@ impl TextSegment {
                 content: String::new(),
                 children: vec![],
             },
+            InlineNode::SoftBreak => Self {
+                kind: "soft_break".to_string(),
+                content: String::new(),
+                children: vec![],
+            },
         }
     }
 }

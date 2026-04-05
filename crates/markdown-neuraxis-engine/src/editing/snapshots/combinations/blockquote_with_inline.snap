@@ -10,6 +10,7 @@ BlockQuote [0..68]
     Text [23..28] " and "
     Link [28..39] text:"link" url:"url"
     Text [39..40] "."
+    SoftBreak [40..40]
     Text [43..60] "Second line with "
     Code [60..66] "code"
     Text [66..67] "."

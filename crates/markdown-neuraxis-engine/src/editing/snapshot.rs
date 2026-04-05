@@ -56,8 +56,10 @@ pub enum InlineNode {
     Link { text: String, url: String },
     /// Image ![alt](url)
     Image { alt: String, url: String },
-    /// Hard line break
+    /// Hard line break (two trailing spaces + newline)
     HardBreak,
+    /// Soft line break (newline absorbed during line wrapping, renders as space)
+    SoftBreak,
 }
 
 /// The kind of block
@@ -307,6 +309,16 @@ fn merge_consecutive_blockquotes(blocks: Vec<Block>, source: &str) -> Vec<Block>
     result
 }
 
+/// Create a SoftBreak segment to represent an absorbed newline between merged lines.
+/// The range is placed at the end of the previous segments (where the newline was).
+fn soft_break_segment(prev_segments: &[InlineSegment]) -> InlineSegment {
+    let pos = prev_segments.last().map(|s| s.range.end).unwrap_or(0);
+    InlineSegment {
+        kind: InlineNode::SoftBreak,
+        range: pos..pos,
+    }
+}
+
 /// Merge blockquotes without gap checking (used for children of merged parents).
 fn merge_blockquote_run_unchecked(blocks: &[Block], source: &str) -> Block {
     assert!(!blocks.is_empty());
@@ -315,6 +327,16 @@ fn merge_blockquote_run_unchecked(blocks: &[Block], source: &str) -> Block {
     let mut merged_children = Vec::new();
 
     for block in blocks {
+        // Insert SoftBreak between segments from different source lines,
+        // but not after HardBreak (which already provides the line break)
+        if !merged_segments.is_empty() && !block.segments.is_empty() {
+            let last_is_hardbreak = merged_segments
+                .last()
+                .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
+            if !last_is_hardbreak {
+                merged_segments.push(soft_break_segment(&merged_segments));
+            }
+        }
         merged_segments.extend(block.segments.clone());
         if let BlockContent::Children(children) = &block.content {
             merged_children.extend(children.clone());
@@ -352,7 +374,16 @@ fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
     let mut merged_children = Vec::new();
 
     for block in blocks {
-        // Add this block's segments (if any)
+        // Insert SoftBreak between segments from different source lines,
+        // but not after HardBreak (which already provides the line break)
+        if !merged_segments.is_empty() && !block.segments.is_empty() {
+            let last_is_hardbreak = merged_segments
+                .last()
+                .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
+            if !last_is_hardbreak {
+                merged_segments.push(soft_break_segment(&merged_segments));
+            }
+        }
         merged_segments.extend(block.segments.clone());
 
         // Add this block's children (if any)
@@ -1190,6 +1221,14 @@ mod tests {
                 )
                 .unwrap();
             }
+            InlineNode::SoftBreak => {
+                writeln!(
+                    out,
+                    "{}{}SoftBreak [{}..{}]",
+                    prefix, spaces, range.start, range.end
+                )
+                .unwrap();
+            }
         }
     }
 
@@ -1244,6 +1283,9 @@ mod tests {
             }
             InlineNode::HardBreak => {
                 writeln!(out, "{}{}HardBreak", prefix, spaces).unwrap();
+            }
+            InlineNode::SoftBreak => {
+                writeln!(out, "{}{}SoftBreak", prefix, spaces).unwrap();
             }
         }
     }
