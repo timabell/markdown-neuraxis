@@ -70,28 +70,32 @@ pub fn BlockQuote(
         rsx! {
             blockquote {
                 class: "block-quote",
-                tabindex: "0",
-                onclick: {
-                    let mut focused_anchor_id = focused_anchor_id;
-                    move |evt| {
-                        evt.stop_propagation();
-                        focused_anchor_id.set(Some(block_id))
-                    }
-                },
-                onkeydown: {
-                    let mut focused_anchor_id = focused_anchor_id;
-                    move |evt| {
-                        if evt.key() == Key::Enter {
-                            focused_anchor_id.set(Some(block_id));
+                // Clickable span for this level's content only
+                span {
+                    class: "block-quote-content clickable-block",
+                    tabindex: "0",
+                    onclick: {
+                        let mut focused_anchor_id = focused_anchor_id;
+                        move |evt| {
+                            evt.stop_propagation();
+                            focused_anchor_id.set(Some(block_id))
                         }
+                    },
+                    onkeydown: {
+                        let mut focused_anchor_id = focused_anchor_id;
+                        move |evt| {
+                            if evt.key() == Key::Enter {
+                                focused_anchor_id.set(Some(block_id));
+                            }
+                        }
+                    },
+                    // Render inline segments (this level's content)
+                    InlineSegments {
+                        segments: block.segments.clone(),
+                        on_wikilink_click
                     }
-                },
-                // Render inline segments (this level's content)
-                InlineSegments {
-                    segments: block.segments.clone(),
-                    on_wikilink_click
                 }
-                // Render nested children (deeper blockquote levels)
+                // Render nested children (deeper blockquote levels) outside clickable area
                 if let Some(children) = children {
                     for (i, child) in children.iter().enumerate() {
                         BlockRenderer {
