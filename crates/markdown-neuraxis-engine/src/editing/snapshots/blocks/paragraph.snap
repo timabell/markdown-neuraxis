@@ -10,7 +10,9 @@ Paragraph [37..56]
     Text [37..55] "Another paragraph."
 Paragraph [57..78]
   segments:
-    Text [57..77] "A soft\nwrapped para."
+    Text [57..63] "A soft"
+    SoftBreak [63..63]
+    Text [64..77] "wrapped para."
 Paragraph [79..102]
   segments:
     Text [79..85] "A hard"

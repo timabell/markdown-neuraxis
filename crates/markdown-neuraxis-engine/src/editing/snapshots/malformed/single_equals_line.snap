@@ -4,4 +4,6 @@ expression: formatted
 ---
 Paragraph [0..7]
   segments:
-    Text [0..6] "Text\n="
+    Text [0..4] "Text"
+    SoftBreak [4..4]
+    Text [5..6] "="

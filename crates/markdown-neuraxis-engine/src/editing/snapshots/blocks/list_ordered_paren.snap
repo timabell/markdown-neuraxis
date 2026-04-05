@@ -4,4 +4,8 @@ expression: formatted
 ---
 Paragraph [0..43]
   segments:
-    Text [0..42] "1) First item\n2) Second item\n3) Third item"
+    Text [0..13] "1) First item"
+    SoftBreak [13..13]
+    Text [14..28] "2) Second item"
+    SoftBreak [28..28]
+    Text [29..42] "3) Third item"

@@ -5,4 +5,6 @@ expression: formatted
 ThematicBreak [0..4]
 Paragraph [4..27]
   segments:
-    Text [4..26] "title: Test\nno closing"
+    Text [4..15] "title: Test"
+    SoftBreak [15..15]
+    Text [16..26] "no closing"
