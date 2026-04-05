@@ -11,11 +11,12 @@ List { ordered: false } [0..94]
         Text [13..29] "  continued here"
       children:
         BlockQuote [32..80]
-          segments:
-            Text [34..45] "quoted part"
-            SoftBreak [45..45]
-            Text [50..60] "more quote"
           children:
+            Paragraph [32..61]
+              segments:
+                Text [34..45] "quoted part"
+                SoftBreak [45..45]
+                Text [50..60] "more quote"
             BlockQuote [64..80]
               segments:
                 Text [66..79] "deeply nested"
