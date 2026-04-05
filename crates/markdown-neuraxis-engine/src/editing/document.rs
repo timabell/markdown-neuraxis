@@ -86,11 +86,9 @@ impl IndentStyle {
 /// ```rust
 /// # use markdown_neuraxis_engine::editing::{Document, Cmd};
 /// // Create document with lossless byte preservation
+/// // Note: Anchors are created automatically during from_bytes()
 /// let markdown_bytes = b"# Hello\n\n- Item 1";
 /// let mut doc = Document::from_bytes(markdown_bytes).unwrap();
-///
-/// // Initialize stable block identifiers
-/// doc.create_anchors_from_tree();
 ///
 /// // Apply structured edits
 /// let patch = doc.apply(Cmd::SplitListItem { at: 10 });
@@ -140,7 +138,7 @@ impl Document {
         // Initial parse of the document
         let tree = parser.parse(buffer.to_string(), None);
 
-        Ok(Self {
+        let mut doc = Self {
             buffer,
             selection: len..len, // Start with cursor at end
             version: 0,
@@ -148,7 +146,12 @@ impl Document {
             tree,
             anchors: Vec::new(),
             indent_style,
-        })
+        };
+
+        // Initialize anchors from the parse tree for stable block IDs
+        doc.create_anchors_from_tree();
+
+        Ok(doc)
     }
 
     /// Get the document's content as raw bytes (exact round-trip)
@@ -342,7 +345,7 @@ impl Document {
         crate::editing::anchors::rebind_anchors_in_changed_regions(self, changed)
     }
 
-    pub fn create_anchors_from_tree(&mut self) {
+    fn create_anchors_from_tree(&mut self) {
         crate::editing::anchors::create_anchors_from_tree(self)
     }
 
@@ -1023,7 +1026,7 @@ mod tests {
 
         let markdown =
             "- Top level\n  - 2-space indented\n    - 4-space indented\n      - 6-space indented";
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
         // Verify indent style was detected before tree-sitter parsing
         assert_eq!(
@@ -1032,8 +1035,7 @@ mod tests {
             "Should detect 2-space indent style"
         );
 
-        // Create anchors and snapshot to verify the structure
-        doc.create_anchors_from_tree();
+        // Get snapshot to verify the structure (anchors are created automatically in from_bytes)
         let source = doc.text();
         let snapshot = doc.snapshot();
 
@@ -1128,7 +1130,7 @@ mod tests {
 
         // Now test with tab-based document
         let tab_markdown = "- Top level\n\t- Tab indented\n\t\t- Double tab";
-        let mut tab_doc = Document::from_bytes(tab_markdown.as_bytes()).unwrap();
+        let tab_doc = Document::from_bytes(tab_markdown.as_bytes()).unwrap();
 
         // Verify tab detection
         assert_eq!(
@@ -1137,7 +1139,6 @@ mod tests {
             "Should detect tab indent style"
         );
 
-        tab_doc.create_anchors_from_tree();
         let tab_source = tab_doc.text();
         let tab_snapshot = tab_doc.snapshot();
 

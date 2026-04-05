@@ -32,8 +32,8 @@ fn test_exact_diagnostic_collision_indented_1_vs_indented_1_2() {
         - indented 1.2.1 - then clicked this
 "#;
 
-    let mut doc = Document::from_bytes(actual_file_content.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(actual_file_content.as_bytes()).unwrap();
+    // Anchors created automatically in from_bytes
 
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
@@ -123,11 +123,9 @@ fn test_anchor_generation_algorithm_produces_unique_ids_for_similar_content() {
         let doc1_markdown = format!("- {}", content1);
         let doc2_markdown = format!("- {}", content2);
 
-        let mut doc1 = Document::from_bytes(doc1_markdown.as_bytes()).unwrap();
-        let mut doc2 = Document::from_bytes(doc2_markdown.as_bytes()).unwrap();
-
-        doc1.create_anchors_from_tree();
-        doc2.create_anchors_from_tree();
+        let doc1 = Document::from_bytes(doc1_markdown.as_bytes()).unwrap();
+        let doc2 = Document::from_bytes(doc2_markdown.as_bytes()).unwrap();
+        // Anchors created automatically in from_bytes
 
         let snapshot1 = doc1.snapshot();
         let snapshot2 = doc2.snapshot();
@@ -170,8 +168,8 @@ fn test_combined_document_collision_reproduction() {
 
 "#;
 
-    let mut doc = Document::from_bytes(problematic_markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(problematic_markdown.as_bytes()).unwrap();
+    // Anchors created automatically in from_bytes
 
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);

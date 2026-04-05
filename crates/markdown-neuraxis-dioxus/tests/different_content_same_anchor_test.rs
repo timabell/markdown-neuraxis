@@ -9,8 +9,8 @@ use test_helpers::flatten_blocks;
 fn test_different_content_same_anchor_id_bug() {
     // Use the actual runtime data that shows the bug
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+    // Anchors created automatically in from_bytes
 
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
@@ -79,8 +79,8 @@ fn test_different_content_same_anchor_id_bug() {
 fn test_specific_indented_1_vs_indented_1_2_collision() {
     // Test the specific diagnostic case: "indented 1" vs "indented 1.2"
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+    // Anchors created automatically in from_bytes
 
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);

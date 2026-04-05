@@ -1,5 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use markdown_neuraxis_engine::editing::{anchors::create_anchors_from_tree, document::Document};
+use markdown_neuraxis_engine::editing::document::Document;
 mod common;
 
 fn bench_snapshot_operations(c: &mut Criterion) {
@@ -7,8 +7,7 @@ fn bench_snapshot_operations(c: &mut Criterion) {
     group.sample_size(10);
 
     let content = common::generate_markdown_content(100);
-    let mut doc = Document::from_bytes(content.as_bytes()).unwrap();
-    create_anchors_from_tree(&mut doc);
+    let doc = Document::from_bytes(content.as_bytes()).unwrap();
 
     group.bench_function("snapshot", |b| {
         b.iter(|| {

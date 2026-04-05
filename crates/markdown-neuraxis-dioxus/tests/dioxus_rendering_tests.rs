@@ -8,9 +8,7 @@ use test_helpers::flatten_blocks;
 /// Test helper to create nested list document
 fn create_nested_list_doc() -> Document {
     let markdown = "- item 1\n  - nested 1.1\n  - nested 1.2\n    - deeply nested 1.2.1\n- item 2";
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
-    doc
+    Document::from_bytes(markdown.as_bytes()).unwrap()
 }
 
 #[cfg(test)]

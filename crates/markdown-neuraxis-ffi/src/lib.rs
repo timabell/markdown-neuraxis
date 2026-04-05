@@ -39,11 +39,9 @@ impl DocumentHandle {
     /// Create a document from markdown content string.
     #[uniffi::constructor]
     pub fn from_string(content: String) -> Result<Self, FfiError> {
-        let mut doc =
-            Document::from_bytes(content.as_bytes()).map_err(|e| FfiError::ParseError {
-                reason: e.to_string(),
-            })?;
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(content.as_bytes()).map_err(|e| FfiError::ParseError {
+            reason: e.to_string(),
+        })?;
 
         Ok(Self {
             inner: Mutex::new(doc),

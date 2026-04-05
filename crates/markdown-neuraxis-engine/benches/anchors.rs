@@ -1,5 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use markdown_neuraxis_engine::editing::{anchors::create_anchors_from_tree, document::Document};
+use markdown_neuraxis_engine::editing::Document;
 mod common;
 
 fn bench_anchor_operations(c: &mut Criterion) {
@@ -7,13 +7,12 @@ fn bench_anchor_operations(c: &mut Criterion) {
     group.sample_size(10);
 
     let content = common::generate_markdown_content(100);
-    let doc = Document::from_bytes(content.as_bytes()).unwrap();
 
+    // Benchmark anchor creation by measuring Document::from_bytes which creates anchors automatically
     group.bench_function("create_anchors", |b| {
-        let mut d = doc.clone();
         b.iter(|| {
-            create_anchors_from_tree(std::hint::black_box(&mut d));
-            std::hint::black_box(&d);
+            let doc = Document::from_bytes(std::hint::black_box(content.as_bytes())).unwrap();
+            std::hint::black_box(&doc);
         });
     });
 

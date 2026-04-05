@@ -17,8 +17,7 @@ fn test_document_clone_should_have_valid_anchor_node_references() {
   - item 1.2
 - item 2"#;
 
-    let mut original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    original_doc.create_anchors_from_tree();
+    let original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     println!("=== ORIGINAL DOCUMENT ===");
     println!(
@@ -100,8 +99,7 @@ fn test_document_clone_anchor_content_integrity() {
   - nested item
 - second item"#;
 
-    let mut original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    original_doc.create_anchors_from_tree();
+    let original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
     let original_snapshot = original_doc.snapshot();
     let original_blocks = flatten_blocks(&original_snapshot.blocks);
 
@@ -169,8 +167,7 @@ fn test_document_clone_preserves_functionality() {
     let markdown = r#"- original item
   - nested original"#;
 
-    let mut original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    original_doc.create_anchors_from_tree();
+    let original_doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     let mut cloned_doc = original_doc.clone();
 

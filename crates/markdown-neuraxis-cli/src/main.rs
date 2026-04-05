@@ -90,8 +90,7 @@ impl App {
                 // Load and display file content
                 match io::read_file(file.relative_path(), &self.notes_path) {
                     Ok(content) => match Document::from_bytes(content.as_bytes()) {
-                        Ok(mut document) => {
-                            document.create_anchors_from_tree();
+                        Ok(document) => {
                             self.selected_document = Some(document.clone());
                             self.current_content = self.render_document_content(&document);
                         }

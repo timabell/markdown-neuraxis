@@ -27,14 +27,14 @@ fn test_anchor_generation_is_order_independent() {
 
 "#;
 
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     // Generate anchors multiple times and capture the mappings
+    // Anchors are created automatically in from_bytes and are stable
     let mut anchor_mappings = Vec::new();
 
     for generation in 0..5 {
-        // Clear existing anchors and regenerate from scratch
-        doc.create_anchors_from_tree();
+        // Anchors are created automatically and stable, just take snapshot
         let snapshot = doc.snapshot();
         let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -98,10 +98,9 @@ fn test_anchor_generation_with_tree_manipulation() {
 	- indented 1.2
 "#;
 
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
-    // First generation
-    doc.create_anchors_from_tree();
+    // First generation - anchors created automatically
     let snapshot1 = doc.snapshot();
     let blocks1 = flatten_blocks(&snapshot1.blocks);
     let mapping1: std::collections::HashMap<String, u128> = blocks1
@@ -116,8 +115,8 @@ fn test_anchor_generation_with_tree_manipulation() {
 
     // Simulate tree re-creation
     let text = doc.text();
-    let mut new_doc = Document::from_bytes(text.as_bytes()).unwrap();
-    new_doc.create_anchors_from_tree();
+    let new_doc = Document::from_bytes(text.as_bytes()).unwrap();
+    // Anchors created automatically in from_bytes
     let snapshot2 = new_doc.snapshot();
     let blocks2 = flatten_blocks(&snapshot2.blocks);
     let mapping2: std::collections::HashMap<String, u128> = blocks2
@@ -152,7 +151,7 @@ fn test_anchor_generation_with_incremental_parsing() {
 "#;
 
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    // Anchors created automatically in from_bytes
     let initial_snapshot = doc.snapshot();
     let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
 
@@ -207,9 +206,8 @@ fn test_anchor_generation_with_incremental_parsing() {
 #[test]
 fn test_specific_collision_scenario() {
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+    // Anchors created automatically in from_bytes
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
 

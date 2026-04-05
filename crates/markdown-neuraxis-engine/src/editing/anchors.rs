@@ -31,8 +31,8 @@ use crate::editing::Document;
 /// ```rust
 /// use markdown_neuraxis_engine::editing::*;
 ///
-/// let mut doc = Document::from_bytes(b"# Heading\n- Item").unwrap();
-/// doc.create_anchors_from_tree();
+/// // Anchors are created automatically in from_bytes()
+/// let doc = Document::from_bytes(b"# Heading\n- Item").unwrap();
 ///
 /// let snapshot = doc.snapshot();
 /// for block in &snapshot.blocks {
@@ -334,7 +334,7 @@ fn collect_anchor_ranges_recursive(
 ///
 /// Anchors are created for these Markdown elements:
 /// - **`atx_heading`**: `# Heading`, `## Subheading`, etc.
-/// - **`list_item`**: `- Item`, `1. Item`, `* Item`, etc.  
+/// - **`list_item`**: `- Item`, `1. Item`, `* Item`, etc.
 /// - **`fenced_code_block`**: `` ```language`` blocks
 /// - **`indented_code_block`**: 4-space indented code
 ///
@@ -345,7 +345,7 @@ fn collect_anchor_ranges_recursive(
 ///
 /// Each anchor receives a **static ID** generated from:
 /// - Magic number (differentiates from dynamic IDs)
-/// - Node index within document  
+/// - Node index within document
 /// - Byte range (ensures uniqueness across content)
 /// - Hash collision resistance (128-bit IDs)
 ///
@@ -355,9 +355,9 @@ fn collect_anchor_ranges_recursive(
 /// overlapping anchors between parent and child list items. This ensures each
 /// list item gets its own stable identifier without conflicts.
 ///
-/// Call this function **once** after document creation to establish the initial
-/// anchor set. Subsequent edits will maintain anchors via transformation/rebinding.
-pub fn create_anchors_from_tree(doc: &mut Document) {
+/// This function is called automatically by `Document::from_bytes()` to establish
+/// the initial anchor set. Subsequent edits maintain anchors via transformation/rebinding.
+pub(crate) fn create_anchors_from_tree(doc: &mut Document) {
     doc.anchors.clear();
 
     if let Some(ref tree) = doc.tree {
@@ -503,11 +503,9 @@ mod tests {
     #[test]
     fn test_anchor_creation_from_simple_document() {
         let text = "# Heading\n\n- Item 1\n- Item 2";
-        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        let doc = Document::from_bytes(text.as_bytes()).unwrap();
 
-        // Create anchors from tree-sitter parse tree
-        doc.create_anchors_from_tree();
-
+        // Anchors are created automatically in from_bytes
         // Should have anchors for heading and list items
         assert!(
             doc.anchors.len() >= 2,
@@ -524,7 +522,7 @@ mod tests {
     #[test]
     fn test_anchor_transformation_insert_before() {
         let mut doc = Document::from_bytes(b"# Heading\n\n- Item 1").unwrap();
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         let original_anchors = doc.anchors.clone();
 
@@ -568,7 +566,7 @@ mod tests {
     #[test]
     fn test_anchor_transformation_insert_after() {
         let mut doc = Document::from_bytes(b"# Heading\n\n- Item 1").unwrap();
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         let original_anchors = doc.anchors.clone();
         let text_len = doc.text().len();
@@ -596,7 +594,7 @@ mod tests {
     #[test]
     fn test_anchor_transformation_delete_before() {
         let mut doc = Document::from_bytes(b"Prefix: # Heading\n\n- Item 1").unwrap();
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         let original_anchors = doc.anchors.clone();
 
@@ -631,7 +629,7 @@ mod tests {
     #[test]
     fn test_anchor_transformation_delete_overlapping() {
         let mut doc = Document::from_bytes(b"# Heading\n\n- Item 1\n- Item 2").unwrap();
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         let _original_anchor_count = doc.anchors.len();
 
@@ -655,7 +653,7 @@ mod tests {
     #[test]
     fn test_anchor_rebinding_after_parse() {
         let mut doc = Document::from_bytes(b"- Item 1\n- Item 2").unwrap();
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         let original_count = doc.anchors.len();
 
@@ -685,7 +683,7 @@ mod tests {
     #[test]
     fn test_anchor_ids_stable_across_edits() {
         let mut doc = Document::from_bytes(b"# Heading\n\n- Item 1\n- Item 2").unwrap();
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         // Collect original anchor IDs
         let original_ids: std::collections::HashSet<AnchorId> =
@@ -714,9 +712,8 @@ mod tests {
     #[test]
     fn test_anchor_generation_for_nested_lists() {
         let text = "- Item 1\n  - Nested 1\n  - Nested 2\n- Item 2";
-        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
-
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(text.as_bytes()).unwrap();
+        // Anchors created automatically in from_bytes
 
         // Should create anchors for all list items
         assert!(
@@ -739,8 +736,8 @@ mod tests {
 
     #[test]
     fn test_empty_document_anchors() {
-        let mut doc = Document::from_bytes(b"").unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(b"").unwrap();
+        // Anchors created automatically in from_bytes
 
         // Empty document should have no anchors
         assert_eq!(
@@ -755,9 +752,7 @@ mod tests {
         // FIRST: Create a document with some initial content
         let text = "# Heading One\n\nA paragraph here.\n\n- List item 1\n- List item 2";
         let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
-
-        // Create anchors from the initial tree (this should be done ONCE)
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         // Store the original anchor IDs and their content for verification
         let original_anchors: Vec<(AnchorId, String)> = doc
@@ -836,8 +831,7 @@ mod tests {
         // Test that anchor IDs remain stable even when deletions overlap their ranges
         let text = "# First Heading\n\nParagraph content.\n\n## Second Heading\n\nMore content.";
         let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
-
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         let original_ids: std::collections::HashSet<AnchorId> =
             doc.anchors.iter().map(|a| a.id).collect();
@@ -898,7 +892,7 @@ mod tests {
     #[test]
     fn test_anchor_transform_through_multiple_commands() {
         let mut doc = Document::from_bytes(b"# Heading\n\n- Item 1").unwrap();
-        doc.create_anchors_from_tree();
+        // Anchors created automatically in from_bytes
 
         let original_anchors = doc.anchors.clone();
 
@@ -943,19 +937,12 @@ mod tests {
         // Test the bug fix: anchors should be created for new blocks even if document started empty
 
         // Start with an empty document (no anchors initially)
+        // Anchors are created automatically in from_bytes
         let mut doc = Document::from_bytes(b"").unwrap();
         assert_eq!(
             doc.anchors.len(),
             0,
             "Empty document should have no anchors"
-        );
-
-        // Initialize anchors (this should work even for empty documents)
-        doc.create_anchors_from_tree();
-        assert_eq!(
-            doc.anchors.len(),
-            0,
-            "Empty document should still have no anchors after initialization"
         );
 
         // Insert text that creates a block (should get an anchor)
@@ -984,8 +971,8 @@ mod tests {
         // Test edge case: document with anchors becomes empty, then gets content again
 
         // Start with a document that has content
+        // Anchors created automatically in from_bytes
         let mut doc = Document::from_bytes(b"# Heading\n\n- Item").unwrap();
-        doc.create_anchors_from_tree();
 
         let initial_anchor_count = doc.anchors.len();
         assert!(initial_anchor_count > 0, "Should have initial anchors");
@@ -1043,8 +1030,8 @@ mod tests {
   even more content
   - Deep nested item"#;
 
-        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(text.as_bytes()).unwrap();
+        // Anchors created automatically in from_bytes
 
         // Debug: print all anchors for inspection
         println!("Document text:\n{}", doc.text());
@@ -1158,7 +1145,7 @@ mod tests {
   - Child item
 - Another parent"#;
 
-        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        let doc = Document::from_bytes(text.as_bytes()).unwrap();
 
         // Parse the document to get tree-sitter nodes
         if let Some(ref tree) = doc.tree {
@@ -1191,7 +1178,7 @@ mod tests {
         }
 
         // Now test that our actual anchor generation fixes this
-        doc.create_anchors_from_tree();
+        // Anchors were already created automatically in from_bytes
 
         println!("Fixed anchor ranges (non-overlapping):");
         for (i, anchor) in doc.anchors.iter().enumerate() {
@@ -1228,8 +1215,8 @@ mod tests {
 
   - Nested after blank line"#;
 
-        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(text.as_bytes()).unwrap();
+        // Anchors created automatically in from_bytes
 
         println!("Edge cases anchor ranges:");
         for (i, anchor) in doc.anchors.iter().enumerate() {
@@ -1294,7 +1281,7 @@ mod tests {
     - Another deep nest
 - Final simple item"#;
 
-        let mut doc = Document::from_bytes(text.as_bytes()).unwrap();
+        let doc = Document::from_bytes(text.as_bytes()).unwrap();
 
         // Test the raw ranges to see the problem space
         if let Some(ref tree) = doc.tree {
@@ -1333,7 +1320,7 @@ mod tests {
         }
 
         // Now test that our anchors fix the overlaps
-        doc.create_anchors_from_tree();
+        // Anchors were already created automatically in from_bytes
 
         println!("Fixed anchor ranges:");
         for (i, anchor) in doc.anchors.iter().enumerate() {

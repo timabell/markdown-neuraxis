@@ -1021,8 +1021,7 @@ mod tests {
             .join(format!("{rel_path}.md"));
         let input = std::fs::read_to_string(&input_path).unwrap();
 
-        let mut doc = Document::from_bytes(input.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(input.as_bytes()).unwrap();
 
         let snapshot = create_snapshot(&doc);
         let formatted = insta_format_snapshot(&snapshot);

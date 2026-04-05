@@ -13,8 +13,7 @@ mod code_fence_editor_tests {
     #[test]
     fn test_code_fence_byte_range_includes_full_block() {
         let markdown = "```rust\nfn main() {}\n```";
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
         let snapshot = doc.snapshot();
         let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -33,8 +32,7 @@ mod code_fence_editor_tests {
     #[test]
     fn test_code_fence_roundtrip_preserves_content() {
         let markdown = "```rust\nfn main() {}\n```\n\n```\nplain code\n```";
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
         // Round-trip: get text back should be identical
         assert_eq!(doc.text(), markdown, "Round-trip should preserve content");
@@ -44,9 +42,7 @@ mod code_fence_editor_tests {
 /// Test helper to create a nested list document
 fn create_nested_list_doc() -> Document {
     let markdown = "- item 1\n  - nested 1.1\n  - nested 1.2\n    - deeply nested 1.2.1\n- item 2";
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
-    doc
+    Document::from_bytes(markdown.as_bytes()).unwrap()
 }
 
 #[cfg(test)]

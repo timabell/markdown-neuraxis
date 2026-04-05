@@ -44,8 +44,7 @@ fn test_render_block_anchor_uniqueness() {
 - Item 2
   - Nested Item 2.1"#;
 
-    let mut document = Document::from_bytes(content.as_bytes()).unwrap();
-    document.create_anchors_from_tree();
+    let document = Document::from_bytes(content.as_bytes()).unwrap();
     let snapshot = document.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -92,8 +91,7 @@ fn test_anchor_stability_across_snapshots() {
 - Item 2
   - Nested Item 2.1"#;
 
-    let mut document = Document::from_bytes(content.as_bytes()).unwrap();
-    document.create_anchors_from_tree();
+    let document = Document::from_bytes(content.as_bytes()).unwrap();
 
     // Take multiple snapshots and ensure they have the same anchor IDs in the same order
     let snapshot1 = document.snapshot();
@@ -134,8 +132,7 @@ fn test_snapshot_block_anchor_uniqueness() {
 
     // Parse the document using the same path as the UI does
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
-    let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
-    document.create_anchors_from_tree();
+    let document = Document::from_bytes(file_content.as_bytes()).unwrap();
     let snapshot = document.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -179,8 +176,7 @@ fn test_focus_state_integration_single_textarea_invariant() {
 
     let (temp_dir, file) = create_test_markdown_file(content);
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
-    let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
-    document.create_anchors_from_tree();
+    let document = Document::from_bytes(file_content.as_bytes()).unwrap();
     let snapshot = document.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -247,8 +243,7 @@ fn test_nested_list_anchor_hierarchy() {
 
     let (temp_dir, file) = create_test_markdown_file(content);
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
-    let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
-    document.create_anchors_from_tree();
+    let document = Document::from_bytes(file_content.as_bytes()).unwrap();
     let snapshot = document.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -299,8 +294,7 @@ fn test_list_item_click_simulation_anchor_uniqueness() {
 
     let (temp_dir, file) = create_test_markdown_file(content);
     let file_content = io::read_file(file.relative_path(), temp_dir.path()).unwrap();
-    let mut document = Document::from_bytes(file_content.as_bytes()).unwrap();
-    document.create_anchors_from_tree();
+    let document = Document::from_bytes(file_content.as_bytes()).unwrap();
     let snapshot = document.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -349,8 +343,7 @@ fn test_multiple_textarea_bug_location_analysis() {
 - Item 2
   - Nested Item 2.1"#;
 
-    let mut document = Document::from_bytes(content.as_bytes()).unwrap();
-    document.create_anchors_from_tree();
+    let document = Document::from_bytes(content.as_bytes()).unwrap();
     let snapshot = document.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
 

@@ -26,8 +26,8 @@ fn test_anchor_id_confusion_after_editing() {
 "#;
 
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
 
+    // Anchors are created automatically in from_bytes
     // Take initial snapshot and record anchor IDs
     let source = doc.text();
     let initial_snapshot = doc.snapshot();
@@ -156,8 +156,8 @@ fn test_multiple_edit_cycles_preserve_anchor_identity() {
 - item 2"#;
 
     let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
 
+    // Anchors are created automatically in from_bytes
     // Record initial anchor mappings
     let initial_snapshot = doc.snapshot();
     let initial_blocks = flatten_blocks(&initial_snapshot.blocks);

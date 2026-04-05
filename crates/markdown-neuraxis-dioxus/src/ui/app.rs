@@ -247,10 +247,7 @@ fn load_existing_document(
 
     match io::read_file(markdown_file.relative_path(), notes_path) {
         Ok(content) => match Document::from_bytes(content.as_bytes()) {
-            Ok(mut document) => {
-                // Create anchors for the document blocks
-                document.create_anchors_from_tree();
-
+            Ok(document) => {
                 // Create snapshot for rendering
                 let snapshot = document.snapshot();
 
@@ -290,8 +287,7 @@ pub fn load_document(
 
     match io::read_file(markdown_file.relative_path(), notes_path) {
         Ok(content) => match Document::from_bytes(content.as_bytes()) {
-            Ok(mut document) => {
-                document.create_anchors_from_tree();
+            Ok(document) => {
                 let snapshot = document.snapshot();
                 *current_document.write() = Some(Arc::new(document));
                 *current_snapshot.write() = Some(snapshot);
@@ -308,8 +304,7 @@ pub fn load_document(
         Err(_) => {
             // File doesn't exist - create a blank document
             match Document::from_bytes(b"") {
-                Ok(mut document) => {
-                    document.create_anchors_from_tree();
+                Ok(document) => {
                     let snapshot = document.snapshot();
                     *current_document.write() = Some(Arc::new(document));
                     *current_snapshot.write() = Some(snapshot);

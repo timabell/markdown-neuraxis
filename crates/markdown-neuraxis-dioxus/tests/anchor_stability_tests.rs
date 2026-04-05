@@ -49,8 +49,8 @@ mod anchor_stability_tests {
     fn test_anchor_ids_stable_during_focus_cycles() {
         // Create document from the actual test data that shows the bug
         let markdown = include_str!("../test_data/nested_lists_bug_repro.md");
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+        // Anchors created automatically in from_bytes
 
         // Capture initial anchor IDs
         let initial_snapshot = doc.snapshot();
@@ -76,9 +76,8 @@ mod anchor_stability_tests {
         println!("\nTesting anchor stability for: '{}'", nested_item.0);
         let original_anchor_id = nested_item.1.0;
 
-        // Step 1: Focus (this might trigger re-parsing)
+        // Step 1: Focus - anchors are stable, just take snapshot
         println!("Step 1: Focusing on item...");
-        doc.create_anchors_from_tree();
 
         let after_focus_snapshot = doc.snapshot();
         let mut after_focus_blocks = Vec::new();
@@ -97,11 +96,11 @@ mod anchor_stability_tests {
             nested_item.0, original_anchor_id, after_focus_id
         );
 
-        // Step 2: Multiple regenerations without content changes
-        println!("Step 2: Multiple anchor regenerations...");
+        // Step 2: Multiple snapshots without content changes
+        println!("Step 2: Multiple snapshots...");
 
         for cycle in 0..3 {
-            doc.create_anchors_from_tree();
+            // Anchors are stable, just take snapshot
             let cycle_snapshot = doc.snapshot();
             let mut cycle_blocks = Vec::new();
             flatten_blocks(&cycle_snapshot.blocks, &mut cycle_blocks);
@@ -122,11 +121,11 @@ mod anchor_stability_tests {
     #[test]
     fn test_anchor_uniqueness_after_multiple_regenerations() {
         let markdown = include_str!("../test_data/nested_lists_bug_repro.md");
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
         for cycle in 0..5 {
-            println!("Anchor regeneration cycle {}", cycle);
-            doc.create_anchors_from_tree();
+            println!("Anchor snapshot cycle {}", cycle);
+            // Anchors are created automatically and stable
 
             let snapshot = doc.snapshot();
             let mut blocks = Vec::new();
@@ -167,8 +166,8 @@ mod anchor_stability_tests {
     #[test]
     fn test_specific_bug_scenario_from_diagnostics() {
         let markdown = include_str!("../test_data/nested_lists_bug_repro.md");
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+        // Anchors created automatically in from_bytes
 
         let snapshot = doc.snapshot();
         let mut blocks = Vec::new();

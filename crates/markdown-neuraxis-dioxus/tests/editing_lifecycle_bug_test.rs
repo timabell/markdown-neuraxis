@@ -9,10 +9,10 @@ use test_helpers::flatten_blocks;
 fn test_editing_lifecycle_causes_anchor_instability() {
     // Use the actual runtime data
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     // Step 1: Initial document load (like opening the file)
-    doc.create_anchors_from_tree();
+    // Anchors are created automatically in from_bytes
     let initial_snapshot = doc.snapshot();
     let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
 
@@ -39,8 +39,7 @@ fn test_editing_lifecycle_causes_anchor_instability() {
         // 1. Focus event triggered
         // 2. UI might regenerate anchors for consistency
         // 3. Document state changes
-
-        doc.create_anchors_from_tree(); // This is what might cause instability
+        // Anchors are created automatically in from_bytes, so just take snapshot
 
         let cycle_snapshot = doc.snapshot();
         let cycle_blocks = flatten_blocks(&cycle_snapshot.blocks);
@@ -115,9 +114,9 @@ fn test_editing_lifecycle_causes_anchor_instability() {
 fn test_rapid_focus_changes_cause_collision() {
     // Simulate rapid clicking between items (like a user quickly clicking different items)
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
-    doc.create_anchors_from_tree();
+    // Anchors are created automatically in from_bytes
     let initial_snapshot = doc.snapshot();
     let initial_blocks = flatten_blocks(&initial_snapshot.blocks);
 
@@ -137,10 +136,8 @@ fn test_rapid_focus_changes_cause_collision() {
     println!("Found {} 'indented 1.2' items", indented_1_2_items.len());
 
     // Simulate rapid focus changes (like clicking back and forth)
+    // Anchors are created automatically and stable, so just take repeated snapshots
     for rapid_cycle in 0..10 {
-        // This simulates the sequence: click item → focus → anchor regeneration
-        doc.create_anchors_from_tree();
-
         let rapid_snapshot = doc.snapshot();
         let rapid_blocks = flatten_blocks(&rapid_snapshot.blocks);
 

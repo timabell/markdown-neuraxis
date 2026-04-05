@@ -49,20 +49,17 @@
  * ```rust
  * use markdown_neuraxis_engine::editing::*;
  *
- * // 1. Create document from bytes (lossless)
+ * // 1. Create document from bytes (lossless, anchors initialized automatically)
  * let markdown_bytes = b"# Hello\n\n- Item 1\n- Item 2";
  * let mut doc = Document::from_bytes(markdown_bytes).unwrap();
  *
- * // 2. Initialize anchors for stable block IDs
- * doc.create_anchors_from_tree();
- *
- * // 3. Apply edits via commands
+ * // 2. Apply edits via commands
  * let patch = doc.apply(Cmd::InsertText { at: 0, text: "# ".to_string() });
  *
- * // 4. Get immutable snapshot for rendering
+ * // 3. Get immutable snapshot for rendering
  * let snapshot = doc.snapshot();
  *
- * // 5. Round-trip: save exact bytes
+ * // 4. Round-trip: save exact bytes
  * let saved_bytes = doc.text(); // Get current content
  * ```
  *

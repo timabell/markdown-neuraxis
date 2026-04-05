@@ -15,8 +15,7 @@ mod failing_bug_reproduction {
         // The bug: "indented 1" and "indented 1.2" get same anchor ID due to prefix collision
 
         let markdown = include_str!("../test_data/nested_lists_bug_repro.md");
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
         let snapshot = doc.snapshot();
         let blocks = flatten_blocks(&snapshot.blocks);
@@ -108,13 +107,13 @@ mod failing_bug_reproduction {
     fn test_anchor_generation_algorithm_collision() {
         // Test to understand WHY the anchor generation creates collisions
         let markdown = include_str!("../test_data/nested_lists_bug_repro.md");
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
         // Test anchor generation multiple times to see if it's consistent
         let mut anchor_mappings = Vec::new();
 
         for iteration in 0..3 {
-            doc.create_anchors_from_tree();
+            // Anchors are created automatically in from_bytes, just take snapshot
             let snapshot = doc.snapshot();
             let blocks = flatten_blocks(&snapshot.blocks);
 
@@ -193,8 +192,7 @@ mod failing_bug_reproduction {
         // RenderListItem RENDER: 'indented 1.2' id=AnchorId(10032346120884770342) is_focused=true
 
         let markdown = include_str!("../test_data/nested_lists_bug_repro.md");
-        let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-        doc.create_anchors_from_tree();
+        let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
         let snapshot = doc.snapshot();
         let blocks = flatten_blocks(&snapshot.blocks);

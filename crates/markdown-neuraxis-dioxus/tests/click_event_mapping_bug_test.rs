@@ -11,8 +11,7 @@ fn test_ui_block_to_anchor_mapping_correctness() {
     // This suggests the UI rendering and click handling are using different block mappings
 
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
@@ -95,8 +94,7 @@ fn test_snapshot_block_order_vs_ui_rendering_order() {
     // This could cause click events to get mapped to wrong blocks
 
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
@@ -161,8 +159,7 @@ fn test_hierarchical_list_item_click_confusion() {
     // Maybe nested items inherit or share anchor IDs with their parents
 
     let markdown = include_str!("../test_data/actual_runtime_bug_repro.md");
-    let mut doc = Document::from_bytes(markdown.as_bytes()).unwrap();
-    doc.create_anchors_from_tree();
+    let doc = Document::from_bytes(markdown.as_bytes()).unwrap();
 
     let snapshot = doc.snapshot();
     let blocks = flatten_blocks(&snapshot.blocks);
