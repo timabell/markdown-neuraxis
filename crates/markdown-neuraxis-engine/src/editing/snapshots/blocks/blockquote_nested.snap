@@ -27,8 +27,10 @@ BlockQuote [0..202]
             SoftBreak [161..161]
             Text [166..180] "also multiline"
         BlockQuote [185..201]
-          segments:
-            Text [187..200] "Deepest quote"
+          children:
+            Paragraph [187..200]
+              segments:
+                Text [187..200] "Deepest quote"
 Paragraph [202..225]
   segments:
     Text [202..224] "Nesting without space:"
@@ -43,14 +45,20 @@ BlockQuote [226..274]
           segments:
             Text [243..254] "Inner quote"
         BlockQuote [257..273]
-          segments:
-            Text [259..272] "Deepest quote"
+          children:
+            Paragraph [259..272]
+              segments:
+                Text [259..272] "Deepest quote"
 Paragraph [274..332]
   segments:
     Text [274..331] "Separated by blank line (should be separate blockquotes):"
 BlockQuote [333..352]
-  segments:
-    Text [335..351] "First blockquote"
+  children:
+    Paragraph [335..351]
+      segments:
+        Text [335..351] "First blockquote"
 BlockQuote [353..373]
-  segments:
-    Text [355..372] "Second blockquote"
+  children:
+    Paragraph [355..372]
+      segments:
+        Text [355..372] "Second blockquote"

@@ -19,11 +19,13 @@ FencedCode { language: Some("rust") } [97..146]
   segments:
     Text [105..141] "fn main() {\n    println!(\"Hello\");\n}"
 BlockQuote [147..179]
-  segments:
-    Text [149..167] "A blockquote with "
-    Emphasis [167..177]
-      Text "emphasis"
-    Text [177..178] "."
+  children:
+    Paragraph [149..178]
+      segments:
+        Text [149..167] "A blockquote with "
+        Emphasis [167..177]
+          Text "emphasis"
+        Text [177..178] "."
 List { ordered: false } [180..228]
   children:
     ListItem { marker: "- " } [180..193]
