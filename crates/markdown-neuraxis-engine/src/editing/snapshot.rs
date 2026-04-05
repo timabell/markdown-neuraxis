@@ -147,7 +147,246 @@ pub fn create_snapshot(doc: &crate::editing::Document) -> Snapshot {
         }
     }
 
+    // Consolidate consecutive blockquotes into single blocks
+    let blocks = consolidate_blockquotes(blocks, &source);
+
     Snapshot { blocks }
+}
+
+/// Consolidate consecutive blockquotes into single blocks.
+///
+/// In Markdown, consecutive lines starting with `>` form a single blockquote.
+/// The parser produces separate BLOCK_QUOTE nodes for each line, so we merge
+/// them here into a coherent structure:
+///
+/// - Consecutive leaf blockquotes: merge segments into one block
+/// - Nested blockquotes (`> > text`): become children of the merged block
+/// - Mixed content (`> text` followed by `> > nested`): text in segments, nested in children
+///
+/// Blockquotes are considered consecutive if they're adjacent or separated only
+/// by whitespace (indentation). A blank line (newline character in the gap)
+/// breaks the sequence.
+fn consolidate_blockquotes(blocks: Vec<Block>, source: &str) -> Vec<Block> {
+    let mut result = Vec::new();
+    let mut i = 0;
+
+    while i < blocks.len() {
+        if blocks[i].kind == BlockKind::BlockQuote {
+            // Start of a blockquote run - find extent and consolidate
+            let run_start = i;
+            let mut run_end = i + 1;
+
+            // Find all consecutive blockquotes (adjacent or separated only by indentation)
+            while run_end < blocks.len()
+                && blocks[run_end].kind == BlockKind::BlockQuote
+                && is_whitespace_only_gap(
+                    source,
+                    blocks[run_end - 1].node_range.end,
+                    blocks[run_end].node_range.start,
+                )
+            {
+                run_end += 1;
+            }
+
+            if run_end - run_start == 1 {
+                // Single blockquote - no consolidation needed, but recurse into children
+                let mut block = blocks[i].clone();
+                if let BlockContent::Children(children) = block.content {
+                    block.content =
+                        BlockContent::Children(consolidate_blockquotes(children, source));
+                }
+                result.push(block);
+            } else {
+                // Multiple consecutive blockquotes - merge them
+                result.push(merge_blockquote_run(&blocks[run_start..run_end], source));
+            }
+            i = run_end;
+        } else {
+            // Non-blockquote: recurse into children if present
+            let mut block = blocks[i].clone();
+            if let BlockContent::Children(children) = block.content {
+                block.content = BlockContent::Children(consolidate_blockquotes(children, source));
+            }
+            result.push(block);
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Check if the gap between two ranges allows consolidation.
+/// Returns true if blocks should be consolidated, false if separated by blank line.
+///
+/// Blockquotes are consecutive if the gap contains only:
+/// - Whitespace (spaces/tabs) for indentation
+/// - At most one newline followed by non-newline content
+///
+/// A blank line (empty line) is detected as a newline followed immediately by
+/// another newline (or end of gap), which breaks the sequence.
+fn is_whitespace_only_gap(source: &str, end: usize, start: usize) -> bool {
+    if start <= end {
+        // Adjacent or overlapping - consolidate
+        return true;
+    }
+    let gap = &source[end..start];
+
+    // Check for blank line pattern: newline followed by only whitespace and/or newline
+    // A gap like "\n" (single newline, nothing after) indicates a blank line
+    // A gap like "\n  " (newline then spaces) indicates indentation continuation
+    // A gap like "\n\n" or "\n  \n" indicates a blank line
+
+    let chars: Vec<char> = gap.chars().collect();
+    let newline_count = chars.iter().filter(|&&c| c == '\n').count();
+
+    if newline_count == 0 {
+        // No newlines - just whitespace, consolidate
+        return chars.iter().all(|&c| c == ' ' || c == '\t');
+    }
+
+    if newline_count >= 2 {
+        // Two or more newlines means blank line - don't consolidate
+        return false;
+    }
+
+    // Exactly one newline - check if there's content after it
+    // If the gap is just "\n" (newline at end with nothing after), it's a blank line
+    // If there's whitespace after the newline, it's indentation for continuation
+    if let Some(nl_pos) = chars.iter().position(|&c| c == '\n') {
+        let after_newline = &chars[nl_pos + 1..];
+        // Must have some non-empty content after newline (indentation)
+        !after_newline.is_empty()
+    } else {
+        true
+    }
+}
+
+/// Unconditionally merge all consecutive blockquotes in the list.
+/// Used for children of already-merged parents where gap checking isn't needed.
+fn merge_consecutive_blockquotes(blocks: Vec<Block>, source: &str) -> Vec<Block> {
+    let mut result = Vec::new();
+    let mut i = 0;
+
+    while i < blocks.len() {
+        if blocks[i].kind == BlockKind::BlockQuote {
+            // Find extent of consecutive blockquotes (no gap checking)
+            let run_start = i;
+            let mut run_end = i + 1;
+            while run_end < blocks.len() && blocks[run_end].kind == BlockKind::BlockQuote {
+                run_end += 1;
+            }
+
+            if run_end - run_start == 1 {
+                // Single blockquote - recurse into children
+                let mut block = blocks[i].clone();
+                if let BlockContent::Children(children) = block.content {
+                    block.content =
+                        BlockContent::Children(merge_consecutive_blockquotes(children, source));
+                }
+                result.push(block);
+            } else {
+                // Multiple consecutive - merge them unconditionally
+                result.push(merge_blockquote_run_unchecked(
+                    &blocks[run_start..run_end],
+                    source,
+                ));
+            }
+            i = run_end;
+        } else {
+            // Non-blockquote: recurse into children
+            let mut block = blocks[i].clone();
+            if let BlockContent::Children(children) = block.content {
+                block.content =
+                    BlockContent::Children(merge_consecutive_blockquotes(children, source));
+            }
+            result.push(block);
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Merge blockquotes without gap checking (used for children of merged parents).
+fn merge_blockquote_run_unchecked(blocks: &[Block], source: &str) -> Block {
+    assert!(!blocks.is_empty());
+
+    let mut merged_segments = Vec::new();
+    let mut merged_children = Vec::new();
+
+    for block in blocks {
+        merged_segments.extend(block.segments.clone());
+        if let BlockContent::Children(children) = &block.content {
+            merged_children.extend(children.clone());
+        }
+    }
+
+    let merged_children = merge_consecutive_blockquotes(merged_children, source);
+
+    let first = blocks.first().unwrap();
+    let last = blocks.last().unwrap();
+    let merged_range = first.node_range.start..last.node_range.end;
+    let id = first.id;
+
+    let content = if merged_children.is_empty() {
+        BlockContent::Leaf
+    } else {
+        BlockContent::Children(merged_children)
+    };
+
+    Block {
+        id,
+        kind: BlockKind::BlockQuote,
+        node_range: merged_range,
+        segments: merged_segments,
+        content,
+    }
+}
+
+/// Merge a run of consecutive blockquote blocks into a single block.
+fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
+    assert!(!blocks.is_empty());
+
+    // Collect segments from leaf blockquotes and children from nested ones
+    let mut merged_segments = Vec::new();
+    let mut merged_children = Vec::new();
+
+    for block in blocks {
+        // Add this block's segments (if any)
+        merged_segments.extend(block.segments.clone());
+
+        // Add this block's children (if any)
+        if let BlockContent::Children(children) = &block.content {
+            merged_children.extend(children.clone());
+        }
+    }
+
+    // Children from merged parents should unconditionally merge together
+    // (we've already verified the parents are consecutive, so children belong together)
+    // We still need to handle nested children within them
+    let merged_children = merge_consecutive_blockquotes(merged_children, source);
+
+    // Compute merged range
+    let first = blocks.first().unwrap();
+    let last = blocks.last().unwrap();
+    let merged_range = first.node_range.start..last.node_range.end;
+
+    // Use the first block's ID (it represents the start of the blockquote)
+    let id = first.id;
+
+    let content = if merged_children.is_empty() {
+        BlockContent::Leaf
+    } else {
+        BlockContent::Children(merged_children)
+    };
+
+    Block {
+        id,
+        kind: BlockKind::BlockQuote,
+        node_range: merged_range,
+        segments: merged_segments,
+        content,
+    }
 }
 
 /// Find the best matching anchor for a given byte range.
@@ -269,6 +508,9 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
         }
     }
 
+    // Consolidate consecutive blockquotes in children
+    let children = consolidate_blockquotes(children, source);
+
     let content = if children.is_empty() {
         BlockContent::Leaf
     } else {
@@ -361,23 +603,25 @@ fn process_block_quote(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Op
         }
     }
 
-    let content = if children.is_empty() {
-        BlockContent::Leaf
-    } else {
-        BlockContent::Children(children)
-    };
-
     let id = find_anchor_for_range(anchors, &node_range);
 
-    // Extract segments from blockquote content (after "> " prefix)
-    let prefix_len = text.find(|c: char| c != '>' && c != ' ').unwrap_or(0);
-    let content_start = node_range.start + prefix_len;
-    let content_end = if text.ends_with('\n') {
-        node_range.end - 1
+    // If blockquote has nested blockquotes, all content belongs to the innermost level
+    // so outer levels should have empty segments
+    let (content, segments) = if children.is_empty() {
+        // Leaf blockquote: extract segments from content (after "> " prefix)
+        let prefix_len = text.find(|c: char| c != '>' && c != ' ').unwrap_or(0);
+        let content_start = node_range.start + prefix_len;
+        let content_end = if text.ends_with('\n') {
+            node_range.end - 1
+        } else {
+            node_range.end
+        };
+        let segments = extract_segments(&node, source, content_start..content_end);
+        (BlockContent::Leaf, segments)
     } else {
-        node_range.end
+        // Nested blockquote: content belongs to children, no segments at this level
+        (BlockContent::Children(children), vec![])
     };
-    let segments = extract_segments(&node, source, content_start..content_end);
 
     Some(Block {
         id,

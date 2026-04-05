@@ -2,7 +2,7 @@
 source: crates/markdown-neuraxis-syntax/src/lib.rs
 expression: "insta_format_tree(&tree, 0)"
 ---
-ROOT@0..273
+ROOT@0..373
   BLOCK_QUOTE@0..13
     GT@0..1 ">"
     WHITESPACE@1..2 " "
@@ -127,9 +127,9 @@ ROOT@0..273
       WHITESPACE@248..249 " "
       TEXT@249..254 "quote"
       NEWLINE@254..255 "\\n"
-  BLOCK_QUOTE@255..273
+  BLOCK_QUOTE@255..274
     GT@255..256 ">"
-    BLOCK_QUOTE@256..273
+    BLOCK_QUOTE@256..274
       GT@256..257 ">"
       BLOCK_QUOTE@257..273
         GT@257..258 ">"
@@ -138,3 +138,40 @@ ROOT@0..273
         WHITESPACE@266..267 " "
         TEXT@267..272 "quote"
         NEWLINE@272..273 "\\n"
+      NEWLINE@273..274 "\\n"
+  PARAGRAPH@274..332
+    TEXT@274..283 "Separated"
+    WHITESPACE@283..284 " "
+    TEXT@284..286 "by"
+    WHITESPACE@286..287 " "
+    TEXT@287..292 "blank"
+    WHITESPACE@292..293 " "
+    TEXT@293..297 "line"
+    WHITESPACE@297..298 " "
+    LPAREN@298..299 "("
+    TEXT@299..305 "should"
+    WHITESPACE@305..306 " "
+    TEXT@306..308 "be"
+    WHITESPACE@308..309 " "
+    TEXT@309..317 "separate"
+    WHITESPACE@317..318 " "
+    TEXT@318..329 "blockquotes"
+    RPAREN@329..330 ")"
+    COLON@330..331 ":"
+    NEWLINE@331..332 "\\n"
+  NEWLINE@332..333 "\\n"
+  BLOCK_QUOTE@333..352
+    GT@333..334 ">"
+    WHITESPACE@334..335 " "
+    TEXT@335..340 "First"
+    WHITESPACE@340..341 " "
+    TEXT@341..351 "blockquote"
+    NEWLINE@351..352 "\\n"
+  NEWLINE@352..353 "\\n"
+  BLOCK_QUOTE@353..373
+    GT@353..354 ">"
+    WHITESPACE@354..355 " "
+    TEXT@355..361 "Second"
+    WHITESPACE@361..362 " "
+    TEXT@362..372 "blockquote"
+    NEWLINE@372..373 "\\n"

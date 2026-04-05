@@ -2,15 +2,9 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-BlockQuote [0..19]
+BlockQuote [0..50]
   segments:
     Text [2..18] "Quote with list:"
-BlockQuote [19..29]
-  segments:
     Text [21..28] "- First"
-BlockQuote [29..40]
-  segments:
     Text [31..39] "- Second"
-BlockQuote [40..50]
-  segments:
     Text [42..49] "- Third"
