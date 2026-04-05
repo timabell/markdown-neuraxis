@@ -981,6 +981,35 @@ fn extract_inline_children(
     children
 }
 
+/// Convert text with newlines into Text segments with SoftBreak between lines.
+/// Newlines are converted to SoftBreak to ensure consistent rendering across all block types.
+fn text_to_segments_with_softbreaks(text: &str, start: usize) -> Vec<InlineSegment> {
+    let mut segments = Vec::new();
+    let mut cursor = start;
+
+    for (i, part) in text.split('\n').enumerate() {
+        // Add SoftBreak between lines (not before first)
+        if i > 0 {
+            segments.push(InlineSegment {
+                kind: InlineNode::SoftBreak,
+                range: cursor..cursor, // Zero-length at newline position
+            });
+            cursor += 1; // Skip the newline character
+        }
+
+        if !part.is_empty() {
+            let part_end = cursor + part.len();
+            segments.push(InlineSegment {
+                kind: InlineNode::Text(part.to_string()),
+                range: cursor..part_end,
+            });
+            cursor = part_end;
+        }
+    }
+
+    segments
+}
+
 /// Build InlineSegment list from collected inlines, filling gaps with Text segments.
 fn build_segments_with_gaps(
     inlines: &[InlineInfo],
@@ -996,15 +1025,12 @@ fn build_segments_with_gaps(
             continue;
         }
 
-        // Add Text segment for gap before this inline
+        // Add Text segment(s) for gap before this inline
         if inline.range.start > cursor {
             let text_end = inline.range.start.min(content_range.end);
             let text = &source[cursor..text_end];
             if !text.is_empty() {
-                segments.push(InlineSegment {
-                    kind: InlineNode::Text(text.to_string()),
-                    range: cursor..text_end,
-                });
+                segments.extend(text_to_segments_with_softbreaks(text, cursor));
             }
         }
 
@@ -1017,14 +1043,11 @@ fn build_segments_with_gaps(
         cursor = inline.range.end.max(cursor);
     }
 
-    // Add trailing Text segment
+    // Add trailing Text segment(s)
     if cursor < content_range.end {
         let text = &source[cursor..content_range.end];
         if !text.is_empty() {
-            segments.push(InlineSegment {
-                kind: InlineNode::Text(text.to_string()),
-                range: cursor..content_range.end,
-            });
+            segments.extend(text_to_segments_with_softbreaks(text, cursor));
         }
     }
 
@@ -1032,10 +1055,7 @@ fn build_segments_with_gaps(
     if segments.is_empty() && !content_range.is_empty() {
         let text = &source[content_range.clone()];
         if !text.is_empty() {
-            segments.push(InlineSegment {
-                kind: InlineNode::Text(text.to_string()),
-                range: content_range,
-            });
+            segments.extend(text_to_segments_with_softbreaks(text, content_range.start));
         }
     }
 

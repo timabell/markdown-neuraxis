@@ -6,7 +6,9 @@ List { ordered: false } [0..95]
   children:
     ListItem { marker: "- " } [0..80]
       segments:
-        Text [2..29] "First item\n  continued here"
+        Text [2..12] "First item"
+        SoftBreak [12..12]
+        Text [13..29] "  continued here"
       children:
         BlockQuote [32..80]
           segments:
