@@ -245,6 +245,8 @@ pub fn BlockRenderer(
                 block: block.clone(),
                 source: source.clone(),
                 focused_anchor_id,
+                collapsed_ids,
+                on_context_menu,
                 on_command,
                 on_wikilink_click
             }

@@ -1,12 +1,17 @@
-use crate::ui::components::{editor_block::EditorBlock, text_segment::InlineSegments};
+use crate::ui::components::{
+    block::BlockRenderer, editor_block::EditorBlock, text_segment::InlineSegments,
+};
 use dioxus::prelude::*;
-use markdown_neuraxis_engine::editing::{AnchorId, Block, Cmd};
+use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, Cmd};
+use std::collections::HashSet;
 
 #[component]
 pub fn BlockQuote(
     block: Block,
     source: String,
     focused_anchor_id: Signal<Option<AnchorId>>,
+    collapsed_ids: Signal<HashSet<AnchorId>>,
+    on_context_menu: Option<Callback<(AnchorId, f64, f64)>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
@@ -34,6 +39,12 @@ pub fn BlockQuote(
         }
     } else {
         let block_id = block.id;
+        let children = if let BlockContent::Children(c) = &block.content {
+            Some(c.clone())
+        } else {
+            None
+        };
+
         rsx! {
             blockquote {
                 class: "block-quote",
@@ -53,9 +64,25 @@ pub fn BlockQuote(
                         }
                     }
                 },
+                // Render inline segments (this level's content)
                 InlineSegments {
                     segments: block.segments.clone(),
                     on_wikilink_click
+                }
+                // Render nested children (deeper blockquote levels)
+                if let Some(children) = children {
+                    for (i, child) in children.iter().enumerate() {
+                        BlockRenderer {
+                            key: "{i}",
+                            block: child.clone(),
+                            source: source.clone(),
+                            focused_anchor_id,
+                            collapsed_ids,
+                            on_context_menu,
+                            on_command,
+                            on_wikilink_click
+                        }
+                    }
                 }
             }
         }
