@@ -2,48 +2,20 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-BlockQuote [0..13]
+BlockQuote [0..202]
   segments:
     Text [2..12] "Blockquote"
-BlockQuote [13..25]
-  segments:
     Text [15..24] "multiline"
-BlockQuote [25..28]
-BlockQuote [28..75]
-  segments:
     Text [30..72] "...continued after trailing space and with"
     HardBreak [72..75]
-BlockQuote [75..87]
-  segments:
     Text [77..86] "hardbreak"
-BlockQuote [87..89]
-BlockQuote [89..129]
-  segments:
     Text [91..128] "... continued without trailing space."
-BlockQuote [129..146]
-  segments:
     Text [131..145] "Nested quotes:"
-BlockQuote [146..162]
-  segments:
-    Text [150..161] "Inner quote"
   children:
-    BlockQuote [148..162]
+    BlockQuote [148..202]
       segments:
         Text [150..161] "Inner quote"
-BlockQuote [162..181]
-  segments:
-    Text [166..180] "also multiline"
-  children:
-    BlockQuote [164..181]
-      segments:
         Text [166..180] "also multiline"
-BlockQuote [181..202]
-  segments:
-    Text [187..201] "Deepest quote\n"
-  children:
-    BlockQuote [183..202]
-      segments:
-        Text [187..201] "Deepest quote\n"
       children:
         BlockQuote [185..201]
           segments:
@@ -51,24 +23,23 @@ BlockQuote [181..202]
 Paragraph [202..225]
   segments:
     Text [202..224] "Nesting without space:"
-BlockQuote [226..240]
+BlockQuote [226..274]
   segments:
     Text [228..239] "Outer quote"
-BlockQuote [240..255]
-  segments:
-    Text [243..254] "Inner quote"
   children:
-    BlockQuote [241..255]
+    BlockQuote [241..274]
       segments:
         Text [243..254] "Inner quote"
-BlockQuote [255..273]
-  segments:
-    Text [259..272] "Deepest quote"
-  children:
-    BlockQuote [256..273]
-      segments:
-        Text [259..272] "Deepest quote"
       children:
         BlockQuote [257..273]
           segments:
             Text [259..272] "Deepest quote"
+Paragraph [274..332]
+  segments:
+    Text [274..331] "Separated by blank line (should be separate blockquotes):"
+BlockQuote [333..352]
+  segments:
+    Text [335..351] "First blockquote"
+BlockQuote [353..373]
+  segments:
+    Text [355..372] "Second blockquote"

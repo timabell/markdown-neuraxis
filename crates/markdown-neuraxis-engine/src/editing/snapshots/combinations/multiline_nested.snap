@@ -8,15 +8,10 @@ List { ordered: false } [0..94]
       segments:
         Text [2..29] "First item\n  continued here"
       children:
-        BlockQuote [32..46]
+        BlockQuote [32..80]
           segments:
             Text [34..45] "quoted part"
-        BlockQuote [48..61]
-          segments:
             Text [50..60] "more quote"
-        BlockQuote [63..80]
-          segments:
-            Text [66..79] "deeply nested"
           children:
             BlockQuote [64..80]
               segments:

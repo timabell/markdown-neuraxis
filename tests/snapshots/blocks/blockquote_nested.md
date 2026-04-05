@@ -15,3 +15,9 @@ Nesting without space:
 > Outer quote
 >> Inner quote
 >>> Deepest quote
+
+Separated by blank line (should be separate blockquotes):
+
+> First blockquote
+
+> Second blockquote
