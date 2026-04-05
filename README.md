@@ -145,6 +145,8 @@ cargo run --bin markdown-neuraxis-cli -- <path-to-notes-folder>
 
 If there is sufficient demand then I'll look at publishing to the app store(s).
 
+You can also install it via [Obtainium](https://github.com/ImranR98/Obtainium) which pulls release apks directly from github.
+
 ### Notes Folder structure
 
 The application works with any folder containing markdown files. However it is encouraged to follow the following layout:
