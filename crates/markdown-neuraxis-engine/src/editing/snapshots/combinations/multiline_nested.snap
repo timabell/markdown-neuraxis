@@ -18,8 +18,10 @@ List { ordered: false } [0..94]
                 SoftBreak [45..45]
                 Text [50..60] "more quote"
             BlockQuote [64..80]
-              segments:
-                Text [66..79] "deeply nested"
+              children:
+                Paragraph [66..79]
+                  segments:
+                    Text [66..79] "deeply nested"
     ListItem { marker: "- " } [80..94]
       segments:
         Text [82..93] "Second item"
