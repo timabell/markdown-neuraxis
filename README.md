@@ -1,4 +1,4 @@
-# Markdown Neuraxis
+# Markdown Neuraxis (MdNX)
 
 [github.com/timabell/markdown-neuraxis](https://github.com/timabell/markdown-neuraxis)
 
@@ -7,8 +7,6 @@
 ⚠️⚠️ WARNING: This tool is in early development and will 100% corrupt your markdown files and possibly more. Only run this against data you have backed up, or throw-away copies for testing. There are known editing bugs that will lose markdown content due to read/write of markdown items that are not yet properly supported ⚠️⚠️
 
 ![screenshot](doc/screenshot-of-app.png)
-
-Possible abbreviations: MdNX, Madnax.
 
 ## What is markdown-neuraxis now
 
