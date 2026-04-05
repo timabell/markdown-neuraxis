@@ -320,96 +320,198 @@ fn soft_break_segment(prev_segments: &[InlineSegment]) -> InlineSegment {
 }
 
 /// Merge blockquotes without gap checking (used for children of merged parents).
+/// Content is organized into Paragraph children, with nested BlockQuotes interspersed.
 fn merge_blockquote_run_unchecked(blocks: &[Block], source: &str) -> Block {
     assert!(!blocks.is_empty());
 
-    let mut merged_segments = Vec::new();
-    let mut merged_children = Vec::new();
-    // Track if we've seen an empty blockquote line (paragraph separator) since last content
-    let mut saw_empty_since_content = false;
+    let mut children: Vec<Block> = Vec::new();
+    // Current paragraph being built
+    let mut para_segments: Vec<InlineSegment> = Vec::new();
+    let mut para_start: Option<usize> = None;
+    let mut para_end: usize = 0;
+    let mut para_id: Option<AnchorId> = None;
+
+    // Helper to finalize current paragraph into children
+    let finalize_paragraph = |children: &mut Vec<Block>,
+                              segments: &mut Vec<InlineSegment>,
+                              start: &mut Option<usize>,
+                              end: usize,
+                              id: &mut Option<AnchorId>| {
+        if !segments.is_empty() {
+            let range = start.unwrap_or(0)..end;
+            children.push(Block {
+                id: id
+                    .take()
+                    .expect("paragraph must have ID from first contributing block"),
+                kind: BlockKind::Paragraph,
+                node_range: range,
+                segments: std::mem::take(segments),
+                content: BlockContent::Leaf,
+            });
+            *start = None;
+        }
+    };
 
     for block in blocks {
+        // If block has nested children, finalize current para and add them
+        if let BlockContent::Children(nested) = &block.content {
+            finalize_paragraph(
+                &mut children,
+                &mut para_segments,
+                &mut para_start,
+                para_end,
+                &mut para_id,
+            );
+            children.extend(nested.clone());
+        }
+
         if block.segments.is_empty() {
-            // Empty blockquote line acts as paragraph separator
-            saw_empty_since_content = true;
+            // Empty blockquote line - finalize current paragraph
+            finalize_paragraph(
+                &mut children,
+                &mut para_segments,
+                &mut para_start,
+                para_end,
+                &mut para_id,
+            );
         } else {
-            // Insert SoftBreak only for consecutive content lines (no empty line between)
-            if !merged_segments.is_empty() && !saw_empty_since_content {
-                let last_is_hardbreak = merged_segments
+            // Content line - add to current paragraph
+            if !para_segments.is_empty() {
+                // Insert SoftBreak between consecutive lines (unless after HardBreak)
+                let last_is_hardbreak = para_segments
                     .last()
                     .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
                 if !last_is_hardbreak {
-                    merged_segments.push(soft_break_segment(&merged_segments));
+                    para_segments.push(soft_break_segment(&para_segments));
                 }
+            } else {
+                // First content of this paragraph - capture start position and ID
+                para_start = Some(block.node_range.start);
+                para_id = Some(block.id);
             }
-            merged_segments.extend(block.segments.clone());
-            saw_empty_since_content = false;
-        }
-        if let BlockContent::Children(children) = &block.content {
-            merged_children.extend(children.clone());
+            para_segments.extend(block.segments.clone());
+            para_end = block.node_range.end;
         }
     }
 
-    let merged_children = merge_consecutive_blockquotes(merged_children, source);
+    // Finalize any remaining paragraph
+    finalize_paragraph(
+        &mut children,
+        &mut para_segments,
+        &mut para_start,
+        para_end,
+        &mut para_id,
+    );
+
+    // Recursively merge any consecutive blockquotes in children
+    let children = merge_consecutive_blockquotes(children, source);
 
     let first = blocks.first().unwrap();
     let last = blocks.last().unwrap();
     let merged_range = first.node_range.start..last.node_range.end;
     let id = first.id;
 
-    let content = if merged_children.is_empty() {
+    let content = if children.is_empty() {
         BlockContent::Leaf
     } else {
-        BlockContent::Children(merged_children)
+        BlockContent::Children(children)
     };
 
     Block {
         id,
         kind: BlockKind::BlockQuote,
         node_range: merged_range,
-        segments: merged_segments,
+        segments: vec![], // BlockQuote content is now in Paragraph children
         content,
     }
 }
 
 /// Merge a run of consecutive blockquote blocks into a single block.
+/// Content is organized into Paragraph children, with nested BlockQuotes interspersed.
 fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
     assert!(!blocks.is_empty());
 
-    // Collect segments from leaf blockquotes and children from nested ones
-    let mut merged_segments = Vec::new();
-    let mut merged_children = Vec::new();
-    // Track if we've seen an empty blockquote line (paragraph separator) since last content
-    let mut saw_empty_since_content = false;
+    let mut children: Vec<Block> = Vec::new();
+    // Current paragraph being built
+    let mut para_segments: Vec<InlineSegment> = Vec::new();
+    let mut para_start: Option<usize> = None;
+    let mut para_end: usize = 0;
+    let mut para_id: Option<AnchorId> = None;
+
+    // Helper to finalize current paragraph into children
+    let finalize_paragraph = |children: &mut Vec<Block>,
+                              segments: &mut Vec<InlineSegment>,
+                              start: &mut Option<usize>,
+                              end: usize,
+                              id: &mut Option<AnchorId>| {
+        if !segments.is_empty() {
+            let range = start.unwrap_or(0)..end;
+            children.push(Block {
+                id: id
+                    .take()
+                    .expect("paragraph must have ID from first contributing block"),
+                kind: BlockKind::Paragraph,
+                node_range: range,
+                segments: std::mem::take(segments),
+                content: BlockContent::Leaf,
+            });
+            *start = None;
+        }
+    };
 
     for block in blocks {
+        // If block has nested children, finalize current para and add them
+        if let BlockContent::Children(nested) = &block.content {
+            finalize_paragraph(
+                &mut children,
+                &mut para_segments,
+                &mut para_start,
+                para_end,
+                &mut para_id,
+            );
+            children.extend(nested.clone());
+        }
+
         if block.segments.is_empty() {
-            // Empty blockquote line acts as paragraph separator
-            saw_empty_since_content = true;
+            // Empty blockquote line - finalize current paragraph
+            finalize_paragraph(
+                &mut children,
+                &mut para_segments,
+                &mut para_start,
+                para_end,
+                &mut para_id,
+            );
         } else {
-            // Insert SoftBreak only for consecutive content lines (no empty line between)
-            if !merged_segments.is_empty() && !saw_empty_since_content {
-                let last_is_hardbreak = merged_segments
+            // Content line - add to current paragraph
+            if !para_segments.is_empty() {
+                // Insert SoftBreak between consecutive lines (unless after HardBreak)
+                let last_is_hardbreak = para_segments
                     .last()
                     .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
                 if !last_is_hardbreak {
-                    merged_segments.push(soft_break_segment(&merged_segments));
+                    para_segments.push(soft_break_segment(&para_segments));
                 }
+            } else {
+                // First content of this paragraph - capture start position and ID
+                para_start = Some(block.node_range.start);
+                para_id = Some(block.id);
             }
-            merged_segments.extend(block.segments.clone());
-            saw_empty_since_content = false;
-        }
-
-        // Add this block's children (if any)
-        if let BlockContent::Children(children) = &block.content {
-            merged_children.extend(children.clone());
+            para_segments.extend(block.segments.clone());
+            para_end = block.node_range.end;
         }
     }
 
-    // Children from merged parents should unconditionally merge together
-    // (we've already verified the parents are consecutive, so children belong together)
-    // We still need to handle nested children within them
-    let merged_children = merge_consecutive_blockquotes(merged_children, source);
+    // Finalize any remaining paragraph
+    finalize_paragraph(
+        &mut children,
+        &mut para_segments,
+        &mut para_start,
+        para_end,
+        &mut para_id,
+    );
+
+    // Recursively merge any consecutive blockquotes in children
+    let children = merge_consecutive_blockquotes(children, source);
 
     // Compute merged range
     let first = blocks.first().unwrap();
@@ -419,17 +521,17 @@ fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
     // Use the first block's ID (it represents the start of the blockquote)
     let id = first.id;
 
-    let content = if merged_children.is_empty() {
+    let content = if children.is_empty() {
         BlockContent::Leaf
     } else {
-        BlockContent::Children(merged_children)
+        BlockContent::Children(children)
     };
 
     Block {
         id,
         kind: BlockKind::BlockQuote,
         node_range: merged_range,
-        segments: merged_segments,
+        segments: vec![], // BlockQuote content is now in Paragraph children
         content,
     }
 }

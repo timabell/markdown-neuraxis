@@ -11,11 +11,12 @@ List { ordered: false } [0..95]
         Text [13..29] "  continued here"
       children:
         BlockQuote [32..80]
-          segments:
-            Text [34..45] "quoted part"
-            SoftBreak [45..45]
-            Text [50..60] "more quote"
           children:
+            Paragraph [32..61]
+              segments:
+                Text [34..45] "quoted part"
+                SoftBreak [45..45]
+                Text [50..60] "more quote"
             BlockQuote [64..80]
               segments:
                 Text [66..79] "deeply nested"
@@ -46,25 +47,31 @@ List { ordered: false } [228..437]
         Text [230..246] "Deep blockquotes"
       children:
         BlockQuote [249..424]
-          segments:
-            Text [251..260] "level one"
-            SoftBreak [260..260]
-            Text [265..274] "continued"
-            Text [406..423] "back to level one"
           children:
-            BlockQuote [278..402]
+            Paragraph [249..275]
               segments:
-                Text [280..289] "level two"
-                SoftBreak [289..289]
-                Text [295..309] "also continued"
+                Text [251..260] "level one"
+                SoftBreak [260..260]
+                Text [265..274] "continued"
+            BlockQuote [278..402]
               children:
-                BlockQuote [314..402]
+                Paragraph [278..310]
                   segments:
-                    Text [316..342] "level three with long text"
-                    SoftBreak [342..342]
-                    Text [349..377] "that wraps to multiple lines"
-                    SoftBreak [377..377]
-                    Text [384..401] "in the blockquote"
+                    Text [280..289] "level two"
+                    SoftBreak [289..289]
+                    Text [295..309] "also continued"
+                BlockQuote [314..402]
+                  children:
+                    Paragraph [314..402]
+                      segments:
+                        Text [316..342] "level three with long text"
+                        SoftBreak [342..342]
+                        Text [349..377] "that wraps to multiple lines"
+                        SoftBreak [377..377]
+                        Text [384..401] "in the blockquote"
+            Paragraph [404..424]
+              segments:
+                Text [406..423] "back to level one"
     ListItem { marker: "- " } [424..437]
       segments:
         Text [426..436] "Final item"

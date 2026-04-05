@@ -3,23 +3,29 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 BlockQuote [0..202]
-  segments:
-    Text [2..12] "Blockquote"
-    SoftBreak [12..12]
-    Text [15..24] "multiline"
-    Text [30..72] "...continued after trailing space and with"
-    HardBreak [72..75]
-    Text [77..86] "hardbreak"
-    Text [91..128] "... continued without trailing space."
-    SoftBreak [128..128]
-    Text [131..145] "Nested quotes:"
   children:
-    BlockQuote [148..202]
+    Paragraph [0..25]
       segments:
-        Text [150..161] "Inner quote"
-        SoftBreak [161..161]
-        Text [166..180] "also multiline"
+        Text [2..12] "Blockquote"
+        SoftBreak [12..12]
+        Text [15..24] "multiline"
+    Paragraph [28..87]
+      segments:
+        Text [30..72] "...continued after trailing space and with"
+        HardBreak [72..75]
+        Text [77..86] "hardbreak"
+    Paragraph [89..146]
+      segments:
+        Text [91..128] "... continued without trailing space."
+        SoftBreak [128..128]
+        Text [131..145] "Nested quotes:"
+    BlockQuote [148..202]
       children:
+        Paragraph [148..181]
+          segments:
+            Text [150..161] "Inner quote"
+            SoftBreak [161..161]
+            Text [166..180] "also multiline"
         BlockQuote [185..201]
           segments:
             Text [187..200] "Deepest quote"
@@ -27,13 +33,15 @@ Paragraph [202..225]
   segments:
     Text [202..224] "Nesting without space:"
 BlockQuote [226..274]
-  segments:
-    Text [228..239] "Outer quote"
   children:
-    BlockQuote [241..274]
+    Paragraph [226..240]
       segments:
-        Text [243..254] "Inner quote"
+        Text [228..239] "Outer quote"
+    BlockQuote [241..274]
       children:
+        Paragraph [241..255]
+          segments:
+            Text [243..254] "Inner quote"
         BlockQuote [257..273]
           segments:
             Text [259..272] "Deepest quote"

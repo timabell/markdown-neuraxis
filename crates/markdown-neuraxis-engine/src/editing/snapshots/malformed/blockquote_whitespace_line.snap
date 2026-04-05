@@ -3,6 +3,10 @@ source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
 BlockQuote [0..18]
-  segments:
-    Text [2..7] "First"
-    Text [12..17] "Third"
+  children:
+    Paragraph [0..8]
+      segments:
+        Text [2..7] "First"
+    Paragraph [10..18]
+      segments:
+        Text [12..17] "Third"
