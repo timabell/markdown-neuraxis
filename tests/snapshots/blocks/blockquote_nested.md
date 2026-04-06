@@ -21,3 +21,9 @@ Separated by blank line (should be separate blockquotes):
 > First blockquote
 
 > Second blockquote
+
+> Third
+> softwrap
+
+> Fourth  
+> hardwrap
