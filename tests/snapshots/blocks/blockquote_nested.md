@@ -27,3 +27,7 @@ Separated by blank line (should be separate blockquotes):
 
 > Fourth  
 > hardwrap
+
+> start of outer
+> > middle inner quote
+> end of outer

@@ -2,7 +2,7 @@
 source: crates/markdown-neuraxis-syntax/src/lib.rs
 expression: "insta_format_tree(&tree, 0)"
 ---
-ROOT@0..416
+ROOT@0..472
   BLOCK_QUOTE@0..13
     GT@0..1 ">"
     WHITESPACE@1..2 " "
@@ -198,3 +198,34 @@ ROOT@0..416
     WHITESPACE@406..407 " "
     TEXT@407..415 "hardwrap"
     NEWLINE@415..416 "\\n"
+  NEWLINE@416..417 "\\n"
+  BLOCK_QUOTE@417..434
+    GT@417..418 ">"
+    WHITESPACE@418..419 " "
+    TEXT@419..424 "start"
+    WHITESPACE@424..425 " "
+    TEXT@425..427 "of"
+    WHITESPACE@427..428 " "
+    TEXT@428..433 "outer"
+    NEWLINE@433..434 "\\n"
+  BLOCK_QUOTE@434..457
+    GT@434..435 ">"
+    WHITESPACE@435..436 " "
+    BLOCK_QUOTE@436..457
+      GT@436..437 ">"
+      WHITESPACE@437..438 " "
+      TEXT@438..444 "middle"
+      WHITESPACE@444..445 " "
+      TEXT@445..450 "inner"
+      WHITESPACE@450..451 " "
+      TEXT@451..456 "quote"
+      NEWLINE@456..457 "\\n"
+  BLOCK_QUOTE@457..472
+    GT@457..458 ">"
+    WHITESPACE@458..459 " "
+    TEXT@459..462 "end"
+    WHITESPACE@462..463 " "
+    TEXT@463..465 "of"
+    WHITESPACE@465..466 " "
+    TEXT@466..471 "outer"
+    NEWLINE@471..472 "\\n"
