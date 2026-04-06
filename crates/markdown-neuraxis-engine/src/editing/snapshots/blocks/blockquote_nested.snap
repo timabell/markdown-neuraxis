@@ -76,3 +76,16 @@ BlockQuote [394..416]
         Text [396..402] "Fourth"
         HardBreak [402..405]
         Text [407..415] "hardwrap"
+BlockQuote [417..472]
+  children:
+    Paragraph [417..433]
+      segments:
+        Text [419..433] "start of outer"
+    BlockQuote [436..457]
+      children:
+        Paragraph [434..456]
+          segments:
+            Text [438..456] "middle inner quote"
+    Paragraph [457..471]
+      segments:
+        Text [459..471] "end of outer"
