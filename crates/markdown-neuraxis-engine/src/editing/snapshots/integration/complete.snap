@@ -20,7 +20,7 @@ FencedCode { language: Some("rust") } [97..146]
     Text [105..141] "fn main() {\n    println!(\"Hello\");\n}"
 BlockQuote [147..179]
   children:
-    Paragraph [149..178]
+    Paragraph [147..178]
       segments:
         Text [149..167] "A blockquote with "
         Emphasis [167..177]

@@ -4,9 +4,9 @@ expression: formatted
 ---
 BlockQuote [0..18]
   children:
-    Paragraph [2..7]
+    Paragraph [0..7]
       segments:
         Text [2..7] "First"
-    Paragraph [12..17]
+    Paragraph [10..17]
       segments:
         Text [12..17] "Third"

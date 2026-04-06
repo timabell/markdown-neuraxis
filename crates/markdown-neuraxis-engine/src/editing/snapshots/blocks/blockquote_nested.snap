@@ -4,31 +4,31 @@ expression: formatted
 ---
 BlockQuote [0..202]
   children:
-    Paragraph [2..24]
+    Paragraph [0..24]
       segments:
         Text [2..12] "Blockquote"
         SoftBreak [12..12]
         Text [15..24] "multiline"
-    Paragraph [30..86]
+    Paragraph [28..86]
       segments:
         Text [30..72] "...continued after trailing space and with"
         HardBreak [72..75]
         Text [77..86] "hardbreak"
-    Paragraph [91..145]
+    Paragraph [89..145]
       segments:
         Text [91..128] "... continued without trailing space."
         SoftBreak [128..128]
         Text [131..145] "Nested quotes:"
     BlockQuote [148..202]
       children:
-        Paragraph [150..180]
+        Paragraph [146..180]
           segments:
             Text [150..161] "Inner quote"
             SoftBreak [161..161]
             Text [166..180] "also multiline"
         BlockQuote [185..201]
           children:
-            Paragraph [187..200]
+            Paragraph [181..200]
               segments:
                 Text [187..200] "Deepest quote"
 Paragraph [202..225]
@@ -36,17 +36,17 @@ Paragraph [202..225]
     Text [202..224] "Nesting without space:"
 BlockQuote [226..274]
   children:
-    Paragraph [228..239]
+    Paragraph [226..239]
       segments:
         Text [228..239] "Outer quote"
     BlockQuote [241..274]
       children:
-        Paragraph [243..254]
+        Paragraph [240..254]
           segments:
             Text [243..254] "Inner quote"
         BlockQuote [257..273]
           children:
-            Paragraph [259..272]
+            Paragraph [255..272]
               segments:
                 Text [259..272] "Deepest quote"
 Paragraph [274..332]
@@ -54,24 +54,24 @@ Paragraph [274..332]
     Text [274..331] "Separated by blank line (should be separate blockquotes):"
 BlockQuote [333..352]
   children:
-    Paragraph [335..351]
+    Paragraph [333..351]
       segments:
         Text [335..351] "First blockquote"
 BlockQuote [353..373]
   children:
-    Paragraph [355..372]
+    Paragraph [353..372]
       segments:
         Text [355..372] "Second blockquote"
 BlockQuote [374..393]
   children:
-    Paragraph [376..392]
+    Paragraph [374..392]
       segments:
         Text [376..381] "Third"
         SoftBreak [381..381]
         Text [384..392] "softwrap"
 BlockQuote [394..416]
   children:
-    Paragraph [396..415]
+    Paragraph [394..415]
       segments:
         Text [396..402] "Fourth"
         HardBreak [402..405]

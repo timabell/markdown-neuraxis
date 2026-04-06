@@ -4,7 +4,7 @@ expression: formatted
 ---
 BlockQuote [0..68]
   children:
-    Paragraph [2..67]
+    Paragraph [0..67]
       segments:
         Text [2..13] "Quote with "
         Emphasis [13..23]

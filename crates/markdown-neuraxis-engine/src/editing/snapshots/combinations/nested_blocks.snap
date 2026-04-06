@@ -7,7 +7,7 @@ Heading { level: 1 } [0..10]
     Text [2..9] "Heading"
 BlockQuote [11..39]
   children:
-    Paragraph [13..38]
+    Paragraph [11..38]
       segments:
         Text [13..26] "A quote with "
         WikiLink [26..38] target:"wikilink"

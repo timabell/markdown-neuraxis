@@ -34,7 +34,7 @@ List { ordered: false } [103..230]
                 Text [198..228] "nested but inconsistent indent"
 BlockQuote [230..257]
   children:
-    Paragraph [232..256]
+    Paragraph [230..256]
       segments:
         Text [232..256] "half finished blockquote"
 Paragraph [257..282]
