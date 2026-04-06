@@ -4,7 +4,7 @@ expression: formatted
 ---
 BlockQuote [0..50]
   children:
-    Paragraph [2..49]
+    Paragraph [0..49]
       segments:
         Text [2..18] "Quote with list:"
         SoftBreak [18..18]

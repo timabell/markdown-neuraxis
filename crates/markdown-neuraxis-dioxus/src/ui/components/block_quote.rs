@@ -28,7 +28,7 @@ pub fn BlockQuote(
         };
 
     if is_focused {
-        // Calculate edit range covering only paragraphs (not nested blockquotes)
+        // Edit only this level's paragraphs (not nested blockquotes)
         let edit_range = if let (Some(first), Some(last)) = (paragraphs.first(), paragraphs.last())
         {
             first.node_range.start..last.node_range.end

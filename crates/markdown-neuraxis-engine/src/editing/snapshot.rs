@@ -256,6 +256,19 @@ fn soft_break_segment(prev_segments: &[InlineSegment]) -> InlineSegment {
     }
 }
 
+/// Find the start of the line containing `pos` (position after previous newline, or 0).
+fn line_start(source: &str, pos: usize) -> usize {
+    source[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0)
+}
+
+/// Find the end of the line containing `pos` (newline position, or source len).
+fn line_end(source: &str, pos: usize) -> usize {
+    source[pos..]
+        .find('\n')
+        .map(|i| pos + i)
+        .unwrap_or(source.len())
+}
+
 /// Merge a run of consecutive blockquote blocks into a single block.
 /// Content is organized into Paragraph children, with nested BlockQuotes interspersed.
 fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
@@ -322,13 +335,13 @@ fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
                     para_segments.push(soft_break_segment(&para_segments));
                 }
             } else {
-                // First content of this paragraph - capture start position and ID
-                // Use segment range to exclude "> " prefix from paragraph bounds
-                para_start = Some(block.segments.first().unwrap().range.start);
+                // First content of this paragraph - extend to line start to include all `>` markers
+                para_start = Some(line_start(source, block.node_range.start));
                 para_id = Some(block.id);
             }
             para_segments.extend(block.segments.clone());
-            para_end = block.segments.last().unwrap().range.end;
+            // Extend to line end to capture trailing content
+            para_end = line_end(source, block.segments.last().unwrap().range.end);
         }
     }
 

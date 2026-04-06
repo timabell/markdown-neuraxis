@@ -12,14 +12,14 @@ List { ordered: false } [0..95]
       children:
         BlockQuote [32..80]
           children:
-            Paragraph [34..60]
+            Paragraph [30..60]
               segments:
                 Text [34..45] "quoted part"
                 SoftBreak [45..45]
                 Text [50..60] "more quote"
             BlockQuote [64..80]
               children:
-                Paragraph [66..79]
+                Paragraph [61..79]
                   segments:
                     Text [66..79] "deeply nested"
     ListItem { marker: "- " } [80..94]
@@ -50,28 +50,28 @@ List { ordered: false } [228..437]
       children:
         BlockQuote [249..424]
           children:
-            Paragraph [251..274]
+            Paragraph [247..274]
               segments:
                 Text [251..260] "level one"
                 SoftBreak [260..260]
                 Text [265..274] "continued"
             BlockQuote [278..402]
               children:
-                Paragraph [280..309]
+                Paragraph [275..309]
                   segments:
                     Text [280..289] "level two"
                     SoftBreak [289..289]
                     Text [295..309] "also continued"
                 BlockQuote [314..402]
                   children:
-                    Paragraph [316..401]
+                    Paragraph [310..401]
                       segments:
                         Text [316..342] "level three with long text"
                         SoftBreak [342..342]
                         Text [349..377] "that wraps to multiple lines"
                         SoftBreak [377..377]
                         Text [384..401] "in the blockquote"
-            Paragraph [406..423]
+            Paragraph [402..423]
               segments:
                 Text [406..423] "back to level one"
     ListItem { marker: "- " } [424..437]
