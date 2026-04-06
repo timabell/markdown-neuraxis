@@ -32,3 +32,7 @@ cargo install cargo-ndk
 
 # Gradle for generating gradle wrapper (or just open in Android Studio)
 sudo apt install gradle
+
+# Tools used in ci verification & ./lint.sh
+cargo binstall --locked cargo-deny
+pip install --user yamllint
