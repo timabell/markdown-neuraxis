@@ -12,7 +12,7 @@ List { ordered: false } [0..94]
       children:
         BlockQuote [32..80]
           children:
-            Paragraph [32..61]
+            Paragraph [34..60]
               segments:
                 Text [34..45] "quoted part"
                 SoftBreak [45..45]

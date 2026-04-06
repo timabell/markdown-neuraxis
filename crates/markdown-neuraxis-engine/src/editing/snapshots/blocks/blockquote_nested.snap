@@ -4,24 +4,24 @@ expression: formatted
 ---
 BlockQuote [0..202]
   children:
-    Paragraph [0..25]
+    Paragraph [2..24]
       segments:
         Text [2..12] "Blockquote"
         SoftBreak [12..12]
         Text [15..24] "multiline"
-    Paragraph [28..87]
+    Paragraph [30..86]
       segments:
         Text [30..72] "...continued after trailing space and with"
         HardBreak [72..75]
         Text [77..86] "hardbreak"
-    Paragraph [89..146]
+    Paragraph [91..145]
       segments:
         Text [91..128] "... continued without trailing space."
         SoftBreak [128..128]
         Text [131..145] "Nested quotes:"
     BlockQuote [148..202]
       children:
-        Paragraph [148..181]
+        Paragraph [150..180]
           segments:
             Text [150..161] "Inner quote"
             SoftBreak [161..161]
@@ -36,12 +36,12 @@ Paragraph [202..225]
     Text [202..224] "Nesting without space:"
 BlockQuote [226..274]
   children:
-    Paragraph [226..240]
+    Paragraph [228..239]
       segments:
         Text [228..239] "Outer quote"
     BlockQuote [241..274]
       children:
-        Paragraph [241..255]
+        Paragraph [243..254]
           segments:
             Text [243..254] "Inner quote"
         BlockQuote [257..273]
@@ -62,3 +62,17 @@ BlockQuote [353..373]
     Paragraph [355..372]
       segments:
         Text [355..372] "Second blockquote"
+BlockQuote [374..393]
+  children:
+    Paragraph [376..392]
+      segments:
+        Text [376..381] "Third"
+        SoftBreak [381..381]
+        Text [384..392] "softwrap"
+BlockQuote [394..416]
+  children:
+    Paragraph [396..415]
+      segments:
+        Text [396..402] "Fourth"
+        HardBreak [402..405]
+        Text [407..415] "hardwrap"
