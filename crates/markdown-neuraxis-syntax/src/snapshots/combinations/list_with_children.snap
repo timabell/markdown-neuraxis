@@ -48,27 +48,29 @@ ROOT@0..116
         TEXT@62..66 "then"
         NEWLINE@66..67 "\\n"
       WHITESPACE@67..69 "  "
-      UNORDERED_LIST@69..116
-        LIST_ITEM@69..116
+      UNORDERED_LIST@69..87
+        LIST_ITEM@69..87
           DASH@69..70 "-"
           WHITESPACE@70..71 " "
-          PARAGRAPH@71..116
+          PARAGRAPH@71..87
             TEXT@71..73 "an"
             WHITESPACE@73..74 " "
             TEXT@74..79 "inner"
             WHITESPACE@79..80 " "
             TEXT@80..86 "bullet"
             NEWLINE@86..87 "\\n"
-            WHITESPACE@87..89 "  "
-            TEXT@89..97 "followed"
-            WHITESPACE@97..98 " "
-            TEXT@98..100 "by"
-            NEWLINE@100..101 "\\n"
-            WHITESPACE@101..103 "  "
-            HASH@103..104 "#"
-            HASH@104..105 "#"
-            WHITESPACE@105..106 " "
-            TEXT@106..107 "a"
-            WHITESPACE@107..108 " "
-            TEXT@108..115 "heading"
-            NEWLINE@115..116 "\\n"
+      WHITESPACE@87..89 "  "
+      PARAGRAPH@89..101
+        TEXT@89..97 "followed"
+        WHITESPACE@97..98 " "
+        TEXT@98..100 "by"
+        NEWLINE@100..101 "\\n"
+      WHITESPACE@101..103 "  "
+      HEADING@103..116
+        HASH@103..104 "#"
+        HASH@104..105 "#"
+        WHITESPACE@105..106 " "
+        TEXT@106..107 "a"
+        WHITESPACE@107..108 " "
+        TEXT@108..115 "heading"
+        NEWLINE@115..116 "\\n"

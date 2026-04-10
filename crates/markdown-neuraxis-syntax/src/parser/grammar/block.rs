@@ -42,6 +42,26 @@ fn whitespace_width(text: &str) -> usize {
     text.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum()
 }
 
+/// Check if token at offset would interrupt a paragraph (start a new block).
+/// Used to determine when to end paragraph continuation.
+fn interrupts_paragraph(p: &Parser<'_, '_>, offset: usize) -> bool {
+    match p.nth(offset) {
+        // Headings and blockquotes always interrupt
+        SyntaxKind::HASH | SyntaxKind::GT => true,
+        // List markers interrupt (dash/star/plus followed by space)
+        SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+            p.nth(offset + 1) == SyntaxKind::WHITESPACE
+        }
+        // Numbered list markers interrupt (digit(s) + dot + space)
+        SyntaxKind::TEXT => {
+            p.nth(offset + 1) == SyntaxKind::DOT && p.nth(offset + 2) == SyntaxKind::WHITESPACE
+        }
+        // Code fences interrupt
+        SyntaxKind::BACKTICK | SyntaxKind::TILDE => is_code_fence_at(p, offset),
+        _ => false,
+    }
+}
+
 /// Parse a single block element.
 ///
 /// This is the main dispatch function for block parsing. It skips blank lines,
@@ -448,25 +468,30 @@ fn list_ext(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
             if ws_width != sibling_indent_len {
                 break; // Different indent level - not a sibling in this list
             }
-            // Consume matching indentation
+            // Check what follows BEFORE consuming whitespace
+            let after_ws = p.nth(1);
+            let is_list_item = match after_ws {
+                SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+                    p.nth(2) == SyntaxKind::WHITESPACE
+                }
+                SyntaxKind::TEXT => {
+                    p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE
+                }
+                _ => false,
+            };
+            if !is_list_item || blank_count > 0 {
+                break; // Not a sibling list item
+            }
+            // Now consume indentation and parse item
             p.bump();
             match p.current() {
                 SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-                    if p.nth(1) != SyntaxKind::WHITESPACE {
-                        break; // Not a valid list item
-                    }
-                    if blank_count > 0 {
-                        break;
-                    }
                     list_item(p, sibling_indent_len);
                 }
-                SyntaxKind::TEXT if is_numbered_list_item(p) => {
-                    if blank_count > 0 {
-                        break;
-                    }
+                SyntaxKind::TEXT => {
                     list_item_numbered(p, sibling_indent_len);
                 }
-                _ => break,
+                _ => unreachable!(), // already checked above
             }
         } else {
             // Root level list - items start without indentation
@@ -609,23 +634,10 @@ fn blocks_in_list_item(p: &mut Parser<'_, '_>, content_indent: usize, sibling_in
             continue;
         }
 
-        // If at exactly sibling indent, check if it's a sibling list item
-        // (only matters for nested lists where sibling_indent > 0)
+        // If at exactly sibling indent, content belongs to parent level
+        // (for nested lists where sibling_indent > 0)
         if ws_width == sibling_indent && sibling_indent > 0 {
-            let is_sibling_list = match after_ws {
-                SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-                    p.nth(2) == SyntaxKind::WHITESPACE
-                }
-                SyntaxKind::TEXT => {
-                    // Numbered list: "1. "
-                    p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE
-                }
-                _ => false,
-            };
-            if is_sibling_list {
-                break; // Sibling item - let list_ext handle it
-            }
-            // Not a list marker - continuation content for this item
+            break;
         }
 
         // Content belongs to this item - consume indent and dispatch
@@ -642,6 +654,7 @@ fn dispatch_block_in_list_item(
     sibling_indent: usize,
 ) {
     match p.current() {
+        SyntaxKind::HASH => heading(p),
         SyntaxKind::GT => blockquote(p),
         SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
             if p.nth(1) == SyntaxKind::WHITESPACE {
@@ -673,12 +686,12 @@ fn dispatch_block_in_list_item(
 /// Parse a paragraph within a list item, with indent-aware continuation.
 ///
 /// Parses inline content, then loops for continuation lines that are:
-/// - Not outdented below sibling_indent
+/// - Not outdented below content_indent
 /// - Not block markers (which end the paragraph)
 ///
-/// `_content_indent` is unused but kept for API consistency with dispatch_block_in_list_item.
-/// `sibling_indent` is the minimum indent for content to belong to this item.
-fn paragraph_in_list_item(p: &mut Parser<'_, '_>, _content_indent: usize, sibling_indent: usize) {
+/// `content_indent` is the expected content column for this list item.
+/// `_sibling_indent` is unused but kept for API consistency.
+fn paragraph_in_list_item(p: &mut Parser<'_, '_>, content_indent: usize, _sibling_indent: usize) {
     let para = p.start();
 
     // Parse first line
@@ -707,33 +720,19 @@ fn paragraph_in_list_item(p: &mut Parser<'_, '_>, _content_indent: usize, siblin
 
         let ws_width = whitespace_width(p.current_text());
 
-        // Below sibling indent = outdented, end paragraph
-        if ws_width < sibling_indent {
+        // Below content indent = outdented, end paragraph
+        if ws_width < content_indent {
             break;
         }
 
-        let after_ws = p.nth(1);
+        // Blank line (whitespace-only)
+        if p.nth(1) == SyntaxKind::NEWLINE || p.nth(1) == SyntaxKind::EOF {
+            break;
+        }
 
-        // Check for block markers that end the paragraph
-        match after_ws {
-            SyntaxKind::GT => break,
-            SyntaxKind::NEWLINE | SyntaxKind::EOF => break,
-            SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-                if p.nth(2) == SyntaxKind::WHITESPACE {
-                    break; // List marker
-                }
-            }
-            SyntaxKind::TEXT => {
-                if p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE {
-                    break; // Numbered list marker
-                }
-            }
-            SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
-                if is_code_fence_at(p, 1) {
-                    break;
-                }
-            }
-            _ => {}
+        // Block markers interrupt the paragraph
+        if interrupts_paragraph(p, 1) {
+            break;
         }
 
         // Continuation line - consume indentation and content

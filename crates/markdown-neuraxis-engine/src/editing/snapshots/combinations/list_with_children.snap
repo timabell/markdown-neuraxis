@@ -15,15 +15,23 @@ List { ordered: false } [0..116]
             Paragraph [18..29]
               segments:
                 Text [22..29] "a quote"
+        Paragraph [32..36]
+          segments:
+            Text [32..35] "and"
         FencedCode { language: None } [38..60]
           segments:
             Text [42..53] "  some code"
-        List { ordered: false } [69..116]
+        Paragraph [62..67]
+          segments:
+            Text [62..66] "then"
+        List { ordered: false } [69..87]
           children:
-            ListItem { marker: "- " } [69..116]
+            ListItem { marker: "- " } [69..87]
               segments:
                 Text [71..86] "an inner bullet"
-                SoftBreak [86..86]
-                Text [87..100] "  followed by"
-                SoftBreak [100..100]
-                Text [101..115] "  ## a heading"
+        Paragraph [89..101]
+          segments:
+            Text [89..100] "followed by"
+        Heading { level: 2 } [103..116]
+          segments:
+            Text [106..115] "a heading"
