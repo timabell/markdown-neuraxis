@@ -1,4 +1,6 @@
+use crate::platform::pick_folder;
 use dioxus::prelude::*;
+use markdown_neuraxis_config::Config;
 use markdown_neuraxis_engine::{
     Document, FileTree, MarkdownFile, Snapshot, editing::commands::Cmd, io,
 };
@@ -38,20 +40,24 @@ pub fn App(notes_path: PathBuf) -> Element {
         notes_path.display()
     );
 
+    // Notes path as a signal so it can be changed at runtime
+    let notes_path = use_signal(|| notes_path);
+
     // Error state for runtime errors
     let mut error_state = use_signal(|| None::<RuntimeError>);
 
     // Build file tree
     let mut file_tree = use_signal(|| {
-        log::info!("Building file tree for: {}", notes_path.display());
-        match io::build_file_tree(&notes_path) {
+        let path = notes_path.read();
+        log::info!("Building file tree for: {}", path.display());
+        match io::build_file_tree(&path) {
             Ok(tree) => {
                 log::info!("File tree built successfully");
                 tree
             }
             Err(e) => {
                 log::error!("Error building file tree: {e}");
-                FileTree::new(notes_path.clone())
+                FileTree::new(path.clone())
             }
         }
     });
@@ -66,7 +72,6 @@ pub fn App(notes_path: PathBuf) -> Element {
 
     // Create callbacks outside the rsx! block for cleaner code
     let on_sidebar_file_select = {
-        let notes_path = notes_path.clone();
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
@@ -74,9 +79,10 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut mobile_nav_open = mobile_nav_open;
         let mut focused_folder = focused_folder;
         move |markdown_file: MarkdownFile| {
+            let path = notes_path.read();
             load_existing_document(
                 &markdown_file,
-                &notes_path,
+                &path,
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
@@ -90,15 +96,15 @@ pub fn App(notes_path: PathBuf) -> Element {
     };
 
     let on_file_navigate = {
-        let notes_path = notes_path.clone();
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
         move |file_path: PathBuf| {
+            let path = notes_path.read();
             navigate_to_path(
                 file_path,
-                &notes_path,
+                &path,
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
@@ -108,7 +114,6 @@ pub fn App(notes_path: PathBuf) -> Element {
     };
 
     let on_wikilink_navigate = {
-        let notes_path = notes_path.clone();
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
@@ -116,6 +121,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut file_tree = file_tree;
         let mut focused_folder = focused_folder;
         move |target: String| {
+            let path = notes_path.read();
             // First check if target matches a folder
             let folder_path = file_tree.read().find_folder(&target);
             if let Some(folder_path) = folder_path {
@@ -131,7 +137,7 @@ pub fn App(notes_path: PathBuf) -> Element {
 
             // Not a folder, resolve as file - clear any folder focus
             focused_folder.set(None);
-            let markdown_file = resolve_wikilink(&target, &notes_path);
+            let markdown_file = resolve_wikilink(&target, &path);
             // Expand parent folders so the file is visible in the tree
             if let Some(parent) = markdown_file.relative_path().parent()
                 && !parent.as_str().is_empty()
@@ -142,7 +148,7 @@ pub fn App(notes_path: PathBuf) -> Element {
             }
             load_document(
                 markdown_file,
-                &notes_path,
+                &path,
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
@@ -152,7 +158,7 @@ pub fn App(notes_path: PathBuf) -> Element {
     };
 
     let on_command = create_command_callback(
-        notes_path.clone(),
+        notes_path,
         selected_file,
         current_document,
         current_snapshot,
@@ -182,7 +188,67 @@ pub fn App(notes_path: PathBuf) -> Element {
             }
             div {
                 class: if *mobile_nav_open.read() { "sidebar mobile-visible" } else { "sidebar" },
-                h2 { "Files" }
+                div {
+                    class: "sidebar-header",
+                    h2 { "Files" }
+                    button {
+                        class: "change-folder-btn",
+                        title: "Change notes folder",
+                        onclick: move |_| {
+                            let mut notes_path = notes_path;
+                            let mut file_tree = file_tree;
+                            let mut selected_file = selected_file;
+                            let mut current_document = current_document;
+                            let mut current_snapshot = current_snapshot;
+                            let mut focused_folder = focused_folder;
+                            let mut error_state = error_state;
+
+                            let current_path = notes_path.read().clone();
+                            spawn(async move {
+                                if let Some(new_path) = pick_folder(Some(&current_path)).await {
+                                    // Save the new path to config
+                                    let config = Config { notes_path: new_path.clone() };
+                                    match config.save() {
+                                        Ok(()) => {
+                                            log::info!("Config saved with new notes path: {}", new_path.display());
+
+                                            // Update notes_path signal
+                                            notes_path.set(new_path.clone());
+
+                                            // Rebuild file tree
+                                            match io::build_file_tree(&new_path) {
+                                                Ok(tree) => {
+                                                    log::info!("File tree rebuilt successfully");
+                                                    file_tree.set(tree);
+                                                }
+                                                Err(e) => {
+                                                    log::error!("Error building file tree: {e}");
+                                                    file_tree.set(FileTree::new(new_path));
+                                                }
+                                            }
+
+                                            // Clear current file state
+                                            selected_file.set(None);
+                                            current_document.set(None);
+                                            current_snapshot.set(None);
+                                            focused_folder.set(None);
+                                            error_state.set(None);
+                                        }
+                                        Err(e) => {
+                                            RuntimeError::log_and_set(
+                                                &mut error_state,
+                                                "Failed to save config".to_string(),
+                                                e,
+                                            );
+                                        }
+                                    }
+                                }
+                                // If None (cancelled), do nothing
+                            });
+                        },
+                        "📂"
+                    }
+                }
                 super::components::TreeView {
                     tree: ReadSignal::from(file_tree),
                     selected_file: selected_file.read().clone(),
@@ -203,7 +269,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                     super::components::MainPanel {
                         file: file.clone(),
                         snapshot: snapshot.clone(),
-                        notes_path: notes_path.clone(),
+                        notes_path: notes_path.read().clone(),
                         document: document.clone(),
                         on_file_select: Some(Callback::new(on_file_navigate)),
                         on_command,
@@ -368,7 +434,7 @@ pub fn resolve_wikilink(target: &str, _notes_path: &Path) -> MarkdownFile {
 
 /// Create a command callback for document editing
 fn create_command_callback(
-    notes_path: PathBuf,
+    notes_path: Signal<PathBuf>,
     selected_file: Signal<Option<MarkdownFile>>,
     mut current_document: Signal<Option<Arc<Document>>>,
     mut current_snapshot: Signal<Option<Snapshot>>,
@@ -376,6 +442,7 @@ fn create_command_callback(
     mut error_state: Signal<Option<RuntimeError>>,
 ) -> impl FnMut(Cmd) + 'static {
     move |cmd: Cmd| {
+        let path = notes_path.read();
         let document_arc = current_document.read().clone();
         if let Some(mut document_arc) = document_arc {
             // Use Arc::make_mut for efficient copy-on-write
@@ -388,13 +455,13 @@ fn create_command_callback(
                 let content = document.text();
 
                 // Check if file exists before writing
-                let file_existed = io::read_file(file.relative_path(), &notes_path).is_ok();
+                let file_existed = io::read_file(file.relative_path(), &path).is_ok();
 
-                match io::write_file(file.relative_path(), &notes_path, &content) {
+                match io::write_file(file.relative_path(), &path, &content) {
                     Ok(()) => {
                         if !file_existed {
-                            let absolute_path = file.relative_path().to_path(&notes_path);
-                            file_tree.write().add_file(&absolute_path, &notes_path);
+                            let absolute_path = file.relative_path().to_path(&*path);
+                            file_tree.write().add_file(&absolute_path, &path);
                             log::info!(
                                 "New file created and auto-saved: {:?}",
                                 file.relative_path()

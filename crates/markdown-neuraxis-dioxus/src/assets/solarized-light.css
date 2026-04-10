@@ -40,7 +40,37 @@ body {
 
 .sidebar h2 {
     margin-top: 0;
+    margin-bottom: 0;
     color: var(--base01);
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.change-folder-btn {
+    background: var(--base3);
+    border: 1px solid var(--base1);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--base01);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.change-folder-btn:hover {
+    background: var(--base2);
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+.change-folder-btn:active {
+    background: var(--blue);
+    color: var(--base3);
 }
 
 .file-list {
