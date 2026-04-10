@@ -487,11 +487,14 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
     let fallback_content_end = node_range.start + first_line_content_end;
 
     // Process children (nested content)
-    // Skip PARAGRAPH children - segments are extracted separately below.
+    // Skip the FIRST paragraph - its content becomes the list item's segments.
+    // Subsequent paragraphs are separate child blocks.
     let mut children = Vec::new();
+    let mut first_paragraph_seen = false;
     for child in node.children() {
-        // Skip PARAGRAPH inside list items - the list item already extracted its text
-        if child.kind() == SyntaxKind::PARAGRAPH {
+        // Skip the first paragraph - its content becomes the list item's segments
+        if child.kind() == SyntaxKind::PARAGRAPH && !first_paragraph_seen {
+            first_paragraph_seen = true;
             continue;
         }
         if let Some(block) = process_node(source, child, anchors) {

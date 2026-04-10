@@ -2,9 +2,9 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-List { ordered: false } [0..30]
+List { ordered: false } [0..116]
   children:
-    ListItem { marker: "- " } [0..30]
+    ListItem { marker: "- " } [0..116]
       segments:
         Text [2..10] "a bullet"
         SoftBreak [10..10]
@@ -15,23 +15,23 @@ List { ordered: false } [0..30]
             Paragraph [18..29]
               segments:
                 Text [22..29] "a quote"
-Paragraph [30..67]
-  segments:
-    Text [30..35] "  and"
-    SoftBreak [35..35]
-    Text [36..41] "  ```"
-    SoftBreak [41..41]
-    Text [42..53] "  some code"
-    SoftBreak [53..53]
-    Text [54..59] "  ```"
-    SoftBreak [59..59]
-    Text [60..66] "  then"
-List { ordered: false } [69..116]
-  children:
-    ListItem { marker: "- " } [69..116]
-      segments:
-        Text [71..86] "an inner bullet"
-        SoftBreak [86..86]
-        Text [87..100] "  followed by"
-        SoftBreak [100..100]
-        Text [101..115] "  ## a heading"
+        Paragraph [32..36]
+          segments:
+            Text [32..35] "and"
+        FencedCode { language: None } [38..60]
+          segments:
+            Text [42..53] "  some code"
+        Paragraph [62..67]
+          segments:
+            Text [62..66] "then"
+        List { ordered: false } [69..87]
+          children:
+            ListItem { marker: "- " } [69..87]
+              segments:
+                Text [71..86] "an inner bullet"
+        Paragraph [89..101]
+          segments:
+            Text [89..100] "followed by"
+        Heading { level: 2 } [103..116]
+          segments:
+            Text [106..115] "a heading"

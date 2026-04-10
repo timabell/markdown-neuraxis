@@ -30,7 +30,7 @@ ROOT@0..107
         NEWLINE@46..47 "\\n"
     NEWLINE@47..48 "\\n"
   UNORDERED_LIST@48..81
-    LIST_ITEM@48..78
+    LIST_ITEM@48..80
       DASH@48..49 "-"
       WHITESPACE@49..50 " "
       PARAGRAPH@50..78
@@ -42,7 +42,7 @@ ROOT@0..107
         WHITESPACE@71..72 " "
         TEXT@72..77 "blank"
         NEWLINE@77..78 "\\n"
-    WHITESPACE@78..80 "  "
+      WHITESPACE@78..80 "  "
     NEWLINE@80..81 "\\n"
   UNORDERED_LIST@81..107
     LIST_ITEM@81..107
