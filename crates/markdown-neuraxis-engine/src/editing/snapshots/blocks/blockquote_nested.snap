@@ -2,24 +2,90 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-BlockQuote [0..14]
-  segments:
-    Text [2..13] "Outer quote"
-BlockQuote [14..30]
-  segments:
-    Text [18..29] "Inner quote"
+BlockQuote [0..202]
   children:
-    BlockQuote [16..30]
+    Paragraph [0..24]
       segments:
-        Text [18..29] "Inner quote"
-BlockQuote [30..50]
-  segments:
-    Text [36..49] "Deepest quote"
-  children:
-    BlockQuote [32..50]
+        Text [2..12] "Blockquote"
+        SoftBreak [12..12]
+        Text [15..24] "multiline"
+    Paragraph [28..86]
       segments:
-        Text [36..49] "Deepest quote"
+        Text [30..72] "...continued after trailing space and with"
+        HardBreak [72..75]
+        Text [77..86] "hardbreak"
+    Paragraph [89..145]
+      segments:
+        Text [91..128] "... continued without trailing space."
+        SoftBreak [128..128]
+        Text [131..145] "Nested quotes:"
+    BlockQuote [148..202]
       children:
-        BlockQuote [34..50]
+        Paragraph [146..180]
           segments:
-            Text [36..49] "Deepest quote"
+            Text [150..161] "Inner quote"
+            SoftBreak [161..161]
+            Text [166..180] "also multiline"
+        BlockQuote [185..201]
+          children:
+            Paragraph [181..200]
+              segments:
+                Text [187..200] "Deepest quote"
+Paragraph [202..225]
+  segments:
+    Text [202..224] "Nesting without space:"
+BlockQuote [226..274]
+  children:
+    Paragraph [226..239]
+      segments:
+        Text [228..239] "Outer quote"
+    BlockQuote [241..274]
+      children:
+        Paragraph [240..254]
+          segments:
+            Text [243..254] "Inner quote"
+        BlockQuote [257..273]
+          children:
+            Paragraph [255..272]
+              segments:
+                Text [259..272] "Deepest quote"
+Paragraph [274..332]
+  segments:
+    Text [274..331] "Separated by blank line (should be separate blockquotes):"
+BlockQuote [333..352]
+  children:
+    Paragraph [333..351]
+      segments:
+        Text [335..351] "First blockquote"
+BlockQuote [353..373]
+  children:
+    Paragraph [353..372]
+      segments:
+        Text [355..372] "Second blockquote"
+BlockQuote [374..393]
+  children:
+    Paragraph [374..392]
+      segments:
+        Text [376..381] "Third"
+        SoftBreak [381..381]
+        Text [384..392] "softwrap"
+BlockQuote [394..416]
+  children:
+    Paragraph [394..415]
+      segments:
+        Text [396..402] "Fourth"
+        HardBreak [402..405]
+        Text [407..415] "hardwrap"
+BlockQuote [417..472]
+  children:
+    Paragraph [417..433]
+      segments:
+        Text [419..433] "start of outer"
+    BlockQuote [436..457]
+      children:
+        Paragraph [434..456]
+          segments:
+            Text [438..456] "middle inner quote"
+    Paragraph [457..471]
+      segments:
+        Text [459..471] "end of outer"

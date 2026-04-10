@@ -38,6 +38,7 @@ fn inline_node_to_text(node: &InlineNode) -> String {
         InlineNode::Link { text, .. } => text.clone(),
         InlineNode::Image { alt, .. } => alt.clone(),
         InlineNode::HardBreak => "\n".to_string(),
+        InlineNode::SoftBreak => " ".to_string(),
     }
 }
 

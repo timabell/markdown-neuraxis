@@ -6,4 +6,6 @@ List { ordered: false } [0..20]
   children:
     ListItem { marker: "- " } [0..20]
       segments:
-        Text [2..19] "Item\n    not code"
+        Text [2..6] "Item"
+        SoftBreak [6..6]
+        Text [7..19] "    not code"

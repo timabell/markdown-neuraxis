@@ -6,21 +6,22 @@ List { ordered: false } [0..95]
   children:
     ListItem { marker: "- " } [0..80]
       segments:
-        Text [2..29] "First item\n  continued here"
+        Text [2..12] "First item"
+        SoftBreak [12..12]
+        Text [13..29] "  continued here"
       children:
-        BlockQuote [32..46]
-          segments:
-            Text [34..45] "quoted part"
-        BlockQuote [48..61]
-          segments:
-            Text [50..60] "more quote"
-        BlockQuote [63..80]
-          segments:
-            Text [66..79] "deeply nested"
+        BlockQuote [32..80]
           children:
-            BlockQuote [64..80]
+            Paragraph [30..60]
               segments:
-                Text [66..79] "deeply nested"
+                Text [34..45] "quoted part"
+                SoftBreak [45..45]
+                Text [50..60] "more quote"
+            BlockQuote [64..80]
+              children:
+                Paragraph [61..79]
+                  segments:
+                    Text [66..79] "deeply nested"
     ListItem { marker: "- " } [80..94]
       segments:
         Text [82..93] "Second item"
@@ -47,62 +48,32 @@ List { ordered: false } [228..437]
       segments:
         Text [230..246] "Deep blockquotes"
       children:
-        BlockQuote [249..261]
-          segments:
-            Text [251..260] "level one"
-        BlockQuote [263..275]
-          segments:
-            Text [265..274] "continued"
-        BlockQuote [277..290]
-          segments:
-            Text [280..289] "level two"
+        BlockQuote [249..424]
           children:
-            BlockQuote [278..290]
+            Paragraph [247..274]
               segments:
-                Text [280..289] "level two"
-        BlockQuote [292..310]
-          segments:
-            Text [295..309] "also continued"
-          children:
-            BlockQuote [293..310]
-              segments:
-                Text [295..309] "also continued"
-        BlockQuote [312..343]
-          segments:
-            Text [316..342] "level three with long text"
-          children:
-            BlockQuote [313..343]
-              segments:
-                Text [316..342] "level three with long text"
+                Text [251..260] "level one"
+                SoftBreak [260..260]
+                Text [265..274] "continued"
+            BlockQuote [278..402]
               children:
-                BlockQuote [314..343]
+                Paragraph [275..309]
                   segments:
-                    Text [316..342] "level three with long text"
-        BlockQuote [345..378]
-          segments:
-            Text [349..377] "that wraps to multiple lines"
-          children:
-            BlockQuote [346..378]
+                    Text [280..289] "level two"
+                    SoftBreak [289..289]
+                    Text [295..309] "also continued"
+                BlockQuote [314..402]
+                  children:
+                    Paragraph [310..401]
+                      segments:
+                        Text [316..342] "level three with long text"
+                        SoftBreak [342..342]
+                        Text [349..377] "that wraps to multiple lines"
+                        SoftBreak [377..377]
+                        Text [384..401] "in the blockquote"
+            Paragraph [402..423]
               segments:
-                Text [349..377] "that wraps to multiple lines"
-              children:
-                BlockQuote [347..378]
-                  segments:
-                    Text [349..377] "that wraps to multiple lines"
-        BlockQuote [380..402]
-          segments:
-            Text [384..401] "in the blockquote"
-          children:
-            BlockQuote [381..402]
-              segments:
-                Text [384..401] "in the blockquote"
-              children:
-                BlockQuote [382..402]
-                  segments:
-                    Text [384..401] "in the blockquote"
-        BlockQuote [404..424]
-          segments:
-            Text [406..423] "back to level one"
+                Text [406..423] "back to level one"
     ListItem { marker: "- " } [424..437]
       segments:
         Text [426..436] "Final item"

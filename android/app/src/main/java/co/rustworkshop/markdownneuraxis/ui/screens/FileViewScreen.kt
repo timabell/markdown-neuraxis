@@ -42,6 +42,7 @@ private fun segmentsToText(segments: List<TextSegment>): String {
             "emphasis", "strong" -> segmentsToText(segment.children)
             "link", "image" -> segment.content.substringBefore("|")
             "hard_break" -> "\n"
+            "soft_break" -> " "
             else -> ""
         }
     }
@@ -177,6 +178,8 @@ private fun RenderSegments(
                     }
                     pop()
                 }
+                "soft_break" -> append(" ")
+                "hard_break" -> append("\n")
                 else -> append(segment.content)
             }
         }

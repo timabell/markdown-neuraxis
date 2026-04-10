@@ -5,3 +5,16 @@ expression: formatted
 Paragraph [0..36]
   segments:
     Text [0..35] "This is a simple paragraph of text."
+Paragraph [37..56]
+  segments:
+    Text [37..55] "Another paragraph."
+Paragraph [57..78]
+  segments:
+    Text [57..63] "A soft"
+    SoftBreak [63..63]
+    Text [64..77] "wrapped para."
+Paragraph [79..102]
+  segments:
+    Text [79..85] "A hard"
+    HardBreak [85..88]
+    Text [88..101] "wrapped para."

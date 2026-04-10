@@ -1,61 +1,163 @@
-use crate::ui::components::{editor_block::EditorBlock, text_segment::InlineSegments};
+use crate::ui::components::{
+    block::BlockRenderer, editor_block::EditorBlock, text_segment::InlineSegments,
+};
 use dioxus::prelude::*;
-use markdown_neuraxis_engine::editing::{AnchorId, Block, Cmd};
+use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, BlockKind, Cmd};
+use std::collections::HashSet;
+use std::ops::Range;
+
+/// Groups blockquote children for editing: consecutive paragraphs form editable
+/// groups, while other blocks (nested quotes, lists, etc.) are rendered separately.
+enum EditingGroup {
+    /// Consecutive paragraphs that are edited together as one unit
+    Editable {
+        blocks: Vec<Block>,
+        range: Range<usize>,
+    },
+    /// Child block with its own editing behavior (nested quotes, lists, code, etc.)
+    Nested(Block),
+}
+
+fn group_for_editing(children: &[Block]) -> Vec<EditingGroup> {
+    let mut groups = Vec::new();
+    let mut current_paras: Vec<Block> = Vec::new();
+
+    for child in children {
+        if matches!(child.kind, BlockKind::Paragraph) {
+            current_paras.push(child.clone());
+        } else {
+            // Flush any accumulated paragraphs as an editable group
+            if !current_paras.is_empty() {
+                let range = current_paras.first().unwrap().node_range.start
+                    ..current_paras.last().unwrap().node_range.end;
+                groups.push(EditingGroup::Editable {
+                    blocks: std::mem::take(&mut current_paras),
+                    range,
+                });
+            }
+            // Add nested block
+            groups.push(EditingGroup::Nested(child.clone()));
+        }
+    }
+
+    // Flush final editable group if any
+    if !current_paras.is_empty() {
+        let range = current_paras.first().unwrap().node_range.start
+            ..current_paras.last().unwrap().node_range.end;
+        groups.push(EditingGroup::Editable {
+            blocks: current_paras,
+            range,
+        });
+    }
+
+    groups
+}
 
 #[component]
 pub fn BlockQuote(
     block: Block,
     source: String,
     focused_anchor_id: Signal<Option<AnchorId>>,
+    collapsed_ids: Signal<HashSet<AnchorId>>,
+    on_context_menu: Option<Callback<(AnchorId, f64, f64)>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
 ) -> Element {
-    let is_focused = focused_anchor_id.read().as_ref() == Some(&block.id);
-
-    if is_focused {
-        let content_text = source
-            .get(block.node_range.clone())
-            .unwrap_or("")
-            .to_string();
-        let block_clone = block.clone();
-        rsx! {
-            div {
-                class: "block-quote",
-                EditorBlock {
-                    block: block_clone,
-                    content_text,
-                    on_command,
-                    on_cancel: {
-                        let mut focused_anchor_id = focused_anchor_id;
-                        move |_| focused_anchor_id.set(None)
-                    }
-                }
-            }
-        }
+    let children = if let BlockContent::Children(c) = &block.content {
+        c.clone()
     } else {
-        let block_id = block.id;
-        rsx! {
-            blockquote {
-                class: "block-quote",
-                tabindex: "0",
-                onclick: {
-                    let mut focused_anchor_id = focused_anchor_id;
-                    move |evt| {
-                        evt.stop_propagation();
-                        focused_anchor_id.set(Some(block_id))
-                    }
-                },
-                onkeydown: {
-                    let mut focused_anchor_id = focused_anchor_id;
-                    move |evt| {
-                        if evt.key() == Key::Enter {
-                            focused_anchor_id.set(Some(block_id));
+        vec![]
+    };
+
+    // Group children for editing: consecutive paragraphs together, nested blocks separate
+    let groups = group_for_editing(&children);
+
+    // Find which editable group (if any) contains the focused block
+    let current_focus = focused_anchor_id.read();
+    let focused_group_idx = current_focus.as_ref().and_then(|focused_id| {
+        groups.iter().position(|group| {
+            if let EditingGroup::Editable { blocks, .. } = group {
+                blocks.iter().any(|b| &b.id == focused_id)
+            } else {
+                false
+            }
+        })
+    });
+
+    rsx! {
+        blockquote {
+            class: "block-quote",
+            for (i, group) in groups.iter().enumerate() {
+                if let EditingGroup::Editable { blocks, range } = group {
+                    if focused_group_idx == Some(i) {
+                        // This run is focused - show editor
+                        {
+                            let edit_range = range.clone();
+                            let content_text = source.get(edit_range.clone()).unwrap_or("").to_string();
+                            rsx! {
+                                EditorBlock {
+                                    key: "editor-{i}",
+                                    block: block.clone(),
+                                    content_text,
+                                    edit_range: Some(edit_range),
+                                    on_command,
+                                    on_cancel: {
+                                        let mut focused_anchor_id = focused_anchor_id;
+                                        move |_| focused_anchor_id.set(None)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // This run is not focused - show display mode
+                        {
+                            let first_block_id = blocks.first().map(|b| b.id).unwrap_or(block.id);
+                            rsx! {
+                                span {
+                                    key: "run-{i}",
+                                    class: "block-quote-content clickable-block",
+                                    tabindex: "0",
+                                    onclick: {
+                                        let mut focused_anchor_id = focused_anchor_id;
+                                        move |evt| {
+                                            evt.stop_propagation();
+                                            focused_anchor_id.set(Some(first_block_id))
+                                        }
+                                    },
+                                    onkeydown: {
+                                        let mut focused_anchor_id = focused_anchor_id;
+                                        move |evt| {
+                                            if evt.key() == Key::Enter {
+                                                focused_anchor_id.set(Some(first_block_id));
+                                            }
+                                        }
+                                    },
+                                    for (j, para) in blocks.iter().enumerate() {
+                                        p {
+                                            key: "para-{j}",
+                                            class: "block-quote-paragraph",
+                                            InlineSegments {
+                                                segments: para.segments.clone(),
+                                                on_wikilink_click
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                },
-                InlineSegments {
-                    segments: block.segments.clone(),
-                    on_wikilink_click
+                } else if let EditingGroup::Nested(child) = group {
+                    // Nested blocks with their own editing behavior
+                    BlockRenderer {
+                        key: "child-{i}",
+                        block: child.clone(),
+                        source: source.clone(),
+                        focused_anchor_id,
+                        collapsed_ids,
+                        on_context_menu,
+                        on_command,
+                        on_wikilink_click
+                    }
                 }
             }
         }

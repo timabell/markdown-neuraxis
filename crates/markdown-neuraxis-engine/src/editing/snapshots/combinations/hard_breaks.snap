@@ -6,4 +6,8 @@ Paragraph [0..70]
   segments:
     Text [0..20] "Line with hard break"
     HardBreak [20..23]
-    Text [23..69] "next line\nSingle space no break \nalso no break"
+    Text [23..32] "next line"
+    SoftBreak [32..32]
+    Text [33..55] "Single space no break "
+    SoftBreak [55..55]
+    Text [56..69] "also no break"

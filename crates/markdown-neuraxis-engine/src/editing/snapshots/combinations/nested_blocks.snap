@@ -6,9 +6,11 @@ Heading { level: 1 } [0..10]
   segments:
     Text [2..9] "Heading"
 BlockQuote [11..39]
-  segments:
-    Text [13..26] "A quote with "
-    WikiLink [26..38] target:"wikilink"
+  children:
+    Paragraph [11..38]
+      segments:
+        Text [13..26] "A quote with "
+        WikiLink [26..38] target:"wikilink"
 List { ordered: false } [40..52]
   children:
     ListItem { marker: "- " } [40..52]

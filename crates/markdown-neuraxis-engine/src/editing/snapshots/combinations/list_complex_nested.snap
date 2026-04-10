@@ -9,7 +9,9 @@ List { ordered: false } [0..234]
         Text [2..13] "Simple item"
     ListItem { marker: "- " } [14..132]
       segments:
-        Text [16..68] "Multi-line item that has\n  a hard wrap in the middle"
+        Text [16..40] "Multi-line item that has"
+        SoftBreak [40..40]
+        Text [41..68] "  a hard wrap in the middle"
       children:
         List { ordered: false } [71..132]
           children:
@@ -24,7 +26,11 @@ List { ordered: false } [0..234]
         Text [134..153] "Another simple item"
     ListItem { marker: "- " } [154..234]
       segments:
-        Text [156..212] "Final item with\n  multiple lines and\n  even more content"
+        Text [156..171] "Final item with"
+        SoftBreak [171..171]
+        Text [172..192] "  multiple lines and"
+        SoftBreak [192..192]
+        Text [193..212] "  even more content"
       children:
         List { ordered: false } [215..234]
           children:

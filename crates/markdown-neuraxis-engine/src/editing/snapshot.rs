@@ -56,8 +56,10 @@ pub enum InlineNode {
     Link { text: String, url: String },
     /// Image ![alt](url)
     Image { alt: String, url: String },
-    /// Hard line break
+    /// Hard line break (two trailing spaces + newline)
     HardBreak,
+    /// Soft line break (newline absorbed during line wrapping, renders as space)
+    SoftBreak,
 }
 
 /// The kind of block
@@ -147,7 +149,235 @@ pub fn create_snapshot(doc: &crate::editing::Document) -> Snapshot {
         }
     }
 
+    // Consolidate consecutive blockquotes into single blocks
+    let blocks = consolidate_blockquotes(blocks, &source);
+
     Snapshot { blocks }
+}
+
+/// Consolidate consecutive blockquotes into single blocks.
+///
+/// In Markdown, consecutive lines starting with `>` form a single blockquote.
+/// The parser produces separate BLOCK_QUOTE nodes for each line, so we merge
+/// them here into a coherent structure:
+///
+/// - Consecutive leaf blockquotes: merge segments into one block
+/// - Nested blockquotes (`> > text`): become children of the merged block
+/// - Mixed content (`> text` followed by `> > nested`): text in segments, nested in children
+///
+/// Blockquotes are considered consecutive if they're adjacent or separated only
+/// by whitespace (indentation). A blank line (newline character in the gap)
+/// breaks the sequence.
+/// Merge consecutive blockquotes into single blocks.
+/// Blank lines separate distinct blockquotes.
+fn consolidate_blockquotes(blocks: Vec<Block>, source: &str) -> Vec<Block> {
+    let mut result = Vec::new();
+    let mut i = 0;
+
+    while i < blocks.len() {
+        if blocks[i].kind == BlockKind::BlockQuote {
+            let run_start = i;
+            let mut run_end = i + 1;
+
+            // Find extent of consecutive blockquotes (blank lines separate them)
+            while run_end < blocks.len()
+                && blocks[run_end].kind == BlockKind::BlockQuote
+                && is_blockquote_continuation(
+                    source,
+                    blocks[run_end - 1].node_range.end,
+                    blocks[run_end].node_range.start,
+                )
+            {
+                run_end += 1;
+            }
+
+            result.push(merge_blockquote_run(&blocks[run_start..run_end], source));
+            i = run_end;
+        } else {
+            let mut block = blocks[i].clone();
+            if let BlockContent::Children(children) = block.content {
+                block.content = BlockContent::Children(consolidate_blockquotes(children, source));
+            }
+            result.push(block);
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Check if the gap between two ranges allows consolidation.
+/// Returns true if blocks should be consolidated, false if separated by blank line.
+///
+/// Blockquotes are consecutive if the gap contains only:
+/// - Whitespace (spaces/tabs) for indentation
+/// - Blockquote markers (`>`) which are syntax, not content
+/// - At most one newline followed by continuation markers
+///
+/// A blank line (two+ newlines) separates distinct blockquotes.
+fn is_blockquote_continuation(source: &str, end: usize, start: usize) -> bool {
+    if start <= end {
+        return true;
+    }
+    let gap = &source[end..start];
+
+    // `>` is blockquote syntax, not content - treat it like whitespace
+    let is_structural = |c: char| c == ' ' || c == '\t' || c == '>';
+
+    let chars: Vec<char> = gap.chars().collect();
+    let newline_count = chars.iter().filter(|&&c| c == '\n').count();
+
+    if newline_count == 0 {
+        // No newlines - structural chars only means continuation
+        return chars.iter().all(|&c| is_structural(c));
+    }
+
+    if newline_count >= 2 {
+        // Two+ newlines = blank line separator
+        return false;
+    }
+
+    // One newline - continuation if followed by structural chars
+    if let Some(nl_pos) = chars.iter().position(|&c| c == '\n') {
+        let after_newline = &chars[nl_pos + 1..];
+        !after_newline.is_empty() && after_newline.iter().all(|&c| is_structural(c))
+    } else {
+        true
+    }
+}
+
+/// Create a SoftBreak segment to represent an absorbed newline between merged lines.
+/// The range is placed at the end of the previous segments (where the newline was).
+fn soft_break_segment(prev_segments: &[InlineSegment]) -> InlineSegment {
+    let pos = prev_segments.last().map(|s| s.range.end).unwrap_or(0);
+    InlineSegment {
+        kind: InlineNode::SoftBreak,
+        range: pos..pos,
+    }
+}
+
+/// Find the start of the line containing `pos` (position after previous newline, or 0).
+fn line_start(source: &str, pos: usize) -> usize {
+    source[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0)
+}
+
+/// Find the end of the line containing `pos` (newline position, or source len).
+fn line_end(source: &str, pos: usize) -> usize {
+    source[pos..]
+        .find('\n')
+        .map(|i| pos + i)
+        .unwrap_or(source.len())
+}
+
+/// Merge a run of consecutive blockquote blocks into a single block.
+/// Content is organized into Paragraph children, with nested BlockQuotes interspersed.
+fn merge_blockquote_run(blocks: &[Block], source: &str) -> Block {
+    assert!(!blocks.is_empty());
+
+    let mut children: Vec<Block> = Vec::new();
+    // Current paragraph being built
+    let mut para_segments: Vec<InlineSegment> = Vec::new();
+    let mut para_start: Option<usize> = None;
+    let mut para_end: usize = 0;
+    let mut para_id: Option<AnchorId> = None;
+
+    // Helper to finalize current paragraph into children
+    let finalize_paragraph = |children: &mut Vec<Block>,
+                              segments: &mut Vec<InlineSegment>,
+                              start: &mut Option<usize>,
+                              end: usize,
+                              id: &mut Option<AnchorId>| {
+        if !segments.is_empty() {
+            let range = start.unwrap_or(0)..end;
+            children.push(Block {
+                id: id
+                    .take()
+                    .expect("paragraph must have ID from first contributing block"),
+                kind: BlockKind::Paragraph,
+                node_range: range,
+                segments: std::mem::take(segments),
+                content: BlockContent::Leaf,
+            });
+            *start = None;
+        }
+    };
+
+    for block in blocks {
+        // If block has nested children, finalize current para and add them
+        if let BlockContent::Children(nested) = &block.content {
+            finalize_paragraph(
+                &mut children,
+                &mut para_segments,
+                &mut para_start,
+                para_end,
+                &mut para_id,
+            );
+            children.extend(nested.clone());
+        }
+
+        if block.segments.is_empty() {
+            // Empty blockquote line - finalize current paragraph
+            finalize_paragraph(
+                &mut children,
+                &mut para_segments,
+                &mut para_start,
+                para_end,
+                &mut para_id,
+            );
+        } else {
+            // Content line - add to current paragraph
+            if !para_segments.is_empty() {
+                // Insert SoftBreak between consecutive lines (unless after HardBreak)
+                let last_is_hardbreak = para_segments
+                    .last()
+                    .is_some_and(|s: &InlineSegment| matches!(s.kind, InlineNode::HardBreak));
+                if !last_is_hardbreak {
+                    para_segments.push(soft_break_segment(&para_segments));
+                }
+            } else {
+                // First content of this paragraph - extend to line start to include all `>` markers
+                para_start = Some(line_start(source, block.node_range.start));
+                para_id = Some(block.id);
+            }
+            para_segments.extend(block.segments.clone());
+            // Extend to line end to capture trailing content
+            para_end = line_end(source, block.segments.last().unwrap().range.end);
+        }
+    }
+
+    // Finalize any remaining paragraph
+    finalize_paragraph(
+        &mut children,
+        &mut para_segments,
+        &mut para_start,
+        para_end,
+        &mut para_id,
+    );
+
+    // Recursively merge any consecutive blockquotes in children
+    let children = consolidate_blockquotes(children, source);
+
+    // Compute merged range
+    let first = blocks.first().unwrap();
+    let last = blocks.last().unwrap();
+    let merged_range = first.node_range.start..last.node_range.end;
+
+    // Use the first block's ID (it represents the start of the blockquote)
+    let id = first.id;
+
+    let content = if children.is_empty() {
+        BlockContent::Leaf
+    } else {
+        BlockContent::Children(children)
+    };
+
+    Block {
+        id,
+        kind: BlockKind::BlockQuote,
+        node_range: merged_range,
+        segments: vec![], // BlockQuote content is now in Paragraph children
+        content,
+    }
 }
 
 /// Find the best matching anchor for a given byte range.
@@ -269,6 +499,9 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
         }
     }
 
+    // Consolidate consecutive blockquotes in children
+    let children = consolidate_blockquotes(children, source);
+
     let content = if children.is_empty() {
         BlockContent::Leaf
     } else {
@@ -361,23 +594,25 @@ fn process_block_quote(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Op
         }
     }
 
-    let content = if children.is_empty() {
-        BlockContent::Leaf
-    } else {
-        BlockContent::Children(children)
-    };
-
     let id = find_anchor_for_range(anchors, &node_range);
 
-    // Extract segments from blockquote content (after "> " prefix)
-    let prefix_len = text.find(|c: char| c != '>' && c != ' ').unwrap_or(0);
-    let content_start = node_range.start + prefix_len;
-    let content_end = if text.ends_with('\n') {
-        node_range.end - 1
+    // If blockquote has nested blockquotes, all content belongs to the innermost level
+    // so outer levels should have empty segments
+    let (content, segments) = if children.is_empty() {
+        // Leaf blockquote: extract segments from content (after "> " prefix)
+        let prefix_len = text.find(|c: char| c != '>' && c != ' ').unwrap_or(0);
+        let content_start = node_range.start + prefix_len;
+        let content_end = if text.ends_with('\n') {
+            node_range.end - 1
+        } else {
+            node_range.end
+        };
+        let segments = extract_segments(&node, source, content_start..content_end);
+        (BlockContent::Leaf, segments)
     } else {
-        node_range.end
+        // Nested blockquote: content belongs to children, no segments at this level
+        (BlockContent::Children(children), vec![])
     };
-    let segments = extract_segments(&node, source, content_start..content_end);
 
     Some(Block {
         id,
@@ -706,6 +941,35 @@ fn extract_inline_children(
     children
 }
 
+/// Convert text with newlines into Text segments with SoftBreak between lines.
+/// Newlines are converted to SoftBreak to ensure consistent rendering across all block types.
+fn text_to_segments_with_softbreaks(text: &str, start: usize) -> Vec<InlineSegment> {
+    let mut segments = Vec::new();
+    let mut cursor = start;
+
+    for (i, part) in text.split('\n').enumerate() {
+        // Add SoftBreak between lines (not before first)
+        if i > 0 {
+            segments.push(InlineSegment {
+                kind: InlineNode::SoftBreak,
+                range: cursor..cursor, // Zero-length at newline position
+            });
+            cursor += 1; // Skip the newline character
+        }
+
+        if !part.is_empty() {
+            let part_end = cursor + part.len();
+            segments.push(InlineSegment {
+                kind: InlineNode::Text(part.to_string()),
+                range: cursor..part_end,
+            });
+            cursor = part_end;
+        }
+    }
+
+    segments
+}
+
 /// Build InlineSegment list from collected inlines, filling gaps with Text segments.
 fn build_segments_with_gaps(
     inlines: &[InlineInfo],
@@ -721,15 +985,12 @@ fn build_segments_with_gaps(
             continue;
         }
 
-        // Add Text segment for gap before this inline
+        // Add Text segment(s) for gap before this inline
         if inline.range.start > cursor {
             let text_end = inline.range.start.min(content_range.end);
             let text = &source[cursor..text_end];
             if !text.is_empty() {
-                segments.push(InlineSegment {
-                    kind: InlineNode::Text(text.to_string()),
-                    range: cursor..text_end,
-                });
+                segments.extend(text_to_segments_with_softbreaks(text, cursor));
             }
         }
 
@@ -742,14 +1003,11 @@ fn build_segments_with_gaps(
         cursor = inline.range.end.max(cursor);
     }
 
-    // Add trailing Text segment
+    // Add trailing Text segment(s)
     if cursor < content_range.end {
         let text = &source[cursor..content_range.end];
         if !text.is_empty() {
-            segments.push(InlineSegment {
-                kind: InlineNode::Text(text.to_string()),
-                range: cursor..content_range.end,
-            });
+            segments.extend(text_to_segments_with_softbreaks(text, cursor));
         }
     }
 
@@ -757,10 +1015,7 @@ fn build_segments_with_gaps(
     if segments.is_empty() && !content_range.is_empty() {
         let text = &source[content_range.clone()];
         if !text.is_empty() {
-            segments.push(InlineSegment {
-                kind: InlineNode::Text(text.to_string()),
-                range: content_range,
-            });
+            segments.extend(text_to_segments_with_softbreaks(text, content_range.start));
         }
     }
 
@@ -946,6 +1201,14 @@ mod tests {
                 )
                 .unwrap();
             }
+            InlineNode::SoftBreak => {
+                writeln!(
+                    out,
+                    "{}{}SoftBreak [{}..{}]",
+                    prefix, spaces, range.start, range.end
+                )
+                .unwrap();
+            }
         }
     }
 
@@ -1000,6 +1263,9 @@ mod tests {
             }
             InlineNode::HardBreak => {
                 writeln!(out, "{}{}HardBreak", prefix, spaces).unwrap();
+            }
+            InlineNode::SoftBreak => {
+                writeln!(out, "{}{}SoftBreak", prefix, spaces).unwrap();
             }
         }
     }

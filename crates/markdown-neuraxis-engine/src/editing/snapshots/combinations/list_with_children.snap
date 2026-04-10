@@ -1,0 +1,37 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+List { ordered: false } [0..30]
+  children:
+    ListItem { marker: "- " } [0..30]
+      segments:
+        Text [2..10] "a bullet"
+        SoftBreak [10..10]
+        Text [11..17] "  with"
+      children:
+        BlockQuote [20..30]
+          children:
+            Paragraph [18..29]
+              segments:
+                Text [22..29] "a quote"
+Paragraph [30..67]
+  segments:
+    Text [30..35] "  and"
+    SoftBreak [35..35]
+    Text [36..41] "  ```"
+    SoftBreak [41..41]
+    Text [42..53] "  some code"
+    SoftBreak [53..53]
+    Text [54..59] "  ```"
+    SoftBreak [59..59]
+    Text [60..66] "  then"
+List { ordered: false } [69..116]
+  children:
+    ListItem { marker: "- " } [69..116]
+      segments:
+        Text [71..86] "an inner bullet"
+        SoftBreak [86..86]
+        Text [87..100] "  followed by"
+        SoftBreak [100..100]
+        Text [101..115] "  ## a heading"

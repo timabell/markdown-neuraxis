@@ -96,6 +96,9 @@ fn render_inline_node(
         InlineNode::HardBreak => rsx! {
             br { key: "{key}" }
         },
+        InlineNode::SoftBreak => rsx! {
+            span { key: "{key}", " " }
+        },
     }
 }
 

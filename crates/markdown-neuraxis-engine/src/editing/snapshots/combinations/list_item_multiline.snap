@@ -9,7 +9,11 @@ List { ordered: false } [0..201]
         Text [2..20] "Normal bullet item"
     ListItem { marker: "- " } [21..95]
       segments:
-        Text [23..94] "This line has hard wrap\n  this continues after break\n  and a third line"
+        Text [23..46] "This line has hard wrap"
+        SoftBreak [46..46]
+        Text [47..75] "  this continues after break"
+        SoftBreak [75..75]
+        Text [76..94] "  and a third line"
     ListItem { marker: "- " } [95..170]
       segments:
         Text [97..126] "This line has forced newlines"

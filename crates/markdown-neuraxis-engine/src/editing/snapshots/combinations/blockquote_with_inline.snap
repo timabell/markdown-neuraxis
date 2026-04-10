@@ -2,16 +2,17 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-BlockQuote [0..41]
-  segments:
-    Text [2..13] "Quote with "
-    Emphasis [13..23]
-      Text "emphasis"
-    Text [23..28] " and "
-    Link [28..39] text:"link" url:"url"
-    Text [39..40] "."
-BlockQuote [41..68]
-  segments:
-    Text [43..60] "Second line with "
-    Code [60..66] "code"
-    Text [66..67] "."
+BlockQuote [0..68]
+  children:
+    Paragraph [0..67]
+      segments:
+        Text [2..13] "Quote with "
+        Emphasis [13..23]
+          Text "emphasis"
+        Text [23..28] " and "
+        Link [28..39] text:"link" url:"url"
+        Text [39..40] "."
+        SoftBreak [40..40]
+        Text [43..60] "Second line with "
+        Code [60..66] "code"
+        Text [66..67] "."

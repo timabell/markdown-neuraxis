@@ -285,6 +285,11 @@ impl TextSegment {
                 content: String::new(),
                 children: vec![],
             },
+            InlineNode::SoftBreak => Self {
+                kind: "soft_break".to_string(),
+                content: String::new(),
+                children: vec![],
+            },
         }
     }
 }
@@ -542,8 +547,14 @@ mod tests {
         assert_eq!(snapshot.blocks.len(), 1);
         let quote = &snapshot.blocks[0];
         assert_eq!(quote.kind, "block_quote");
-        // Content is now extracted from segments
-        assert_eq!(segments_to_text(&quote.segments), "This is a quote");
+        // BlockQuote content is in Paragraph children, not direct segments
+        assert!(quote.segments.is_empty());
+        assert_eq!(quote.children.len(), 1);
+        assert_eq!(quote.children[0].kind, "paragraph");
+        assert_eq!(
+            segments_to_text(&quote.children[0].segments),
+            "This is a quote"
+        );
     }
 
     #[test]

@@ -6,21 +6,22 @@ List { ordered: false } [0..94]
   children:
     ListItem { marker: "- " } [0..80]
       segments:
-        Text [2..29] "First item\n  continued here"
+        Text [2..12] "First item"
+        SoftBreak [12..12]
+        Text [13..29] "  continued here"
       children:
-        BlockQuote [32..46]
-          segments:
-            Text [34..45] "quoted part"
-        BlockQuote [48..61]
-          segments:
-            Text [50..60] "more quote"
-        BlockQuote [63..80]
-          segments:
-            Text [66..79] "deeply nested"
+        BlockQuote [32..80]
           children:
-            BlockQuote [64..80]
+            Paragraph [30..60]
               segments:
-                Text [66..79] "deeply nested"
+                Text [34..45] "quoted part"
+                SoftBreak [45..45]
+                Text [50..60] "more quote"
+            BlockQuote [64..80]
+              children:
+                Paragraph [61..79]
+                  segments:
+                    Text [66..79] "deeply nested"
     ListItem { marker: "- " } [80..94]
       segments:
         Text [82..93] "Second item"
