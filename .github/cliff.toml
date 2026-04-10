@@ -48,9 +48,9 @@ commit_parsers = [
     { body = ".*security", group = "<!-- 6 -->🔒 Security", default_scope = "<!-- 1 -->All Platforms" },
 ]
 
-# false = include commits that don't match any parser (as ungrouped)
-# true = exclude commits that don't match any parser (only release-worthy commits)
-filter_commits = true
+# false = exclude commits that don't match any parser (only release-worthy commits)
+# true = include commits that don't match any parser (as ungrouped)
+filter_commits = false
 
 tag_pattern = "v[0-9]*"
 # Skip pre-release tags like v1.0.0-beta.1
