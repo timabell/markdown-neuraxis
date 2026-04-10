@@ -6,17 +6,19 @@ use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, BlockKind
 use std::collections::HashSet;
 use std::ops::Range;
 
-/// Groups children into runs of consecutive paragraphs vs other block types.
-/// Each ParagraphRun contains the blocks and combined byte range.
-enum ChildGroup {
-    ParagraphRun {
+/// Groups blockquote children for editing: consecutive paragraphs form editable
+/// groups, while other blocks (nested quotes, lists, etc.) are rendered separately.
+enum EditingGroup {
+    /// Consecutive paragraphs that are edited together as one unit
+    Editable {
         blocks: Vec<Block>,
         range: Range<usize>,
     },
-    OtherBlock(Block),
+    /// Child block with its own editing behavior (nested quotes, lists, code, etc.)
+    Nested(Block),
 }
 
-fn group_children(children: &[Block]) -> Vec<ChildGroup> {
+fn group_for_editing(children: &[Block]) -> Vec<EditingGroup> {
     let mut groups = Vec::new();
     let mut current_paras: Vec<Block> = Vec::new();
 
@@ -24,25 +26,25 @@ fn group_children(children: &[Block]) -> Vec<ChildGroup> {
         if matches!(child.kind, BlockKind::Paragraph) {
             current_paras.push(child.clone());
         } else {
-            // Flush any accumulated paragraph run
+            // Flush any accumulated paragraphs as an editable group
             if !current_paras.is_empty() {
                 let range = current_paras.first().unwrap().node_range.start
                     ..current_paras.last().unwrap().node_range.end;
-                groups.push(ChildGroup::ParagraphRun {
+                groups.push(EditingGroup::Editable {
                     blocks: std::mem::take(&mut current_paras),
                     range,
                 });
             }
-            // Add this non-paragraph block
-            groups.push(ChildGroup::OtherBlock(child.clone()));
+            // Add nested block
+            groups.push(EditingGroup::Nested(child.clone()));
         }
     }
 
-    // Flush final paragraph run if any
+    // Flush final editable group if any
     if !current_paras.is_empty() {
         let range = current_paras.first().unwrap().node_range.start
             ..current_paras.last().unwrap().node_range.end;
-        groups.push(ChildGroup::ParagraphRun {
+        groups.push(EditingGroup::Editable {
             blocks: current_paras,
             range,
         });
@@ -67,14 +69,14 @@ pub fn BlockQuote(
         vec![]
     };
 
-    // Group consecutive paragraphs into runs
-    let groups = group_children(&children);
+    // Group children for editing: consecutive paragraphs together, nested blocks separate
+    let groups = group_for_editing(&children);
 
-    // Check which paragraph run (if any) contains the focused paragraph
+    // Find which editable group (if any) contains the focused block
     let current_focus = focused_anchor_id.read();
-    let focused_run_idx = current_focus.as_ref().and_then(|focused_id| {
+    let focused_group_idx = current_focus.as_ref().and_then(|focused_id| {
         groups.iter().position(|group| {
-            if let ChildGroup::ParagraphRun { blocks, .. } = group {
+            if let EditingGroup::Editable { blocks, .. } = group {
                 blocks.iter().any(|b| &b.id == focused_id)
             } else {
                 false
@@ -86,8 +88,8 @@ pub fn BlockQuote(
         blockquote {
             class: "block-quote",
             for (i, group) in groups.iter().enumerate() {
-                if let ChildGroup::ParagraphRun { blocks, range } = group {
-                    if focused_run_idx == Some(i) {
+                if let EditingGroup::Editable { blocks, range } = group {
+                    if focused_group_idx == Some(i) {
                         // This run is focused - show editor
                         {
                             let edit_range = range.clone();
@@ -144,8 +146,8 @@ pub fn BlockQuote(
                             }
                         }
                     }
-                } else if let ChildGroup::OtherBlock(child) = group {
-                    // Non-paragraph children (nested quotes, lists, code, etc.)
+                } else if let EditingGroup::Nested(child) = group {
+                    // Nested blocks with their own editing behavior
                     BlockRenderer {
                         key: "child-{i}",
                         block: child.clone(),
