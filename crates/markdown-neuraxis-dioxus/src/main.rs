@@ -63,7 +63,7 @@ fn get_initial_state() -> AppState {
     }
 
     // No CLI argument - check config file
-    log::info!("No CLI argument provided, checking config file");
+    log::info!("Reading config {}", Config::config_path().display());
     match Config::load() {
         Ok(Some(config)) => {
             log::info!(
@@ -73,7 +73,7 @@ fn get_initial_state() -> AppState {
             AppState::Ready(config.notes_path)
         }
         Ok(None) => {
-            log::info!("No config file found, showing setup screen");
+            log::info!("Config not found, showing setup...");
             AppState::NeedsSetup
         }
         Err(e) => {
