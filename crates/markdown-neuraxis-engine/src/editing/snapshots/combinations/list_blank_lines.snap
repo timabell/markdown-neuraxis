@@ -14,7 +14,7 @@ List { ordered: false } [26..48]
         Text [28..46] "Second after empty"
 List { ordered: false } [48..81]
   children:
-    ListItem { marker: "- " } [48..78]
+    ListItem { marker: "- " } [48..80]
       segments:
         Text [50..77] "Third with whitespace blank"
 List { ordered: false } [81..107]

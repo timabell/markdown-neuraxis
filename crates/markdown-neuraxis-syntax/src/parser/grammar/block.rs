@@ -37,6 +37,11 @@ use crate::syntax_kind::SyntaxKind;
 
 use super::inline;
 
+/// Calculate the visual width of whitespace (tabs count as 4 spaces).
+fn whitespace_width(text: &str) -> usize {
+    text.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum()
+}
+
 /// Parse a single block element.
 ///
 /// This is the main dispatch function for block parsing. It skips blank lines,
@@ -438,9 +443,9 @@ fn list_ext(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
             if !p.at(SyntaxKind::WHITESPACE) {
                 break; // Outdented - not part of this nested list
             }
-            // Check that whitespace length matches expected sibling indent
-            let ws_len = p.current_text().len();
-            if ws_len != sibling_indent_len {
+            // Check that whitespace width matches expected sibling indent
+            let ws_width = whitespace_width(p.current_text());
+            if ws_width != sibling_indent_len {
                 break; // Different indent level - not a sibling in this list
             }
             // Consume matching indentation
@@ -508,9 +513,7 @@ fn nested_list(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
 ///
 /// A list item contains:
 /// - A marker (-, *, +) followed by space
-/// - Content wrapped in PARAGRAPH
-/// - Optional continuation lines (indented)
-/// - Optional nested blocks (blockquotes, nested lists)
+/// - Blocks at the item's content indent level (paragraphs, blockquotes, nested lists, code)
 ///
 /// `sibling_indent_len` is the whitespace length for sibling items at the same level.
 fn list_item(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
@@ -526,93 +529,215 @@ fn list_item(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
         return paragraph(p);
     }
 
-    // Parse content as PARAGRAPH child
-    list_item_content(p, sibling_indent_len);
+    // Content must be indented by marker width (2 for "- ")
+    let content_indent = sibling_indent_len + 2;
+
+    // Parse blocks within this list item
+    blocks_in_list_item(p, content_indent, sibling_indent_len);
 
     m.complete(p, SyntaxKind::LIST_ITEM);
 }
 
-/// Parse list item content (PARAGRAPH with continuations, then nested blocks).
-/// `sibling_indent_len` is the whitespace length for sibling items at the same level.
-fn list_item_content(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
+/// Parse blocks within a list item context.
+///
+/// This is the unified block parsing for list items. It loops, dispatching to
+/// the appropriate block parser (paragraph, blockquote, nested list, code block).
+/// Paragraph is the fallback - any content that isn't a recognized block marker
+/// becomes a paragraph.
+///
+/// `content_indent` is the minimum indent for content to belong to this list item.
+/// `sibling_indent` is the indent where sibling list items would appear.
+fn blocks_in_list_item(p: &mut Parser<'_, '_>, content_indent: usize, sibling_indent: usize) {
     // Check for checkbox at start: [ ] or [x] or [X]
     if is_checkbox(p) {
         checkbox(p);
-        // Consume whitespace after checkbox
         p.eat(SyntaxKind::WHITESPACE);
     }
 
-    // Start paragraph for the content
-    let para = p.start();
+    // First block: we're right after "- ", parse immediately (no indent check)
+    dispatch_block_in_list_item(p, content_indent, sibling_indent);
 
-    // Parse first line content
-    inline::inline_until_newline(p);
-
-    // Consume newline
-    if !p.eat(SyntaxKind::NEWLINE) {
-        para.complete(p, SyntaxKind::PARAGRAPH);
-        return;
-    }
-
-    // Check for continuation lines (indented plain text)
+    // Subsequent blocks: check indent, then parse
     loop {
+        // Check for blank lines - but don't consume them yet!
+        // We need to see what comes after to decide if content continues.
+        let mut lookahead = 0;
+        while p.nth(lookahead) == SyntaxKind::NEWLINE {
+            lookahead += 1;
+        }
+
+        // If blank lines lead to EOF or outdented content, stop here
+        // (let list_ext handle blank line detection for list termination)
+        if lookahead > 0 {
+            let after_blanks = p.nth(lookahead);
+            if after_blanks == SyntaxKind::EOF {
+                break;
+            }
+            // If next content is at column 0, let caller handle it
+            if after_blanks != SyntaxKind::WHITESPACE {
+                break;
+            }
+        }
+
+        // Now consume the blank lines we peeked at
+        for _ in 0..lookahead {
+            p.bump();
+        }
+
         if p.at_end() {
             break;
         }
 
-        // Must start with whitespace to be a continuation
+        // Must have indentation
         if !p.at(SyntaxKind::WHITESPACE) {
+            break; // Outdented to column 0 - end of item
+        }
+
+        let ws_width = whitespace_width(p.current_text());
+
+        // If below sibling indent, we're outdented - end of item
+        if ws_width < sibling_indent {
             break;
         }
 
         // Check what follows the whitespace
         let after_ws = p.nth(1);
 
-        // Whitespace followed by newline = blank line, not continuation
+        // Blank line (whitespace-only) - skip it
         if after_ws == SyntaxKind::NEWLINE || after_ws == SyntaxKind::EOF {
+            p.bump(); // consume whitespace
+            continue;
+        }
+
+        // If at exactly sibling indent, check if it's a sibling list item
+        // (only matters for nested lists where sibling_indent > 0)
+        if ws_width == sibling_indent && sibling_indent > 0 {
+            let is_sibling_list = match after_ws {
+                SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+                    p.nth(2) == SyntaxKind::WHITESPACE
+                }
+                SyntaxKind::TEXT => {
+                    // Numbered list: "1. "
+                    p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE
+                }
+                _ => false,
+            };
+            if is_sibling_list {
+                break; // Sibling item - let list_ext handle it
+            }
+            // Not a list marker - continuation content for this item
+        }
+
+        // Content belongs to this item - consume indent and dispatch
+        p.bump();
+        dispatch_block_in_list_item(p, content_indent, sibling_indent);
+    }
+}
+
+/// Dispatch to the appropriate block parser based on current token.
+/// Paragraph is the fallback for any unrecognized content.
+fn dispatch_block_in_list_item(
+    p: &mut Parser<'_, '_>,
+    content_indent: usize,
+    sibling_indent: usize,
+) {
+    match p.current() {
+        SyntaxKind::GT => blockquote(p),
+        SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
+            if p.nth(1) == SyntaxKind::WHITESPACE {
+                // Nested list
+                nested_list(p, content_indent);
+            } else {
+                // Not a list marker (e.g., emphasis), treat as paragraph
+                paragraph_in_list_item(p, content_indent, sibling_indent);
+            }
+        }
+        SyntaxKind::TEXT => {
+            if is_numbered_list_item(p) {
+                nested_list(p, content_indent);
+            } else {
+                paragraph_in_list_item(p, content_indent, sibling_indent);
+            }
+        }
+        SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
+            if is_code_fence(p) {
+                fenced_code(p);
+            } else {
+                paragraph_in_list_item(p, content_indent, sibling_indent);
+            }
+        }
+        _ => paragraph_in_list_item(p, content_indent, sibling_indent),
+    }
+}
+
+/// Parse a paragraph within a list item, with indent-aware continuation.
+///
+/// Parses inline content, then loops for continuation lines that are:
+/// - Not outdented below sibling_indent
+/// - Not block markers (which end the paragraph)
+///
+/// `_content_indent` is unused but kept for API consistency with dispatch_block_in_list_item.
+/// `sibling_indent` is the minimum indent for content to belong to this item.
+fn paragraph_in_list_item(p: &mut Parser<'_, '_>, _content_indent: usize, sibling_indent: usize) {
+    let para = p.start();
+
+    // Parse first line
+    inline::inline_until_newline(p);
+
+    if !p.eat(SyntaxKind::NEWLINE) {
+        para.complete(p, SyntaxKind::PARAGRAPH);
+        return;
+    }
+
+    // Check for continuation lines
+    loop {
+        if p.at_end() {
             break;
         }
 
-        // If it's a block marker, end the paragraph and handle as nested block
+        // Blank line ends paragraph
+        if p.at(SyntaxKind::NEWLINE) {
+            break;
+        }
+
+        // Must have some indentation
+        if !p.at(SyntaxKind::WHITESPACE) {
+            break;
+        }
+
+        let ws_width = whitespace_width(p.current_text());
+
+        // Below sibling indent = outdented, end paragraph
+        if ws_width < sibling_indent {
+            break;
+        }
+
+        let after_ws = p.nth(1);
+
+        // Check for block markers that end the paragraph
         match after_ws {
-            SyntaxKind::GT => {
-                // Blockquote - end paragraph, parse blockquote as sibling
-                para.complete(p, SyntaxKind::PARAGRAPH);
-                list_item_nested_blocks(p, sibling_indent_len);
-                return;
-            }
+            SyntaxKind::GT => break,
+            SyntaxKind::NEWLINE | SyntaxKind::EOF => break,
             SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-                // Could be nested list item
                 if p.nth(2) == SyntaxKind::WHITESPACE {
-                    para.complete(p, SyntaxKind::PARAGRAPH);
-                    list_item_nested_blocks(p, sibling_indent_len);
-                    return;
+                    break; // List marker
                 }
-                // Otherwise it's just text, continue paragraph
             }
             SyntaxKind::TEXT => {
-                // Could be nested numbered list item (e.g., "   1. item")
                 if p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE {
-                    para.complete(p, SyntaxKind::PARAGRAPH);
-                    list_item_nested_blocks(p, sibling_indent_len);
-                    return;
+                    break; // Numbered list marker
                 }
-                // Otherwise it's just text, continue paragraph
             }
             SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
-                // Could be fenced code block
                 if is_code_fence_at(p, 1) {
-                    para.complete(p, SyntaxKind::PARAGRAPH);
-                    list_item_nested_blocks(p, sibling_indent_len);
-                    return;
+                    break;
                 }
-                // Otherwise it's inline code, continue paragraph
             }
             _ => {}
         }
 
-        // This is a continuation line - consume whitespace and content
-        p.bump(); // whitespace
+        // Continuation line - consume indentation and content
+        p.bump();
         inline::inline_until_newline(p);
         if !p.eat(SyntaxKind::NEWLINE) {
             break;
@@ -620,70 +745,6 @@ fn list_item_content(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
     }
 
     para.complete(p, SyntaxKind::PARAGRAPH);
-}
-
-/// Parse nested blocks within a list item (blockquotes, nested lists, fenced code).
-/// `sibling_indent_len` is the whitespace length for sibling items - we only parse
-/// nested content when the current whitespace is LONGER than this (deeper nesting).
-fn list_item_nested_blocks(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
-    loop {
-        if p.at_end() {
-            break;
-        }
-
-        // Must start with whitespace (indentation)
-        if !p.at(SyntaxKind::WHITESPACE) {
-            break;
-        }
-
-        // Check indentation level - only process if DEEPER than sibling indent
-        let ws_len = p.current_text().len();
-        if ws_len <= sibling_indent_len {
-            // Same or less indentation = sibling item, not nested content
-            // Don't consume - let list_ext handle it
-            break;
-        }
-
-        let after_ws = p.nth(1);
-
-        match after_ws {
-            SyntaxKind::GT => {
-                // Nested blockquote
-                p.bump(); // consume indentation
-                blockquote(p);
-            }
-            SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
-                if p.nth(2) == SyntaxKind::WHITESPACE {
-                    // Nested bullet list - pass the NEW indent level for its siblings
-                    p.bump(); // consume indentation
-                    nested_list(p, ws_len);
-                    break; // Only one nested list
-                } else {
-                    break;
-                }
-            }
-            SyntaxKind::TEXT => {
-                // Could be nested numbered list (e.g., "   1. item")
-                if p.nth(2) == SyntaxKind::DOT && p.nth(3) == SyntaxKind::WHITESPACE {
-                    p.bump(); // consume indentation
-                    nested_list(p, ws_len);
-                    break;
-                } else {
-                    break;
-                }
-            }
-            SyntaxKind::BACKTICK | SyntaxKind::TILDE => {
-                // Fenced code block
-                if is_code_fence_at(p, 1) {
-                    p.bump(); // consume indentation
-                    fenced_code(p);
-                } else {
-                    break;
-                }
-            }
-            _ => break,
-        }
-    }
 }
 
 /// Parse a thematic break.
@@ -762,6 +823,7 @@ fn list_item_numbered(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
     let m = p.start();
 
     // Consume the number
+    let number_len = p.current_text().len();
     p.bump();
 
     // Consume the dot
@@ -773,8 +835,11 @@ fn list_item_numbered(p: &mut Parser<'_, '_>, sibling_indent_len: usize) {
         return paragraph(p);
     }
 
-    // Parse content as PARAGRAPH child
-    list_item_content(p, sibling_indent_len);
+    // Content indent = sibling indent + number length + ". " (dot + space)
+    let content_indent = sibling_indent_len + number_len + 2;
+
+    // Parse blocks within this list item
+    blocks_in_list_item(p, content_indent, sibling_indent_len);
 
     m.complete(p, SyntaxKind::LIST_ITEM);
 }
@@ -786,10 +851,9 @@ fn is_indented_code_block(p: &Parser<'_, '_>) -> bool {
     }
 
     // Need at least 4 spaces/tab
-    let ws_text = p.current_text();
-    let ws_len: usize = ws_text.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum();
+    let ws_width = whitespace_width(p.current_text());
 
-    if ws_len < 4 {
+    if ws_width < 4 {
         return false;
     }
 
@@ -826,9 +890,8 @@ fn indented_code(p: &mut Parser<'_, '_>) {
 
         // Check if next line continues the code block (4+ spaces)
         if p.at(SyntaxKind::WHITESPACE) {
-            let ws_text = p.current_text();
-            let ws_len: usize = ws_text.chars().map(|c| if c == '\t' { 4 } else { 1 }).sum();
-            if ws_len >= 4 {
+            let ws_width = whitespace_width(p.current_text());
+            if ws_width >= 4 {
                 continue; // Continue code block
             }
         }
