@@ -32,12 +32,12 @@ pub fn TreeViewItem(
             if node.is_folder {
                 span {
                     class: "tree-toggle",
-                    if node.is_expanded { "- " } else { "+ " }
+                    if node.is_expanded { "📂 " } else { "📁 " }
                 }
             } else {
                 span {
                     class: "tree-file-marker",
-                    "  "
+                    "   "
                 }
             }
 
