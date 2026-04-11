@@ -2,7 +2,10 @@ use dioxus::prelude::*;
 use markdown_neuraxis_engine::editing::Cmd;
 
 #[component]
-pub fn EmptyDocument(on_command: Callback<Cmd>) -> Element {
+pub fn EmptyDocument(
+    on_command: Callback<Cmd>,
+    #[props(default = true)] should_focus: bool,
+) -> Element {
     let mut local_content = use_signal(String::new);
 
     // Helper to commit content if non-empty
@@ -29,7 +32,9 @@ pub fn EmptyDocument(on_command: Callback<Cmd>) -> Element {
                 rows: 2,
 
                 onmounted: move |event: Event<MountedData>| async move {
-                    let _ = event.data().set_focus(true).await;
+                    if should_focus {
+                        let _ = event.data().set_focus(true).await;
+                    }
                 },
 
                 oninput: move |event: Event<FormData>| {

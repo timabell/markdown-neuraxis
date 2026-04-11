@@ -490,6 +490,29 @@ hr {
     border-radius: 4px;
 }
 
+.document-title {
+    cursor: pointer;
+    padding: 4px 8px;
+    margin: 0 -8px;
+    border-radius: 4px;
+}
+
+.document-title:hover {
+    background-color: var(--base2);
+}
+
+.document-title-input {
+    font-size: 2em;
+    font-weight: bold;
+    font-family: inherit;
+    width: 100%;
+    border: 2px solid var(--blue);
+    border-radius: 4px;
+    padding: 4px 8px;
+    background: var(--base3);
+    color: var(--base01);
+}
+
 .block-editor {
     width: 100%;
     border: 2px solid var(--blue);

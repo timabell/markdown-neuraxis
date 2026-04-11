@@ -73,6 +73,34 @@ impl FileTreeNode {
         }
     }
 
+    /// Remove a file from the tree, returns true if the node itself should be removed
+    pub fn remove_file(&mut self, relative_path: &Path) -> bool {
+        let components: Vec<_> = relative_path.components().collect();
+        if components.is_empty() {
+            return false;
+        }
+
+        let first_component = components[0].as_os_str().to_string_lossy().to_string();
+
+        if components.len() == 1 {
+            // This is the file to remove
+            self.children.remove(&first_component);
+        } else {
+            // Recurse into subfolder
+            let remaining_path = relative_path.iter().skip(1).collect::<PathBuf>();
+            if let Some(child) = self.children.get_mut(&first_component) {
+                child.remove_file(&remaining_path);
+                // Remove empty folders
+                if child.is_folder && child.children.is_empty() {
+                    self.children.remove(&first_component);
+                }
+            }
+        }
+
+        // Return true if this node should be removed (is folder and now empty)
+        self.is_folder && self.children.is_empty()
+    }
+
     pub fn toggle_expanded(&mut self, relative_path: &RelativePath) -> bool {
         if self.relative_path == relative_path {
             self.is_expanded = !self.is_expanded;
@@ -261,6 +289,13 @@ impl FileTree {
     pub fn add_file(&mut self, file_path: &Path, notes_root: &Path) {
         if let Ok(relative_path) = file_path.strip_prefix(notes_root) {
             self.root.insert_file(relative_path);
+        }
+    }
+
+    /// Remove a file from the tree, cleaning up empty parent folders
+    pub fn remove_file(&mut self, file_path: &Path, notes_root: &Path) {
+        if let Ok(relative_path) = file_path.strip_prefix(notes_root) {
+            self.root.remove_file(relative_path);
         }
     }
 
@@ -552,5 +587,33 @@ mod tests {
 
         let deep = active.children.get("deep").unwrap();
         assert!(deep.is_expanded);
+    }
+
+    #[test]
+    fn test_remove_file() {
+        let root_path = PathBuf::from("/test/notes");
+        let files = vec![
+            PathBuf::from("/test/notes/file1.md"),
+            PathBuf::from("/test/notes/file2.md"),
+            PathBuf::from("/test/notes/folder/nested.md"),
+        ];
+        let mut tree = FileTree::build_from_files(root_path.clone(), &files);
+
+        // Should have 3 items initially (folder + 2 root files, nested is inside)
+        let items = tree.get_items();
+        assert_eq!(items.len(), 3);
+
+        // Remove a root file
+        tree.remove_file(&PathBuf::from("/test/notes/file1.md"), &root_path);
+        let items = tree.get_items();
+        assert_eq!(items.len(), 2);
+        assert!(!items.iter().any(|i| i.node.name == "file1"));
+
+        // Remove nested file
+        tree.remove_file(&PathBuf::from("/test/notes/folder/nested.md"), &root_path);
+        let items = tree.get_items();
+        // Folder should be removed too since it's now empty
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].node.name, "file2");
     }
 }

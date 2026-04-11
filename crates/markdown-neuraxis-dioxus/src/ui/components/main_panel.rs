@@ -16,6 +16,8 @@ pub fn MainPanel(
     on_file_select: Option<Callback<PathBuf>>,
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
+    on_rename: Callback<String>,
+    #[props(default = false)] is_new_file: bool,
 ) -> Element {
     let mut focused_anchor_id = use_signal(|| None::<AnchorId>);
     let collapsed_ids = use_signal(HashSet::<AnchorId>::new);
@@ -23,7 +25,16 @@ pub fn MainPanel(
     let context_menu_block = use_signal(|| None::<AnchorId>);
     let snapshot_clone = snapshot.clone();
     let mut navigate_to_block = create_navigation_handler(focused_anchor_id, snapshot_clone);
-    let display_name = file.display_path();
+
+    // Editable filename state (display path without .md extension)
+    let initial_path = file.display_path().to_string();
+    let initial_path_for_keydown = initial_path.clone();
+    let initial_path_for_blur = initial_path.clone();
+    let initial_path_for_click = initial_path.clone();
+    // For new files, start in title editing mode; otherwise focus content
+    let mut editing_name = use_signal(|| is_new_file);
+    let mut name_input = use_signal(|| initial_path.clone());
+    let mut focus_content = use_signal(|| !is_new_file);
 
     // Clone values before using in RSX
     let snapshot_for_keydown = snapshot.clone();
@@ -38,7 +49,58 @@ pub fn MainPanel(
                     handle_document_keydown(event, &mut focused_anchor_id, &snapshot_for_keydown, &mut navigate_to_block);
                 }
             },
-            h1 { "{display_name}" }
+            if *editing_name.read() {
+                input {
+                    class: "document-title-input",
+                    r#type: "text",
+                    value: name_input.read().clone(),
+                    onmounted: move |event: Event<MountedData>| async move {
+                        let _ = event.data().set_focus(true).await;
+                    },
+                    oninput: move |event: Event<FormData>| {
+                        name_input.set(event.value());
+                    },
+                    onkeydown: move |event: Event<KeyboardData>| {
+                        match event.key() {
+                            Key::Enter => {
+                                event.prevent_default();
+                                let new_path = name_input.read().clone();
+                                if new_path != initial_path_for_keydown && !new_path.trim().is_empty() {
+                                    on_rename.call(new_path);
+                                }
+                                editing_name.set(false);
+                                // Only focus content area for new unsaved files
+                                if is_new_file {
+                                    focus_content.set(true);
+                                }
+                            }
+                            Key::Escape => {
+                                // Cancel editing, revert to original path
+                                event.prevent_default();
+                                name_input.set(initial_path_for_keydown.clone());
+                                editing_name.set(false);
+                            }
+                            _ => {}
+                        }
+                    },
+                    onblur: move |_| {
+                        let new_path = name_input.read().clone();
+                        if new_path != initial_path_for_blur && !new_path.trim().is_empty() {
+                            on_rename.call(new_path);
+                        }
+                        editing_name.set(false);
+                    },
+                }
+            } else {
+                h1 {
+                    class: "document-title",
+                    onclick: move |_| {
+                        name_input.set(initial_path_for_click.clone());
+                        editing_name.set(true);
+                    },
+                    "{initial_path}"
+                }
+            }
             hr {}
             // Show EmptyDocument if no blocks or content is just whitespace
             if !snapshot.blocks.is_empty() && !document.text().trim().is_empty() {
@@ -56,7 +118,12 @@ pub fn MainPanel(
                     on_wikilink_click
                 }
             } else {
-                EmptyDocument { on_command }
+                // Key changes when focus_content changes, forcing remount to trigger onmounted focus
+                EmptyDocument {
+                    key: "{focus_content.read()}",
+                    on_command,
+                    should_focus: *focus_content.read()
+                }
             }
         }
     }
