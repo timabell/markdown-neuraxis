@@ -221,8 +221,12 @@ hr {
 }
 
 .empty-document {
-    color: var(--base1);
-    font-style: italic;
+    margin: 21px 0 0 24px;
+    width: 100%;
+}
+
+.empty-document .editor-textarea {
+    width: 100%;
 }
 
 /* Heading styles */
@@ -514,11 +518,6 @@ hr {
     transform: translateY(1px);
 }
 
-.empty-document .add-block-button {
-    margin-top: 16px;
-    padding: 16px 24px;
-    font-size: 18px;
-}
 
 /* Editor block styles for raw markdown editing */
 .editor-block {

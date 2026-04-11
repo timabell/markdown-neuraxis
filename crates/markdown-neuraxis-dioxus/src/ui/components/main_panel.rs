@@ -40,7 +40,8 @@ pub fn MainPanel(
             },
             h1 { "{display_name}" }
             hr {}
-            if !snapshot.blocks.is_empty() {
+            // Show EmptyDocument if no blocks or content is just whitespace
+            if !snapshot.blocks.is_empty() && !document.text().trim().is_empty() {
                 DocumentContent {
                     snapshot: snapshot_for_content,
                     source: document.text(),

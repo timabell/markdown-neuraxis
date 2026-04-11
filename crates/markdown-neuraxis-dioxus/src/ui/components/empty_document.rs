@@ -24,20 +24,28 @@ pub fn EmptyDocument(on_command: Callback<Cmd>) -> Element {
             textarea {
                 class: "editor-textarea",
                 value: local_content.read().clone(),
-                placeholder: "Start typing...",
+                placeholder: "Start typing markdown...",
                 spellcheck: false,
-                rows: 3,
-                autofocus: true,
+                rows: 2,
+
+                onmounted: move |event: Event<MountedData>| async move {
+                    let _ = event.data().set_focus(true).await;
+                },
 
                 oninput: move |event: Event<FormData>| {
                     local_content.set(event.value());
                 },
 
                 onkeydown: move |event: Event<KeyboardData>| {
-                    // Enter without shift commits the content
-                    if event.key() == Key::Enter && !event.modifiers().shift() {
-                        event.prevent_default();
-                        commit_if_nonempty();
+                    match event.key() {
+                        Key::Enter if !event.modifiers().shift() => {
+                            event.prevent_default();
+                            commit_if_nonempty();
+                        }
+                        Key::Escape => {
+                            commit_if_nonempty();
+                        }
+                        _ => {}
                     }
                 },
 
