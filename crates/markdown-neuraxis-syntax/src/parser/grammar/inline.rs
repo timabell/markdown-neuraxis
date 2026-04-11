@@ -55,6 +55,15 @@ pub fn inline_until_newline(p: &mut Parser<'_, '_>) {
     }
 }
 
+/// Parse inline content until pipe, newline, or EOF.
+///
+/// Used for table cells where pipes delimit cell boundaries.
+pub fn inline_until_pipe_or_newline(p: &mut Parser<'_, '_>) {
+    while !p.at_end() && !p.at(SyntaxKind::NEWLINE) && !p.at(SyntaxKind::PIPE) {
+        inline_element(p);
+    }
+}
+
 /// Parse a single inline element.
 fn inline_element(p: &mut Parser<'_, '_>) {
     match p.current() {

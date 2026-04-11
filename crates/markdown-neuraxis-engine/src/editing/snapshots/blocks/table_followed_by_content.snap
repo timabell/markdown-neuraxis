@@ -1,0 +1,7 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [31..68]
+  segments:
+    Text [31..67] "This is a paragraph after the table."

@@ -48,6 +48,8 @@ fn interrupts_paragraph(p: &Parser<'_, '_>, offset: usize) -> bool {
     match p.nth(offset) {
         // Headings and blockquotes always interrupt
         SyntaxKind::HASH | SyntaxKind::GT => true,
+        // Pipe at line start may be a table (conservative - actual table check is complex)
+        SyntaxKind::PIPE => true,
         // List markers interrupt (dash/star/plus followed by space)
         SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
             p.nth(offset + 1) == SyntaxKind::WHITESPACE
@@ -88,6 +90,13 @@ pub fn block(p: &mut Parser<'_, '_>) {
     match p.current() {
         SyntaxKind::HASH => heading(p),
         SyntaxKind::GT => blockquote(p),
+        SyntaxKind::PIPE => {
+            if is_table_start(p) {
+                table(p);
+            } else {
+                paragraph(p);
+            }
+        }
         SyntaxKind::DASH | SyntaxKind::STAR | SyntaxKind::PLUS => {
             // Could be frontmatter (--- at doc start with closing ---), thematic break, list item, or paragraph
             if p.at_document_start() && is_frontmatter_start(p) {
@@ -1055,6 +1064,113 @@ fn paragraph(p: &mut Parser<'_, '_>) {
     }
 
     m.complete(p, SyntaxKind::PARAGRAPH);
+}
+
+/// Check if current position starts a GFM table (header row + delimiter row).
+fn is_table_start(p: &Parser<'_, '_>) -> bool {
+    if p.current() != SyntaxKind::PIPE {
+        return false;
+    }
+
+    // Find the end of the first line (header row)
+    let mut i = 0;
+    while p.nth(i) != SyntaxKind::EOF && p.nth(i) != SyntaxKind::NEWLINE {
+        i += 1;
+    }
+
+    // Must have a newline to check second line
+    if p.nth(i) != SyntaxKind::NEWLINE {
+        return false;
+    }
+    i += 1;
+
+    // Second line must be a delimiter row: starts with | followed by dashes
+    if p.nth(i) != SyntaxKind::PIPE {
+        return false;
+    }
+    i += 1;
+
+    // Skip optional whitespace
+    if p.nth(i) == SyntaxKind::WHITESPACE {
+        i += 1;
+    }
+
+    // Must have at least one dash (or colon for alignment, but we check dash)
+    matches!(p.nth(i), SyntaxKind::DASH | SyntaxKind::COLON)
+}
+
+/// Parse a GFM-style table.
+fn table(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Parse header section
+    let head = p.start();
+    table_row(p);
+    head.complete(p, SyntaxKind::TABLE_HEAD);
+
+    // Parse delimiter row
+    table_delimiter_row(p);
+
+    // Parse body section (remaining rows)
+    let body = p.start();
+    while !p.at_end() && p.at(SyntaxKind::PIPE) {
+        table_row(p);
+    }
+    body.complete(p, SyntaxKind::TABLE_BODY);
+
+    m.complete(p, SyntaxKind::TABLE);
+}
+
+/// Parse a table row (sequence of cells).
+fn table_row(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume leading pipe
+    p.bump();
+
+    // Parse cells until end of line
+    loop {
+        // Skip whitespace before cell content
+        p.eat(SyntaxKind::WHITESPACE);
+
+        if p.at(SyntaxKind::NEWLINE) || p.at(SyntaxKind::EOF) {
+            break;
+        }
+
+        if p.at(SyntaxKind::PIPE) {
+            // Empty cell or next cell
+            p.bump();
+            continue;
+        }
+
+        // Parse cell content with inline formatting
+        let cell = p.start();
+        inline::inline_until_pipe_or_newline(p);
+        cell.complete(p, SyntaxKind::TABLE_CELL);
+
+        // Consume trailing pipe (or end of line)
+        if p.at(SyntaxKind::PIPE) {
+            p.bump();
+        }
+    }
+
+    // Consume newline
+    p.eat(SyntaxKind::NEWLINE);
+
+    m.complete(p, SyntaxKind::TABLE_ROW);
+}
+
+/// Parse a table delimiter row (|---|---|).
+fn table_delimiter_row(p: &mut Parser<'_, '_>) {
+    let m = p.start();
+
+    // Consume entire line
+    while !p.at_end() && !p.at(SyntaxKind::NEWLINE) {
+        p.bump();
+    }
+    p.eat(SyntaxKind::NEWLINE);
+
+    m.complete(p, SyntaxKind::TABLE_DELIMITER);
 }
 
 // All parsing behavior is verified by snapshot tests in tests/snapshots/.

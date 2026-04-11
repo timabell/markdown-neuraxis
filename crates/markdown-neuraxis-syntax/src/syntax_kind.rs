@@ -163,6 +163,18 @@ pub enum SyntaxKind {
     INDENTED_CODE,
     /// YAML frontmatter block
     FRONTMATTER,
+    /// Table container
+    TABLE,
+    /// Table header section (first row)
+    TABLE_HEAD,
+    /// Table body section (rows after delimiter)
+    TABLE_BODY,
+    /// Table row
+    TABLE_ROW,
+    /// Table cell
+    TABLE_CELL,
+    /// Table delimiter row (|---|---|)
+    TABLE_DELIMITER,
 
     /// Error recovery node
     ERROR,

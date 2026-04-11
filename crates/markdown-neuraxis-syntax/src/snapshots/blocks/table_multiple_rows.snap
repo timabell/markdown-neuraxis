@@ -1,0 +1,95 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..70
+  TABLE@0..70
+    TABLE_HEAD@0..14
+      TABLE_ROW@0..14
+        PIPE@0..1 "|"
+        WHITESPACE@1..2 " "
+        TABLE_CELL@2..4
+          TEXT@2..3 "a"
+          WHITESPACE@3..4 " "
+        PIPE@4..5 "|"
+        WHITESPACE@5..6 " "
+        TABLE_CELL@6..8
+          TEXT@6..7 "b"
+          WHITESPACE@7..8 " "
+        PIPE@8..9 "|"
+        WHITESPACE@9..10 " "
+        TABLE_CELL@10..12
+          TEXT@10..11 "c"
+          WHITESPACE@11..12 " "
+        PIPE@12..13 "|"
+        NEWLINE@13..14 "\\n"
+    TABLE_DELIMITER@14..28
+      PIPE@14..15 "|"
+      DASH@15..16 "-"
+      DASH@16..17 "-"
+      DASH@17..18 "-"
+      PIPE@18..19 "|"
+      DASH@19..20 "-"
+      DASH@20..21 "-"
+      DASH@21..22 "-"
+      PIPE@22..23 "|"
+      DASH@23..24 "-"
+      DASH@24..25 "-"
+      DASH@25..26 "-"
+      PIPE@26..27 "|"
+      NEWLINE@27..28 "\\n"
+    TABLE_BODY@28..70
+      TABLE_ROW@28..42
+        PIPE@28..29 "|"
+        WHITESPACE@29..30 " "
+        TABLE_CELL@30..32
+          TEXT@30..31 "1"
+          WHITESPACE@31..32 " "
+        PIPE@32..33 "|"
+        WHITESPACE@33..34 " "
+        TABLE_CELL@34..36
+          TEXT@34..35 "2"
+          WHITESPACE@35..36 " "
+        PIPE@36..37 "|"
+        WHITESPACE@37..38 " "
+        TABLE_CELL@38..40
+          TEXT@38..39 "3"
+          WHITESPACE@39..40 " "
+        PIPE@40..41 "|"
+        NEWLINE@41..42 "\\n"
+      TABLE_ROW@42..56
+        PIPE@42..43 "|"
+        WHITESPACE@43..44 " "
+        TABLE_CELL@44..46
+          TEXT@44..45 "4"
+          WHITESPACE@45..46 " "
+        PIPE@46..47 "|"
+        WHITESPACE@47..48 " "
+        TABLE_CELL@48..50
+          TEXT@48..49 "5"
+          WHITESPACE@49..50 " "
+        PIPE@50..51 "|"
+        WHITESPACE@51..52 " "
+        TABLE_CELL@52..54
+          TEXT@52..53 "6"
+          WHITESPACE@53..54 " "
+        PIPE@54..55 "|"
+        NEWLINE@55..56 "\\n"
+      TABLE_ROW@56..70
+        PIPE@56..57 "|"
+        WHITESPACE@57..58 " "
+        TABLE_CELL@58..60
+          TEXT@58..59 "7"
+          WHITESPACE@59..60 " "
+        PIPE@60..61 "|"
+        WHITESPACE@61..62 " "
+        TABLE_CELL@62..64
+          TEXT@62..63 "8"
+          WHITESPACE@63..64 " "
+        PIPE@64..65 "|"
+        WHITESPACE@65..66 " "
+        TABLE_CELL@66..68
+          TEXT@66..67 "9"
+          WHITESPACE@67..68 " "
+        PIPE@68..69 "|"
+        NEWLINE@69..70 "\\n"
