@@ -8,18 +8,21 @@
 
 ![screenshot](doc/screenshot-of-app.png)
 
-## What is markdown-neuraxis now
+## Why markdown-neuraxis
 
-- Markdown first
-- Local / privacy first
-- Open Source - A-GPL licensed
-- An outliner (collapsible bullets)
+- FOSS / Open Source - A-GPL v3 licenced
+- Local-first
+- Privacy-first
+- Normal markdown files (with extended capabilities)
+- Normal filesystem folders
+- No enforced filesystem structures
+- Outlining (collapsible bullets & headings)
+- Support for highly nested content (e.g. code in blockquotes in deeply nested bullets)
+- Fast Rust engine core
 - Cross-platform
   - Desktop - Windows / Linux / Mac (with Dioxus)
   - Mobile - Android with native Kotlin UI
 	- Terminal/command-line TUI (Text User Interface)
-- Fast Rust engine
-- Flexible in folder & file structure
 
 There is currently nothing out there that hits all these points. Sadly logseq is going db-first from markdown-first and the android app has stagnated and is slow; obsidian people love but is closed-source. Many markdown tools are cloud-first SaaS products.
 
