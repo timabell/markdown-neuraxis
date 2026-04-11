@@ -52,6 +52,16 @@ impl MarkdownFile {
             .unwrap_or("Untitled")
             .to_string()
     }
+
+    /// Create from a display path (without .md extension), adding it automatically
+    pub fn from_display_path(display_path: &str) -> Self {
+        let path_with_ext = if display_path.ends_with(".md") {
+            display_path.to_string()
+        } else {
+            format!("{}.md", display_path)
+        };
+        Self::new(RelativePathBuf::from(path_with_ext))
+    }
 }
 
 impl From<RelativePathBuf> for MarkdownFile {

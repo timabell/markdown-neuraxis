@@ -66,6 +66,8 @@ pub fn App(notes_path: PathBuf) -> Element {
     let current_document = use_signal(|| None::<Arc<Document>>);
     let current_snapshot = use_signal(|| None::<Snapshot>);
     let focused_folder = use_signal(|| None::<RelativePathBuf>);
+    // Track if current file is newly created (for focusing title input)
+    let is_new_file = use_signal(|| false);
 
     // Mobile navigation state - tracks whether file tree is shown on mobile
     let mut mobile_nav_open = use_signal(|| false);
@@ -78,6 +80,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut error_state = error_state;
         let mut mobile_nav_open = mobile_nav_open;
         let mut focused_folder = focused_folder;
+        let mut is_new_file = is_new_file;
         move |markdown_file: MarkdownFile| {
             let path = notes_path.read();
             load_existing_document(
@@ -87,6 +90,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut current_document,
                 &mut current_snapshot,
                 &mut error_state,
+                &mut is_new_file,
             );
             // Clear any folder focus when a file is selected
             focused_folder.set(None);
@@ -100,6 +104,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
         let mut error_state = error_state;
+        let mut is_new_file = is_new_file;
         move |file_path: PathBuf| {
             let path = notes_path.read();
             navigate_to_path(
@@ -109,6 +114,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut current_document,
                 &mut current_snapshot,
                 &mut error_state,
+                &mut is_new_file,
             );
         }
     };
@@ -120,6 +126,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut error_state = error_state;
         let mut file_tree = file_tree;
         let mut focused_folder = focused_folder;
+        let mut is_new_file = is_new_file;
         move |target: String| {
             let path = notes_path.read();
             // First check if target matches a folder
@@ -153,6 +160,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut current_document,
                 &mut current_snapshot,
                 &mut error_state,
+                &mut is_new_file,
             );
         }
     };
@@ -164,6 +172,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         current_snapshot,
         file_tree,
         error_state,
+        is_new_file,
     );
 
     rsx! {
@@ -191,62 +200,97 @@ pub fn App(notes_path: PathBuf) -> Element {
                 div {
                     class: "sidebar-header",
                     h2 { "Files" }
-                    button {
-                        class: "change-folder-btn",
-                        title: "Change notes folder",
-                        onclick: move |_| {
-                            let mut notes_path = notes_path;
-                            let mut file_tree = file_tree;
-                            let mut selected_file = selected_file;
-                            let mut current_document = current_document;
-                            let mut current_snapshot = current_snapshot;
-                            let mut focused_folder = focused_folder;
-                            let mut error_state = error_state;
+                    div {
+                        class: "sidebar-header-buttons",
+                        button {
+                            class: "new-file-btn",
+                            title: "New file in root",
+                            onclick: {
+                                let mut selected_file = selected_file;
+                                let mut current_document = current_document;
+                                let mut current_snapshot = current_snapshot;
+                                let mut error_state = error_state;
+                                let mut focused_folder = focused_folder;
+                                let mut mobile_nav_open = mobile_nav_open;
+                                let mut is_new_file = is_new_file;
+                                move |_| {
+                                    let path = notes_path.read();
+                                    let root_path = RelativePathBuf::new();
+                                    let filename = generate_unique_filename(&root_path, &path);
+                                    let file_path = RelativePathBuf::from(&filename);
+                                    let markdown_file = MarkdownFile::new(file_path);
+                                    load_document(
+                                        markdown_file,
+                                        &path,
+                                        &mut selected_file,
+                                        &mut current_document,
+                                        &mut current_snapshot,
+                                        &mut error_state,
+                                        &mut is_new_file,
+                                    );
+                                    focused_folder.set(None);
+                                    mobile_nav_open.set(false);
+                                }
+                            },
+                            "+"
+                        }
+                        button {
+                            class: "change-folder-btn",
+                            title: "Change notes folder",
+                            onclick: move |_| {
+                                let mut notes_path = notes_path;
+                                let mut file_tree = file_tree;
+                                let mut selected_file = selected_file;
+                                let mut current_document = current_document;
+                                let mut current_snapshot = current_snapshot;
+                                let mut focused_folder = focused_folder;
+                                let mut error_state = error_state;
 
-                            let current_path = notes_path.read().clone();
-                            spawn(async move {
-                                if let Some(new_path) = pick_folder(Some(&current_path)).await {
-                                    // Save the new path to config
-                                    let config = Config { notes_path: new_path.clone() };
-                                    match config.save() {
-                                        Ok(()) => {
-                                            log::info!("Config saved with new notes path: {}", new_path.display());
+                                let current_path = notes_path.read().clone();
+                                spawn(async move {
+                                    if let Some(new_path) = pick_folder(Some(&current_path)).await {
+                                        // Save the new path to config
+                                        let config = Config { notes_path: new_path.clone() };
+                                        match config.save() {
+                                            Ok(()) => {
+                                                log::info!("Config saved with new notes path: {}", new_path.display());
 
-                                            // Update notes_path signal
-                                            notes_path.set(new_path.clone());
+                                                // Update notes_path signal
+                                                notes_path.set(new_path.clone());
 
-                                            // Rebuild file tree
-                                            match io::build_file_tree(&new_path) {
-                                                Ok(tree) => {
-                                                    log::info!("File tree rebuilt successfully");
-                                                    file_tree.set(tree);
+                                                // Rebuild file tree
+                                                match io::build_file_tree(&new_path) {
+                                                    Ok(tree) => {
+                                                        log::info!("File tree rebuilt successfully");
+                                                        file_tree.set(tree);
+                                                    }
+                                                    Err(e) => {
+                                                        log::error!("Error building file tree: {e}");
+                                                        file_tree.set(FileTree::new(new_path));
+                                                    }
                                                 }
-                                                Err(e) => {
-                                                    log::error!("Error building file tree: {e}");
-                                                    file_tree.set(FileTree::new(new_path));
-                                                }
+
+                                                // Clear current file state
+                                                selected_file.set(None);
+                                                current_document.set(None);
+                                                current_snapshot.set(None);
+                                                focused_folder.set(None);
+                                                error_state.set(None);
                                             }
-
-                                            // Clear current file state
-                                            selected_file.set(None);
-                                            current_document.set(None);
-                                            current_snapshot.set(None);
-                                            focused_folder.set(None);
-                                            error_state.set(None);
-                                        }
-                                        Err(e) => {
-                                            RuntimeError::log_and_set(
-                                                &mut error_state,
-                                                "Failed to save config".to_string(),
-                                                e,
-                                            );
+                                            Err(e) => {
+                                                RuntimeError::log_and_set(
+                                                    &mut error_state,
+                                                    "Failed to save config".to_string(),
+                                                    e,
+                                                );
+                                            }
                                         }
                                     }
-                                }
-                                // If None (cancelled), do nothing
-                            });
-                        },
-                        "📂"
+                                    // If None (cancelled), do nothing
+                                });
+                            },
+                            "📂"
+                        }
                     }
                 }
                 super::components::TreeView {
@@ -256,6 +300,32 @@ pub fn App(notes_path: PathBuf) -> Element {
                     on_file_select: on_sidebar_file_select,
                     on_folder_toggle: move |relative_path: RelativePathBuf| {
                         file_tree.write().toggle_folder(&relative_path);
+                    },
+                    on_new_file: {
+                        let mut selected_file = selected_file;
+                        let mut current_document = current_document;
+                        let mut current_snapshot = current_snapshot;
+                        let mut error_state = error_state;
+                        let mut focused_folder = focused_folder;
+                        let mut mobile_nav_open = mobile_nav_open;
+                        let mut is_new_file = is_new_file;
+                        move |folder_path: RelativePathBuf| {
+                            let path = notes_path.read();
+                            let filename = generate_unique_filename(&folder_path, &path);
+                            let file_path = folder_path.join(&filename);
+                            let markdown_file = MarkdownFile::new(file_path);
+                            load_document(
+                                markdown_file,
+                                &path,
+                                &mut selected_file,
+                                &mut current_document,
+                                &mut current_snapshot,
+                                &mut error_state,
+                                &mut is_new_file,
+                            );
+                            focused_folder.set(None);
+                            mobile_nav_open.set(false);
+                        }
                     }
                 }
             }
@@ -267,6 +337,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                     current_document.read().as_ref()
                 ) {
                     super::components::MainPanel {
+                        key: "{file.relative_path()}",
                         file: file.clone(),
                         snapshot: snapshot.clone(),
                         notes_path: notes_path.read().clone(),
@@ -274,6 +345,43 @@ pub fn App(notes_path: PathBuf) -> Element {
                         on_file_select: Some(Callback::new(on_file_navigate)),
                         on_command,
                         on_wikilink_click: on_wikilink_navigate,
+                        on_rename: {
+                            let mut selected_file = selected_file;
+                            let mut file_tree = file_tree;
+                            let mut error_state = error_state;
+                            move |new_path: String| {
+                                let notes = notes_path.read().clone();
+                                let current_file = selected_file.read().clone();
+                                let was_new_file = *is_new_file.read();
+                                if let Some(current_file) = current_file {
+                                    match rename_file(&current_file, &new_path, &notes) {
+                                        Ok(new_file) => {
+                                            // Only update tree if file existed on disk
+                                            if !was_new_file {
+                                                file_tree.write().remove_file(&current_file.relative_path().to_path(&notes), &notes);
+                                                file_tree.write().add_file(&new_file.relative_path().to_path(&notes), &notes);
+                                                // Expand parent folders so new file is visible
+                                                if let Some(parent) = new_file.relative_path().parent()
+                                                    && !parent.as_str().is_empty()
+                                                {
+                                                    file_tree.write().expand_to_folder(&parent.to_relative_path_buf());
+                                                }
+                                            }
+                                            // Update selected file (in-memory only for new files)
+                                            selected_file.set(Some(new_file));
+                                        }
+                                        Err(e) => {
+                                            RuntimeError::log_and_set(
+                                                &mut error_state,
+                                                "Failed to rename file".to_string(),
+                                                e,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        is_new_file: *is_new_file.read(),
                     }
                 } else {
                     div {
@@ -307,9 +415,11 @@ fn load_existing_document(
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
     error_state: &mut Signal<Option<RuntimeError>>,
+    is_new_file: &mut Signal<bool>,
 ) {
     // Clear any previous error
     error_state.set(None);
+    is_new_file.set(false);
 
     match io::read_file(markdown_file.relative_path(), notes_path) {
         Ok(content) => match Document::from_bytes(content.as_bytes()) {
@@ -347,28 +457,33 @@ pub fn load_document(
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
     error_state: &mut Signal<Option<RuntimeError>>,
+    is_new_file: &mut Signal<bool>,
 ) {
     // Clear any previous error
     error_state.set(None);
 
     match io::read_file(markdown_file.relative_path(), notes_path) {
-        Ok(content) => match Document::from_bytes(content.as_bytes()) {
-            Ok(document) => {
-                let snapshot = document.snapshot();
-                *current_document.write() = Some(Arc::new(document));
-                *current_snapshot.write() = Some(snapshot);
-                *selected_file.write() = Some(markdown_file);
+        Ok(content) => {
+            is_new_file.set(false);
+            match Document::from_bytes(content.as_bytes()) {
+                Ok(document) => {
+                    let snapshot = document.snapshot();
+                    *current_document.write() = Some(Arc::new(document));
+                    *current_snapshot.write() = Some(snapshot);
+                    *selected_file.write() = Some(markdown_file);
+                }
+                Err(e) => {
+                    RuntimeError::log_and_set(
+                        error_state,
+                        format!("Failed to parse '{}'", markdown_file.relative_path()),
+                        e,
+                    );
+                }
             }
-            Err(e) => {
-                RuntimeError::log_and_set(
-                    error_state,
-                    format!("Failed to parse '{}'", markdown_file.relative_path()),
-                    e,
-                );
-            }
-        },
+        }
         Err(_) => {
             // File doesn't exist - create a blank document
+            is_new_file.set(true);
             match Document::from_bytes(b"") {
                 Ok(document) => {
                     let snapshot = document.snapshot();
@@ -396,6 +511,7 @@ fn navigate_to_path(
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
     error_state: &mut Signal<Option<RuntimeError>>,
+    is_new_file: &mut Signal<bool>,
 ) {
     // Convert absolute path to relative
     let relative_path = if let Ok(rel) = file_path.strip_prefix(notes_path) {
@@ -415,21 +531,53 @@ fn navigate_to_path(
         current_document,
         current_snapshot,
         error_state,
+        is_new_file,
     );
 }
 
 /// Resolve a wikilink target to a markdown file
 pub fn resolve_wikilink(target: &str, _notes_path: &Path) -> MarkdownFile {
-    // Ensure .md extension is present
-    let filename = if target.ends_with(".md") {
-        target.to_string()
-    } else {
-        format!("{}.md", target)
-    };
+    MarkdownFile::from_display_path(target)
+}
 
-    let relative_path =
-        RelativePathBuf::from_path(&filename).expect("Failed to create relative path");
-    MarkdownFile::new(relative_path)
+/// Rename/move a file to a new path (display path without .md, extension added automatically)
+fn rename_file(
+    current_file: &MarkdownFile,
+    new_display_path: &str,
+    notes_path: &Path,
+) -> Result<MarkdownFile, io::IoError> {
+    let new_file = MarkdownFile::from_display_path(new_display_path);
+    io::rename_file(
+        current_file.relative_path(),
+        new_file.relative_path(),
+        notes_path,
+    )?;
+    Ok(new_file)
+}
+
+/// Generate a unique filename in the given folder
+fn generate_unique_filename(folder_path: &RelativePathBuf, notes_path: &Path) -> String {
+    let base_name = "new";
+    let extension = ".md";
+
+    // Check if new.md exists
+    let first_try = format!("{}{}", base_name, extension);
+    let first_path = folder_path.join(&first_try).to_path(notes_path);
+    if !first_path.exists() {
+        return first_try;
+    }
+
+    // Try untitled-1.md, untitled-2.md, etc.
+    for i in 1..1000 {
+        let numbered = format!("{}-{}{}", base_name, i, extension);
+        let numbered_path = folder_path.join(&numbered).to_path(notes_path);
+        if !numbered_path.exists() {
+            return numbered;
+        }
+    }
+
+    // Fallback - should never reach here with 1000 attempts
+    format!("{}-999{}", base_name, extension)
 }
 
 /// Create a command callback for document editing
@@ -440,6 +588,7 @@ fn create_command_callback(
     mut current_snapshot: Signal<Option<Snapshot>>,
     mut file_tree: Signal<FileTree>,
     mut error_state: Signal<Option<RuntimeError>>,
+    mut is_new_file: Signal<bool>,
 ) -> impl FnMut(Cmd) + 'static {
     move |cmd: Cmd| {
         let path = notes_path.read();
@@ -457,11 +606,20 @@ fn create_command_callback(
                 // Check if file exists before writing
                 let file_existed = io::read_file(file.relative_path(), &path).is_ok();
 
+                // Only create new files if there's actual content
+                if !file_existed && content.trim().is_empty() {
+                    // Skip creating empty files
+                    *current_document.write() = Some(document_arc);
+                    *current_snapshot.write() = Some(new_snapshot);
+                    return;
+                }
+
                 match io::write_file(file.relative_path(), &path, &content) {
                     Ok(()) => {
                         if !file_existed {
                             let absolute_path = file.relative_path().to_path(&*path);
                             file_tree.write().add_file(&absolute_path, &path);
+                            is_new_file.set(false);
                             log::info!(
                                 "New file created and auto-saved: {:?}",
                                 file.relative_path()

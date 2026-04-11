@@ -9,8 +9,10 @@ pub fn TreeViewItem(
     is_focused: bool,
     on_file_select: EventHandler<MarkdownFile>,
     on_folder_toggle: EventHandler<RelativePathBuf>,
+    on_new_file: EventHandler<RelativePathBuf>,
 ) -> Element {
     let node = item.node.clone();
+    let node_for_add = item.node.clone();
     let depth = item.depth;
     let type_class = if node.is_folder { "folder" } else { "file" };
     let selected_class = if is_selected { " selected" } else { "" };
@@ -44,6 +46,17 @@ pub fn TreeViewItem(
             span {
                 class: "tree-label",
                 "{node.name}"
+            }
+
+            if node.is_folder {
+                span {
+                    class: "tree-add-file",
+                    onclick: move |evt| {
+                        evt.stop_propagation();
+                        on_new_file.call(node_for_add.relative_path.clone());
+                    },
+                    "+"
+                }
             }
         }
     }

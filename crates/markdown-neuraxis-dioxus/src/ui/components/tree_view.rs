@@ -10,6 +10,7 @@ pub fn TreeView(
     focused_folder: Option<RelativePathBuf>,
     on_file_select: EventHandler<MarkdownFile>,
     on_folder_toggle: EventHandler<RelativePathBuf>,
+    on_new_file: EventHandler<RelativePathBuf>,
 ) -> Element {
     let items = use_memo(move || tree.read().get_items());
     let mut focused_index = use_signal(|| 0usize);
@@ -80,6 +81,7 @@ pub fn TreeView(
                     is_focused: index == *focused_index.read() && *has_focus.read(),
                     on_file_select: on_file_select,
                     on_folder_toggle: on_folder_toggle,
+                    on_new_file: on_new_file,
                 }
             }
         }

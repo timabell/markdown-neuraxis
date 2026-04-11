@@ -51,6 +51,7 @@ body {
     margin-bottom: 8px;
 }
 
+.new-file-btn,
 .change-folder-btn {
     background: var(--base3);
     border: 1px solid var(--base1);
@@ -62,12 +63,22 @@ body {
     transition: all 0.2s;
 }
 
+.sidebar-header-buttons {
+    display: flex;
+}
+
+.new-file-btn {
+    margin-right: 4px;
+}
+
+.new-file-btn:hover,
 .change-folder-btn:hover {
     background: var(--base2);
     border-color: var(--blue);
     color: var(--blue);
 }
 
+.new-file-btn:active,
 .change-folder-btn:active {
     background: var(--blue);
     color: var(--base3);
@@ -178,6 +189,19 @@ body {
     text-overflow: ellipsis;
 }
 
+.tree-add-file {
+    margin-left: 8px;
+    padding: 0 6px;
+    color: var(--base1);
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.tree-add-file:hover {
+    color: var(--blue);
+    background-color: var(--base2);
+}
+
 .main-content {
     flex: 1;
     padding: 16px;
@@ -221,8 +245,12 @@ hr {
 }
 
 .empty-document {
-    color: var(--base1);
-    font-style: italic;
+    margin: 21px 0 0 24px;
+    width: 100%;
+}
+
+.empty-document .editor-textarea {
+    width: 100%;
 }
 
 /* Heading styles */
@@ -466,6 +494,29 @@ hr {
     border-radius: 4px;
 }
 
+.document-title {
+    cursor: pointer;
+    padding: 4px 8px;
+    margin: 0 -8px;
+    border-radius: 4px;
+}
+
+.document-title:hover {
+    background-color: var(--base2);
+}
+
+.document-title-input {
+    font-size: 2em;
+    font-weight: bold;
+    font-family: inherit;
+    width: 100%;
+    border: 2px solid var(--blue);
+    border-radius: 4px;
+    padding: 4px 8px;
+    background: var(--base3);
+    color: var(--base01);
+}
+
 .block-editor {
     width: 100%;
     border: 2px solid var(--blue);
@@ -483,8 +534,12 @@ hr {
 /* Add block button styling */
 .add-block-container {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     margin: 20px 0;
+}
+
+.add-block-editor {
+    margin: 6px 0 0 4px;
 }
 
 .add-block-button {
@@ -510,11 +565,6 @@ hr {
     transform: translateY(1px);
 }
 
-.empty-document .add-block-button {
-    margin-top: 16px;
-    padding: 16px 24px;
-    font-size: 18px;
-}
 
 /* Editor block styles for raw markdown editing */
 .editor-block {

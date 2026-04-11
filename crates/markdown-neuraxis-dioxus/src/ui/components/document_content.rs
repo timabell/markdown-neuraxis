@@ -33,6 +33,32 @@ pub fn DocumentContent(
     // Clone snapshot for context menu
     let snapshot_for_menu = snapshot.clone();
 
+    // State for add-block textarea at end of document
+    let mut show_add_block = use_signal(|| false);
+    let mut add_block_content = use_signal(String::new);
+    let doc_len = source.len();
+    let ends_with_newline = source.ends_with('\n');
+
+    // Commit new block content if non-empty
+    let mut commit_new_block = {
+        let on_command = on_command;
+        let mut show_add_block = show_add_block;
+        let mut add_block_content = add_block_content;
+        move || {
+            let text = add_block_content.read().clone();
+            if !text.trim().is_empty() {
+                let prefix = if ends_with_newline { "\n" } else { "\n\n" };
+                let cmd = Cmd::InsertText {
+                    at: doc_len,
+                    text: format!("{}{}", prefix, text),
+                };
+                on_command.call(cmd);
+            }
+            add_block_content.set(String::new());
+            show_add_block.set(false);
+        }
+    };
+
     rsx! {
         div {
             class: "document-content",
@@ -47,6 +73,54 @@ pub fn DocumentContent(
                         on_context_menu: Some(on_context_menu),
                         on_command,
                         on_wikilink_click
+                    }
+                }
+            }
+            // Add block area at end of document
+            if *show_add_block.read() {
+                div {
+                    class: "add-block-editor",
+                    textarea {
+                        class: "editor-textarea",
+                        value: add_block_content.read().clone(),
+                        spellcheck: false,
+                        rows: 2,
+
+                        onmounted: move |event: Event<MountedData>| async move {
+                            let _ = event.data().set_focus(true).await;
+                        },
+
+                        oninput: move |event: Event<FormData>| {
+                            add_block_content.set(event.value());
+                        },
+
+                        onkeydown: move |event: Event<KeyboardData>| {
+                            match event.key() {
+                                Key::Enter if !event.modifiers().shift() => {
+                                    event.prevent_default();
+                                    commit_new_block();
+                                }
+                                Key::Escape => {
+                                    commit_new_block();
+                                }
+                                _ => {}
+                            }
+                        },
+
+                        onblur: move |_| {
+                            commit_new_block();
+                        },
+                    }
+                }
+            } else {
+                div {
+                    class: "add-block-container",
+                    button {
+                        class: "add-block-button",
+                        onclick: move |_| {
+                            show_add_block.set(true);
+                        },
+                        "+"
                     }
                 }
             }

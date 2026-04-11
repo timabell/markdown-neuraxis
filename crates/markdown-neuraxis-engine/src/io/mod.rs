@@ -11,6 +11,8 @@ pub enum IoError {
     Io(#[from] std::io::Error),
     #[error("Invalid notes directory: {0}")]
     InvalidNotesDir(String),
+    #[error("File already exists: {0}")]
+    FileExists(PathBuf),
 }
 
 /// Read a markdown file and return its content
@@ -81,6 +83,57 @@ fn scan_directory_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), 
     }
 
     Ok(())
+}
+
+/// Rename/move a file to a new path, creating directories as needed
+pub fn rename_file(
+    old_relative_path: &RelativePath,
+    new_relative_path: &RelativePath,
+    notes_root: &Path,
+) -> Result<(), IoError> {
+    let old_abs_path = old_relative_path.to_path(notes_root);
+    let new_abs_path = new_relative_path.to_path(notes_root);
+
+    // Check if target already exists
+    if new_abs_path.exists() {
+        return Err(IoError::FileExists(new_abs_path));
+    }
+
+    // Create parent directories if needed
+    if let Some(parent) = new_abs_path.parent() {
+        fs::create_dir_all(parent).map_err(IoError::Io)?;
+    }
+
+    // Only rename if old file exists (for new unsaved files, this is a no-op)
+    if old_abs_path.exists() {
+        fs::rename(&old_abs_path, &new_abs_path).map_err(IoError::Io)?;
+
+        // Clean up empty parent directories (like rmdir - fails safely if not empty)
+        cleanup_empty_parents(&old_abs_path, notes_root);
+    }
+
+    Ok(())
+}
+
+/// Remove empty parent directories up to (but not including) notes_root.
+fn cleanup_empty_parents(path: &Path, notes_root: &Path) {
+    let mut current = path.parent();
+    while let Some(parent) = current {
+        // Stop at notes root
+        if parent == notes_root {
+            break;
+        }
+        // Check if directory is empty before attempting removal
+        let is_empty = fs::read_dir(parent)
+            .map(|mut entries| entries.next().is_none())
+            .unwrap_or(false);
+        if !is_empty {
+            break;
+        }
+        // Directory is empty, remove it
+        let _ = fs::remove_dir(parent);
+        current = parent.parent();
+    }
 }
 
 pub fn validate_notes_dir(path: &Path) -> Result<(), IoError> {
@@ -243,5 +296,113 @@ mod tests {
         // Verify content was updated
         let written_content = read_file(relative_path, notes_dir.path()).unwrap();
         assert_eq!(written_content, new_content);
+    }
+
+    #[test]
+    fn test_rename_file_same_directory() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "old.md", "# Content");
+
+        let old_path = RelativePath::new("old.md");
+        let new_path = RelativePath::new("new.md");
+
+        let result = rename_file(old_path, new_path, notes_dir.path());
+        assert!(result.is_ok());
+
+        // Old file should not exist
+        assert!(!old_path.to_path(notes_dir.path()).exists());
+        // New file should exist with same content
+        let content = read_file(new_path, notes_dir.path()).unwrap();
+        assert_eq!(content, "# Content");
+    }
+
+    #[test]
+    fn test_rename_file_to_new_directory() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "root.md", "# Root Content");
+
+        let old_path = RelativePath::new("root.md");
+        let new_path = RelativePath::new("subfolder/moved.md");
+
+        let result = rename_file(old_path, new_path, notes_dir.path());
+        assert!(result.is_ok());
+
+        // Old file should not exist
+        assert!(!old_path.to_path(notes_dir.path()).exists());
+        // New file should exist in new directory
+        let content = read_file(new_path, notes_dir.path()).unwrap();
+        assert_eq!(content, "# Root Content");
+        // Directory should have been created
+        assert!(notes_dir.path().join("subfolder").is_dir());
+    }
+
+    #[test]
+    fn test_rename_file_nonexistent_is_ok() {
+        // For new unsaved files, rename should succeed even if source doesn't exist
+        let notes_dir = create_test_notes_dir();
+
+        let old_path = RelativePath::new("nonexistent.md");
+        let new_path = RelativePath::new("new.md");
+
+        let result = rename_file(old_path, new_path, notes_dir.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_rename_file_fails_if_target_exists() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "source.md", "# Source");
+        create_test_file(&notes_dir, "target.md", "# Target exists");
+
+        let old_path = RelativePath::new("source.md");
+        let new_path = RelativePath::new("target.md");
+
+        let result = rename_file(old_path, new_path, notes_dir.path());
+        assert!(result.is_err());
+        assert!(matches!(result, Err(IoError::FileExists(_))));
+    }
+
+    #[test]
+    fn test_rename_file_removes_empty_parent_folders() {
+        let notes_dir = create_test_notes_dir();
+        // Create a file nested in folders
+        let sub_dir = notes_dir.path().join("folder").join("subfolder");
+        std::fs::create_dir_all(&sub_dir).unwrap();
+        std::fs::write(sub_dir.join("file.md"), "# Content").unwrap();
+
+        let old_path = RelativePath::new("folder/subfolder/file.md");
+        let new_path = RelativePath::new("moved.md");
+
+        let result = rename_file(old_path, new_path, notes_dir.path());
+        assert!(result.is_ok());
+
+        // Old file should be gone
+        assert!(!sub_dir.join("file.md").exists());
+        // Empty folders should be cleaned up
+        assert!(!notes_dir.path().join("folder/subfolder").exists());
+        assert!(!notes_dir.path().join("folder").exists());
+    }
+
+    #[test]
+    fn test_rename_file_keeps_non_empty_parent_folders() {
+        let notes_dir = create_test_notes_dir();
+        // Create nested structure with another file
+        let folder = notes_dir.path().join("folder");
+        let sub_dir = folder.join("subfolder");
+        std::fs::create_dir_all(&sub_dir).unwrap();
+        std::fs::write(sub_dir.join("file.md"), "# Content").unwrap();
+        std::fs::write(folder.join("other.md"), "# Other").unwrap();
+
+        let old_path = RelativePath::new("folder/subfolder/file.md");
+        let new_path = RelativePath::new("moved.md");
+
+        let result = rename_file(old_path, new_path, notes_dir.path());
+        assert!(result.is_ok());
+
+        // Empty subfolder should be removed
+        assert!(!sub_dir.exists());
+        // Parent folder with other file should remain
+        assert!(folder.exists());
+        assert!(folder.join("other.md").exists());
     }
 }
