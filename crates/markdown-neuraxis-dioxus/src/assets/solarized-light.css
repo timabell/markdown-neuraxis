@@ -483,8 +483,12 @@ hr {
 /* Add block button styling */
 .add-block-container {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     margin: 20px 0;
+}
+
+.add-block-editor {
+    margin: 6px 0 0 4px;
 }
 
 .add-block-button {
