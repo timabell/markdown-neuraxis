@@ -457,6 +457,14 @@ fn create_command_callback(
                 // Check if file exists before writing
                 let file_existed = io::read_file(file.relative_path(), &path).is_ok();
 
+                // Only create new files if there's actual content
+                if !file_existed && content.trim().is_empty() {
+                    // Skip creating empty files
+                    *current_document.write() = Some(document_arc);
+                    *current_snapshot.write() = Some(new_snapshot);
+                    return;
+                }
+
                 match io::write_file(file.relative_path(), &path, &content) {
                     Ok(()) => {
                         if !file_existed {
