@@ -2,6 +2,24 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
+Table [0..30]
+  children:
+    TableRow { is_header: true } [0..10]
+      children:
+        TableCell [2..4]
+          segments:
+            Text [2..3] "a"
+        TableCell [6..8]
+          segments:
+            Text [6..7] "b"
+    TableRow { is_header: false } [20..30]
+      children:
+        TableCell [22..24]
+          segments:
+            Text [22..23] "1"
+        TableCell [26..28]
+          segments:
+            Text [26..27] "2"
 Paragraph [31..68]
   segments:
     Text [31..67] "This is a paragraph after the table."

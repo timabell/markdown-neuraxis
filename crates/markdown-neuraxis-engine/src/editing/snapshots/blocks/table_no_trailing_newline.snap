@@ -2,4 +2,15 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-
+Table [0..17]
+  children:
+    TableRow { is_header: true } [0..6]
+      children:
+        TableCell [2..4]
+          segments:
+            Text [2..3] "a"
+    TableRow { is_header: false } [12..17]
+      children:
+        TableCell [14..16]
+          segments:
+            Text [14..15] "1"

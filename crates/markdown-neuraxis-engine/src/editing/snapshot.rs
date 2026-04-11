@@ -81,6 +81,12 @@ pub enum BlockKind {
     FencedCode { language: Option<String> },
     /// Thematic break
     ThematicBreak,
+    /// Table container
+    Table,
+    /// Table row (in head or body)
+    TableRow { is_header: bool },
+    /// Table cell
+    TableCell,
 }
 
 /// A block in the document tree
@@ -436,6 +442,7 @@ fn process_node(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Bl
         SyntaxKind::HEADING => process_heading(source, node, anchors),
         SyntaxKind::FENCED_CODE => process_fenced_code(source, node, anchors),
         SyntaxKind::THEMATIC_BREAK => process_thematic_break(source, node, anchors),
+        SyntaxKind::TABLE => process_table(source, node, anchors),
         _ => None, // Skip unknown node types
     }
 }
@@ -722,6 +729,112 @@ fn process_thematic_break(_source: &str, node: SyntaxNode, anchors: &[Anchor]) -
         kind: BlockKind::ThematicBreak,
         node_range,
         segments: vec![],
+        content: BlockContent::Leaf,
+    })
+}
+
+fn process_table(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
+    let text_range = node.text_range();
+    let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
+
+    let mut rows = Vec::new();
+
+    for child in node.children() {
+        match child.kind() {
+            SyntaxKind::TABLE_HEAD => {
+                // Process header rows
+                for row in child.children() {
+                    if row.kind() == SyntaxKind::TABLE_ROW
+                        && let Some(block) = process_table_row(source, row, anchors, true)
+                    {
+                        rows.push(block);
+                    }
+                }
+            }
+            SyntaxKind::TABLE_BODY => {
+                // Process body rows
+                for row in child.children() {
+                    if row.kind() == SyntaxKind::TABLE_ROW
+                        && let Some(block) = process_table_row(source, row, anchors, false)
+                    {
+                        rows.push(block);
+                    }
+                }
+            }
+            SyntaxKind::TABLE_DELIMITER => {
+                // Skip delimiter row - it's structural, not content
+            }
+            _ => {}
+        }
+    }
+
+    let id = generate_fallback_anchor_id(&node_range);
+
+    Some(Block {
+        id,
+        kind: BlockKind::Table,
+        node_range,
+        segments: vec![],
+        content: if rows.is_empty() {
+            BlockContent::Leaf
+        } else {
+            BlockContent::Children(rows)
+        },
+    })
+}
+
+fn process_table_row(
+    source: &str,
+    node: SyntaxNode,
+    anchors: &[Anchor],
+    is_header: bool,
+) -> Option<Block> {
+    let text_range = node.text_range();
+    let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
+
+    let mut cells = Vec::new();
+
+    for child in node.children() {
+        if child.kind() == SyntaxKind::TABLE_CELL
+            && let Some(block) = process_table_cell(source, child, anchors)
+        {
+            cells.push(block);
+        }
+    }
+
+    let id = generate_fallback_anchor_id(&node_range);
+
+    Some(Block {
+        id,
+        kind: BlockKind::TableRow { is_header },
+        node_range,
+        segments: vec![],
+        content: if cells.is_empty() {
+            BlockContent::Leaf
+        } else {
+            BlockContent::Children(cells)
+        },
+    })
+}
+
+fn process_table_cell(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
+    let text_range = node.text_range();
+    let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
+
+    // Trim trailing whitespace from content range (padding before |)
+    let cell_text = &source[node_range.clone()];
+    let trimmed_len = cell_text.trim_end().len();
+    let content_start = node_range.start;
+    let content_end = node_range.start + trimmed_len;
+    let segments = extract_segments(&node, source, content_start..content_end);
+
+    let id = find_anchor_for_range(anchors, &node_range);
+
+    Some(Block {
+        id,
+        kind: BlockKind::TableCell,
+        node_range,
+        segments,
         content: BlockContent::Leaf,
     })
 }

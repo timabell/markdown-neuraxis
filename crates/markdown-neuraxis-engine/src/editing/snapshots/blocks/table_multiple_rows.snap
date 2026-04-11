@@ -2,4 +2,49 @@
 source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
 expression: formatted
 ---
-
+Table [0..70]
+  children:
+    TableRow { is_header: true } [0..14]
+      children:
+        TableCell [2..4]
+          segments:
+            Text [2..3] "a"
+        TableCell [6..8]
+          segments:
+            Text [6..7] "b"
+        TableCell [10..12]
+          segments:
+            Text [10..11] "c"
+    TableRow { is_header: false } [28..42]
+      children:
+        TableCell [30..32]
+          segments:
+            Text [30..31] "1"
+        TableCell [34..36]
+          segments:
+            Text [34..35] "2"
+        TableCell [38..40]
+          segments:
+            Text [38..39] "3"
+    TableRow { is_header: false } [42..56]
+      children:
+        TableCell [44..46]
+          segments:
+            Text [44..45] "4"
+        TableCell [48..50]
+          segments:
+            Text [48..49] "5"
+        TableCell [52..54]
+          segments:
+            Text [52..53] "6"
+    TableRow { is_header: false } [56..70]
+      children:
+        TableCell [58..60]
+          segments:
+            Text [58..59] "7"
+        TableCell [62..64]
+          segments:
+            Text [62..63] "8"
+        TableCell [66..68]
+          segments:
+            Text [66..67] "9"
