@@ -51,6 +51,7 @@ body {
     margin-bottom: 8px;
 }
 
+.new-file-btn,
 .change-folder-btn {
     background: var(--base3);
     border: 1px solid var(--base1);
@@ -62,12 +63,18 @@ body {
     transition: all 0.2s;
 }
 
+.new-file-btn {
+    margin-right: 4px;
+}
+
+.new-file-btn:hover,
 .change-folder-btn:hover {
     background: var(--base2);
     border-color: var(--blue);
     color: var(--blue);
 }
 
+.new-file-btn:active,
 .change-folder-btn:active {
     background: var(--blue);
     color: var(--base3);
@@ -176,6 +183,19 @@ body {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.tree-add-file {
+    margin-left: 8px;
+    padding: 0 6px;
+    color: var(--base1);
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.tree-add-file:hover {
+    color: var(--blue);
+    background-color: var(--base2);
 }
 
 .main-content {

@@ -192,6 +192,36 @@ pub fn App(notes_path: PathBuf) -> Element {
                     class: "sidebar-header",
                     h2 { "Files" }
                     button {
+                        class: "new-file-btn",
+                        title: "New file in root",
+                        onclick: {
+                            let mut selected_file = selected_file;
+                            let mut current_document = current_document;
+                            let mut current_snapshot = current_snapshot;
+                            let mut error_state = error_state;
+                            let mut focused_folder = focused_folder;
+                            let mut mobile_nav_open = mobile_nav_open;
+                            move |_| {
+                                let path = notes_path.read();
+                                let root_path = RelativePathBuf::new();
+                                let filename = generate_unique_filename(&root_path, &path);
+                                let file_path = RelativePathBuf::from(&filename);
+                                let markdown_file = MarkdownFile::new(file_path);
+                                load_document(
+                                    markdown_file,
+                                    &path,
+                                    &mut selected_file,
+                                    &mut current_document,
+                                    &mut current_snapshot,
+                                    &mut error_state,
+                                );
+                                focused_folder.set(None);
+                                mobile_nav_open.set(false);
+                            }
+                        },
+                        "+"
+                    }
+                    button {
                         class: "change-folder-btn",
                         title: "Change notes folder",
                         onclick: move |_| {
@@ -256,6 +286,30 @@ pub fn App(notes_path: PathBuf) -> Element {
                     on_file_select: on_sidebar_file_select,
                     on_folder_toggle: move |relative_path: RelativePathBuf| {
                         file_tree.write().toggle_folder(&relative_path);
+                    },
+                    on_new_file: {
+                        let mut selected_file = selected_file;
+                        let mut current_document = current_document;
+                        let mut current_snapshot = current_snapshot;
+                        let mut error_state = error_state;
+                        let mut focused_folder = focused_folder;
+                        let mut mobile_nav_open = mobile_nav_open;
+                        move |folder_path: RelativePathBuf| {
+                            let path = notes_path.read();
+                            let filename = generate_unique_filename(&folder_path, &path);
+                            let file_path = folder_path.join(&filename);
+                            let markdown_file = MarkdownFile::new(file_path);
+                            load_document(
+                                markdown_file,
+                                &path,
+                                &mut selected_file,
+                                &mut current_document,
+                                &mut current_snapshot,
+                                &mut error_state,
+                            );
+                            focused_folder.set(None);
+                            mobile_nav_open.set(false);
+                        }
                     }
                 }
             }
@@ -430,6 +484,31 @@ pub fn resolve_wikilink(target: &str, _notes_path: &Path) -> MarkdownFile {
     let relative_path =
         RelativePathBuf::from_path(&filename).expect("Failed to create relative path");
     MarkdownFile::new(relative_path)
+}
+
+/// Generate a unique filename in the given folder
+fn generate_unique_filename(folder_path: &RelativePathBuf, notes_path: &Path) -> String {
+    let base_name = "untitled";
+    let extension = ".md";
+
+    // Check if untitled.md exists
+    let first_try = format!("{}{}", base_name, extension);
+    let first_path = folder_path.join(&first_try).to_path(notes_path);
+    if !first_path.exists() {
+        return first_try;
+    }
+
+    // Try untitled-1.md, untitled-2.md, etc.
+    for i in 1..1000 {
+        let numbered = format!("{}-{}{}", base_name, i, extension);
+        let numbered_path = folder_path.join(&numbered).to_path(notes_path);
+        if !numbered_path.exists() {
+            return numbered;
+        }
+    }
+
+    // Fallback - should never reach here with 1000 attempts
+    format!("{}-999{}", base_name, extension)
 }
 
 /// Create a command callback for document editing
