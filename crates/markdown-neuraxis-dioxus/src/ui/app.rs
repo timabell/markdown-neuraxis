@@ -200,94 +200,97 @@ pub fn App(notes_path: PathBuf) -> Element {
                 div {
                     class: "sidebar-header",
                     h2 { "Files" }
-                    button {
-                        class: "new-file-btn",
-                        title: "New file in root",
-                        onclick: {
-                            let mut selected_file = selected_file;
-                            let mut current_document = current_document;
-                            let mut current_snapshot = current_snapshot;
-                            let mut error_state = error_state;
-                            let mut focused_folder = focused_folder;
-                            let mut mobile_nav_open = mobile_nav_open;
-                            let mut is_new_file = is_new_file;
-                            move |_| {
-                                let path = notes_path.read();
-                                let root_path = RelativePathBuf::new();
-                                let filename = generate_unique_filename(&root_path, &path);
-                                let file_path = RelativePathBuf::from(&filename);
-                                let markdown_file = MarkdownFile::new(file_path);
-                                load_document(
-                                    markdown_file,
-                                    &path,
-                                    &mut selected_file,
-                                    &mut current_document,
-                                    &mut current_snapshot,
-                                    &mut error_state,
-                                    &mut is_new_file,
-                                );
-                                focused_folder.set(None);
-                                mobile_nav_open.set(false);
-                            }
-                        },
-                        "+"
-                    }
-                    button {
-                        class: "change-folder-btn",
-                        title: "Change notes folder",
-                        onclick: move |_| {
-                            let mut notes_path = notes_path;
-                            let mut file_tree = file_tree;
-                            let mut selected_file = selected_file;
-                            let mut current_document = current_document;
-                            let mut current_snapshot = current_snapshot;
-                            let mut focused_folder = focused_folder;
-                            let mut error_state = error_state;
+                    div {
+                        class: "sidebar-header-buttons",
+                        button {
+                            class: "new-file-btn",
+                            title: "New file in root",
+                            onclick: {
+                                let mut selected_file = selected_file;
+                                let mut current_document = current_document;
+                                let mut current_snapshot = current_snapshot;
+                                let mut error_state = error_state;
+                                let mut focused_folder = focused_folder;
+                                let mut mobile_nav_open = mobile_nav_open;
+                                let mut is_new_file = is_new_file;
+                                move |_| {
+                                    let path = notes_path.read();
+                                    let root_path = RelativePathBuf::new();
+                                    let filename = generate_unique_filename(&root_path, &path);
+                                    let file_path = RelativePathBuf::from(&filename);
+                                    let markdown_file = MarkdownFile::new(file_path);
+                                    load_document(
+                                        markdown_file,
+                                        &path,
+                                        &mut selected_file,
+                                        &mut current_document,
+                                        &mut current_snapshot,
+                                        &mut error_state,
+                                        &mut is_new_file,
+                                    );
+                                    focused_folder.set(None);
+                                    mobile_nav_open.set(false);
+                                }
+                            },
+                            "+"
+                        }
+                        button {
+                            class: "change-folder-btn",
+                            title: "Change notes folder",
+                            onclick: move |_| {
+                                let mut notes_path = notes_path;
+                                let mut file_tree = file_tree;
+                                let mut selected_file = selected_file;
+                                let mut current_document = current_document;
+                                let mut current_snapshot = current_snapshot;
+                                let mut focused_folder = focused_folder;
+                                let mut error_state = error_state;
 
-                            let current_path = notes_path.read().clone();
-                            spawn(async move {
-                                if let Some(new_path) = pick_folder(Some(&current_path)).await {
-                                    // Save the new path to config
-                                    let config = Config { notes_path: new_path.clone() };
-                                    match config.save() {
-                                        Ok(()) => {
-                                            log::info!("Config saved with new notes path: {}", new_path.display());
+                                let current_path = notes_path.read().clone();
+                                spawn(async move {
+                                    if let Some(new_path) = pick_folder(Some(&current_path)).await {
+                                        // Save the new path to config
+                                        let config = Config { notes_path: new_path.clone() };
+                                        match config.save() {
+                                            Ok(()) => {
+                                                log::info!("Config saved with new notes path: {}", new_path.display());
 
-                                            // Update notes_path signal
-                                            notes_path.set(new_path.clone());
+                                                // Update notes_path signal
+                                                notes_path.set(new_path.clone());
 
-                                            // Rebuild file tree
-                                            match io::build_file_tree(&new_path) {
-                                                Ok(tree) => {
-                                                    log::info!("File tree rebuilt successfully");
-                                                    file_tree.set(tree);
+                                                // Rebuild file tree
+                                                match io::build_file_tree(&new_path) {
+                                                    Ok(tree) => {
+                                                        log::info!("File tree rebuilt successfully");
+                                                        file_tree.set(tree);
+                                                    }
+                                                    Err(e) => {
+                                                        log::error!("Error building file tree: {e}");
+                                                        file_tree.set(FileTree::new(new_path));
+                                                    }
                                                 }
-                                                Err(e) => {
-                                                    log::error!("Error building file tree: {e}");
-                                                    file_tree.set(FileTree::new(new_path));
-                                                }
+
+                                                // Clear current file state
+                                                selected_file.set(None);
+                                                current_document.set(None);
+                                                current_snapshot.set(None);
+                                                focused_folder.set(None);
+                                                error_state.set(None);
                                             }
-
-                                            // Clear current file state
-                                            selected_file.set(None);
-                                            current_document.set(None);
-                                            current_snapshot.set(None);
-                                            focused_folder.set(None);
-                                            error_state.set(None);
-                                        }
-                                        Err(e) => {
-                                            RuntimeError::log_and_set(
-                                                &mut error_state,
-                                                "Failed to save config".to_string(),
-                                                e,
-                                            );
+                                            Err(e) => {
+                                                RuntimeError::log_and_set(
+                                                    &mut error_state,
+                                                    "Failed to save config".to_string(),
+                                                    e,
+                                                );
+                                            }
                                         }
                                     }
-                                }
-                                // If None (cancelled), do nothing
-                            });
-                        },
-                        "📂"
+                                    // If None (cancelled), do nothing
+                                });
+                            },
+                            "📂"
+                        }
                     }
                 }
                 super::components::TreeView {
