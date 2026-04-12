@@ -445,10 +445,11 @@ private fun RenderBlock(
                                     segments = item.segments,
                                     onWikiLinkClick = onWikiLinkClick,
                                     onTextClick = {
+                                        // Use contentStart/contentEnd to exclude nested children
                                         onStartEdit(
                                             item.id,
-                                            item.sourceStart.toInt(),
-                                            item.sourceEnd.toInt()
+                                            item.contentStart.toInt(),
+                                            item.contentEnd.toInt()
                                         )
                                     }
                                 )

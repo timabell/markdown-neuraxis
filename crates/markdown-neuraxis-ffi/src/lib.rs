@@ -199,6 +199,7 @@ fn convert_block_into(block: &engine::Block, result: &mut Vec<Block>) {
         Vec::new()
     };
 
+    let content_range = block.content_range();
     result.push(Block {
         id: block.id.0.to_string(),
         kind,
@@ -209,6 +210,8 @@ fn convert_block_into(block: &engine::Block, result: &mut Vec<Block>) {
         children,
         source_start: block.node_range.start as u64,
         source_end: block.node_range.end as u64,
+        content_start: content_range.start as u64,
+        content_end: content_range.end as u64,
     });
 }
 
@@ -229,10 +232,16 @@ pub struct Block {
     pub segments: Vec<TextSegment>,
     /// Child blocks (e.g., nested list items)
     pub children: Vec<Block>,
-    /// Start byte offset in source document (for editing)
+    /// Start byte offset of full block in source (node_range.start)
     pub source_start: u64,
-    /// End byte offset in source document (for editing)
+    /// End byte offset of full block in source (node_range.end)
     pub source_end: u64,
+    /// Start byte offset of editable content (content_range().start)
+    /// For list items, this excludes nested children.
+    pub content_start: u64,
+    /// End byte offset of editable content (content_range().end)
+    /// For list items, this excludes nested children.
+    pub content_end: u64,
 }
 
 /// A segment of inline content within a block.
@@ -457,6 +466,49 @@ mod tests {
         assert_eq!(child.kind, "list_item");
         assert!(child.source_start >= parent.source_start);
         assert!(child.source_end <= parent.source_end);
+    }
+
+    #[test]
+    fn test_content_range_excludes_nested_children() {
+        // List item with nested child - content_range should exclude the nested list
+        let content = "- parent\n  - child\n";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        let list = &snapshot.blocks[0];
+        let parent = &list.children[0];
+        assert_eq!(parent.kind, "list_item");
+
+        // source_start/source_end includes entire list item with nested content
+        assert_eq!(parent.source_start, 0);
+        assert_eq!(parent.source_end, 19);
+        assert_eq!(
+            &content[parent.source_start as usize..parent.source_end as usize],
+            "- parent\n  - child\n"
+        );
+
+        // content_start/content_end should only include "- parent" line (no nested child)
+        // The content range ends at the last segment's end, which is after "parent"
+        assert_eq!(parent.content_start, 0);
+        // Content ends at "parent" (byte 8), not including nested content
+        assert!(
+            parent.content_end < parent.source_end,
+            "content_end ({}) should be less than source_end ({})",
+            parent.content_end,
+            parent.source_end
+        );
+        // Verify the content range only includes the first line's content
+        let content_text = &content[parent.content_start as usize..parent.content_end as usize];
+        assert!(
+            content_text.starts_with("- parent"),
+            "content should start with '- parent', got: {:?}",
+            content_text
+        );
+        assert!(
+            !content_text.contains("child"),
+            "content should not contain 'child', got: {:?}",
+            content_text
+        );
     }
 
     #[test]
