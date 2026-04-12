@@ -225,6 +225,28 @@ impl App {
                     lines.push("---".to_string());
                     lines.push(String::new());
                 }
+                BlockKind::Table => {
+                    // Render table rows
+                    if let BlockContent::Children(children) = &block.content {
+                        for child in children {
+                            render_block(child, lines);
+                        }
+                    }
+                    lines.push(String::new());
+                }
+                BlockKind::TableRow { .. } => {
+                    // Collect cell contents
+                    let mut cells = Vec::new();
+                    if let BlockContent::Children(children) = &block.content {
+                        for child in children {
+                            cells.push(segments_to_plain_text(&child.segments));
+                        }
+                    }
+                    lines.push(format!("| {} |", cells.join(" | ")));
+                }
+                BlockKind::TableCell => {
+                    // Cells are rendered by TableRow
+                }
             }
         }
 

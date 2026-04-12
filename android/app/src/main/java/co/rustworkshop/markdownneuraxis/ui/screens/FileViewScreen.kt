@@ -23,6 +23,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
@@ -131,8 +133,9 @@ private fun RenderBlockTree(
 ) {
     for (block in blocks) {
         RenderBlock(block, depth, onWikiLinkClick)
-        // List blocks handle their own children internally
-        if (block.kind != "list" && block.children.isNotEmpty()) {
+        // List and table blocks handle their own children internally
+        val handlesOwnChildren = block.kind in listOf("list", "table", "table_header_row", "table_row")
+        if (!handlesOwnChildren && block.children.isNotEmpty()) {
             RenderBlockTree(block.children, depth + 1, onWikiLinkClick)
         }
     }
@@ -299,11 +302,87 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
         "thematic_break" -> {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         }
+        "table" -> {
+            // Table container - calculate column count for consistent widths
+            val columnCount = block.children.firstOrNull()?.children?.size ?: 1
+            Column(
+                modifier = Modifier
+                    .padding(vertical = 8.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                block.children.forEachIndexed { index, row ->
+                    RenderTableRow(row, columnCount, onWikiLinkClick)
+                    // Add divider between rows (not after last)
+                    if (index < block.children.size - 1) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+            }
+        }
+        "table_header_row", "table_row" -> {
+            // Rows are rendered via RenderTableRow, this handles standalone case
+            RenderTableRow(block, block.children.size, onWikiLinkClick)
+        }
+        "table_cell" -> {
+            // Standalone cell (shouldn't happen - rows handle cells)
+            RenderSegments(
+                segments = block.segments,
+                onWikiLinkClick = onWikiLinkClick
+            )
+        }
         else -> {
             Text(
                 text = segmentsToText(block.segments),
                 modifier = Modifier.padding(vertical = 4.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun RenderTableRow(
+    block: Block,
+    columnCount: Int,
+    onWikiLinkClick: (String) -> Unit
+) {
+    val isHeader = block.kind == "table_header_row"
+    val cells = block.children
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .then(
+                if (isHeader) Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
+                else Modifier
+            )
+    ) {
+        // Render each cell, padding to columnCount if needed
+        for (i in 0 until columnCount) {
+            if (i > 0) {
+                // Vertical divider between cells
+                VerticalDivider(
+                    modifier = Modifier.fillMaxHeight(),
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                if (i < cells.size) {
+                    RenderSegments(
+                        segments = cells[i].segments,
+                        style = if (isHeader) {
+                            MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                        } else {
+                            MaterialTheme.typography.bodyMedium
+                        },
+                        onWikiLinkClick = onWikiLinkClick
+                    )
+                }
+            }
         }
     }
 }

@@ -1,0 +1,11 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Table [0..22]
+  children:
+    TableRow { is_header: true } [0..11]
+      children:
+        TableCell [2..9]
+          segments:
+            Text [2..8] "header"

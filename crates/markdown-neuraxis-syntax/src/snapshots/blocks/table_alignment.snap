@@ -1,0 +1,71 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..78
+  TABLE@0..78
+    TABLE_HEAD@0..26
+      TABLE_ROW@0..26
+        PIPE@0..1 "|"
+        WHITESPACE@1..2 " "
+        TABLE_CELL@2..7
+          TEXT@2..6 "left"
+          WHITESPACE@6..7 " "
+        PIPE@7..8 "|"
+        WHITESPACE@8..9 " "
+        TABLE_CELL@9..16
+          TEXT@9..15 "center"
+          WHITESPACE@15..16 " "
+        PIPE@16..17 "|"
+        WHITESPACE@17..18 " "
+        TABLE_CELL@18..24
+          TEXT@18..23 "right"
+          WHITESPACE@23..24 " "
+        PIPE@24..25 "|"
+        NEWLINE@25..26 "\\n"
+    TABLE_DELIMITER@26..52
+      PIPE@26..27 "|"
+      COLON@27..28 ":"
+      DASH@28..29 "-"
+      DASH@29..30 "-"
+      DASH@30..31 "-"
+      DASH@31..32 "-"
+      DASH@32..33 "-"
+      PIPE@33..34 "|"
+      COLON@34..35 ":"
+      DASH@35..36 "-"
+      DASH@36..37 "-"
+      DASH@37..38 "-"
+      DASH@38..39 "-"
+      DASH@39..40 "-"
+      DASH@40..41 "-"
+      COLON@41..42 ":"
+      PIPE@42..43 "|"
+      DASH@43..44 "-"
+      DASH@44..45 "-"
+      DASH@45..46 "-"
+      DASH@46..47 "-"
+      DASH@47..48 "-"
+      DASH@48..49 "-"
+      COLON@49..50 ":"
+      PIPE@50..51 "|"
+      NEWLINE@51..52 "\\n"
+    TABLE_BODY@52..78
+      TABLE_ROW@52..78
+        PIPE@52..53 "|"
+        WHITESPACE@53..54 " "
+        TABLE_CELL@54..59
+          TEXT@54..55 "a"
+          WHITESPACE@55..59 "    "
+        PIPE@59..60 "|"
+        WHITESPACE@60..63 "   "
+        TABLE_CELL@63..68
+          TEXT@63..64 "b"
+          WHITESPACE@64..68 "    "
+        PIPE@68..69 "|"
+        WHITESPACE@69..74 "     "
+        TABLE_CELL@74..76
+          TEXT@74..75 "c"
+          WHITESPACE@75..76 " "
+        PIPE@76..77 "|"
+        NEWLINE@77..78 "\\n"

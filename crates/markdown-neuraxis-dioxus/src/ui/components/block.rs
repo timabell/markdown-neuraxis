@@ -259,5 +259,92 @@ pub fn BlockRenderer(
                 on_command
             }
         },
+        BlockKind::Table => {
+            let block_id = block.id;
+            if is_focused {
+                // Edit entire table as raw markdown
+                let content_text = source
+                    .get(block.node_range.clone())
+                    .unwrap_or("")
+                    .to_string();
+                let block_clone = block.clone();
+                rsx! {
+                    div {
+                        class: "table-container clickable-block",
+                        EditorBlock {
+                            block: block_clone,
+                            content_text,
+                            on_command,
+                            on_cancel: {
+                                let mut focused_anchor_id = focused_anchor_id;
+                                move |_| focused_anchor_id.set(None)
+                            }
+                        }
+                    }
+                }
+            } else if let BlockContent::Children(children) = &block.content {
+                rsx! {
+                    table {
+                        class: "table clickable-block",
+                        onclick: {
+                            let mut focused_anchor_id = focused_anchor_id;
+                            move |evt| {
+                                evt.stop_propagation();
+                                focused_anchor_id.set(Some(block_id))
+                            }
+                        },
+                        for (i, child) in children.iter().enumerate() {
+                            BlockRenderer {
+                                key: "{i}",
+                                block: child.clone(),
+                                source: source.clone(),
+                                focused_anchor_id,
+                                collapsed_ids,
+                                on_context_menu,
+                                on_command,
+                                on_wikilink_click
+                            }
+                        }
+                    }
+                }
+            } else {
+                rsx! {}
+            }
+        }
+        BlockKind::TableRow { is_header } => {
+            if let BlockContent::Children(children) = &block.content {
+                rsx! {
+                    tr {
+                        class: if *is_header { "table-header-row" } else { "table-row" },
+                        for (i, child) in children.iter().enumerate() {
+                            BlockRenderer {
+                                key: "{i}",
+                                block: child.clone(),
+                                source: source.clone(),
+                                focused_anchor_id,
+                                collapsed_ids,
+                                on_context_menu,
+                                on_command,
+                                on_wikilink_click
+                            }
+                        }
+                    }
+                }
+            } else {
+                rsx! {}
+            }
+        }
+        BlockKind::TableCell => {
+            let segments = block.segments.clone();
+            rsx! {
+                td {
+                    class: "table-cell",
+                    InlineSegments {
+                        segments,
+                        on_wikilink_click
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,0 +1,10 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Paragraph [0..45]
+  segments:
+    Text [0..44] "This is a paragraph with a | pipe character."
+Paragraph [46..94]
+  segments:
+    Text [46..93] "| Only header - no delimiter row so not a table"

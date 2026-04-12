@@ -1,0 +1,30 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Table [0..98]
+  children:
+    TableRow { is_header: true } [0..33]
+      children:
+        TableCell [2..11]
+          segments:
+            Strong [2..10]
+              Text "bold"
+        TableCell [13..22]
+          segments:
+            Emphasis [13..21]
+              Text "italic"
+        TableCell [24..31]
+          segments:
+            Code [24..30] "code"
+    TableRow { is_header: false } [66..98]
+      children:
+        TableCell [68..77]
+          segments:
+            WikiLink [68..76] target:"link"
+        TableCell [79..89]
+          segments:
+            Link [79..88] text:"md" url:"url"
+        TableCell [91..96]
+          segments:
+            Text [91..95] "text"

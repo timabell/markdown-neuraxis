@@ -1,0 +1,100 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..98
+  TABLE@0..98
+    TABLE_HEAD@0..33
+      TABLE_ROW@0..33
+        PIPE@0..1 "|"
+        WHITESPACE@1..2 " "
+        TABLE_CELL@2..11
+          STRONG@2..10
+            STAR@2..3 "*"
+            STAR@3..4 "*"
+            TEXT@4..8 "bold"
+            STAR@8..9 "*"
+            STAR@9..10 "*"
+          WHITESPACE@10..11 " "
+        PIPE@11..12 "|"
+        WHITESPACE@12..13 " "
+        TABLE_CELL@13..22
+          EMPHASIS@13..21
+            STAR@13..14 "*"
+            TEXT@14..20 "italic"
+            STAR@20..21 "*"
+          WHITESPACE@21..22 " "
+        PIPE@22..23 "|"
+        WHITESPACE@23..24 " "
+        TABLE_CELL@24..31
+          CODE_SPAN@24..30
+            BACKTICK@24..25 "`"
+            TEXT@25..29 "code"
+            BACKTICK@29..30 "`"
+          WHITESPACE@30..31 " "
+        PIPE@31..32 "|"
+        NEWLINE@32..33 "\\n"
+    TABLE_DELIMITER@33..66
+      PIPE@33..34 "|"
+      DASH@34..35 "-"
+      DASH@35..36 "-"
+      DASH@36..37 "-"
+      DASH@37..38 "-"
+      DASH@38..39 "-"
+      DASH@39..40 "-"
+      DASH@40..41 "-"
+      DASH@41..42 "-"
+      DASH@42..43 "-"
+      DASH@43..44 "-"
+      PIPE@44..45 "|"
+      DASH@45..46 "-"
+      DASH@46..47 "-"
+      DASH@47..48 "-"
+      DASH@48..49 "-"
+      DASH@49..50 "-"
+      DASH@50..51 "-"
+      DASH@51..52 "-"
+      DASH@52..53 "-"
+      DASH@53..54 "-"
+      DASH@54..55 "-"
+      PIPE@55..56 "|"
+      DASH@56..57 "-"
+      DASH@57..58 "-"
+      DASH@58..59 "-"
+      DASH@59..60 "-"
+      DASH@60..61 "-"
+      DASH@61..62 "-"
+      DASH@62..63 "-"
+      DASH@63..64 "-"
+      PIPE@64..65 "|"
+      NEWLINE@65..66 "\\n"
+    TABLE_BODY@66..98
+      TABLE_ROW@66..98
+        PIPE@66..67 "|"
+        WHITESPACE@67..68 " "
+        TABLE_CELL@68..77
+          WIKILINK@68..76
+            LBRACKET@68..69 "["
+            LBRACKET@69..70 "["
+            TEXT@70..74 "link"
+            RBRACKET@74..75 "]"
+            RBRACKET@75..76 "]"
+          WHITESPACE@76..77 " "
+        PIPE@77..78 "|"
+        WHITESPACE@78..79 " "
+        TABLE_CELL@79..89
+          LINK@79..88
+            LBRACKET@79..80 "["
+            TEXT@80..82 "md"
+            RBRACKET@82..83 "]"
+            LPAREN@83..84 "("
+            TEXT@84..87 "url"
+            RPAREN@87..88 ")"
+          WHITESPACE@88..89 " "
+        PIPE@89..90 "|"
+        WHITESPACE@90..91 " "
+        TABLE_CELL@91..96
+          TEXT@91..95 "text"
+          WHITESPACE@95..96 " "
+        PIPE@96..97 "|"
+        NEWLINE@97..98 "\\n"

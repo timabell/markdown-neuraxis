@@ -1,0 +1,30 @@
+---
+source: crates/markdown-neuraxis-syntax/src/lib.rs
+expression: "insta_format_tree(&tree, 0)"
+---
+ROOT@0..17
+  TABLE@0..17
+    TABLE_HEAD@0..6
+      TABLE_ROW@0..6
+        PIPE@0..1 "|"
+        WHITESPACE@1..2 " "
+        TABLE_CELL@2..4
+          TEXT@2..3 "a"
+          WHITESPACE@3..4 " "
+        PIPE@4..5 "|"
+        NEWLINE@5..6 "\\n"
+    TABLE_DELIMITER@6..12
+      PIPE@6..7 "|"
+      DASH@7..8 "-"
+      DASH@8..9 "-"
+      DASH@9..10 "-"
+      PIPE@10..11 "|"
+      NEWLINE@11..12 "\\n"
+    TABLE_BODY@12..17
+      TABLE_ROW@12..17
+        PIPE@12..13 "|"
+        WHITESPACE@13..14 " "
+        TABLE_CELL@14..16
+          TEXT@14..15 "1"
+          WHITESPACE@15..16 " "
+        PIPE@16..17 "|"

@@ -1,0 +1,28 @@
+---
+source: crates/markdown-neuraxis-engine/src/editing/snapshot.rs
+expression: formatted
+---
+Table [0..78]
+  children:
+    TableRow { is_header: true } [0..26]
+      children:
+        TableCell [2..7]
+          segments:
+            Text [2..6] "left"
+        TableCell [9..16]
+          segments:
+            Text [9..15] "center"
+        TableCell [18..24]
+          segments:
+            Text [18..23] "right"
+    TableRow { is_header: false } [52..78]
+      children:
+        TableCell [54..59]
+          segments:
+            Text [54..55] "a"
+        TableCell [63..68]
+          segments:
+            Text [63..64] "b"
+        TableCell [74..76]
+          segments:
+            Text [74..75] "c"
