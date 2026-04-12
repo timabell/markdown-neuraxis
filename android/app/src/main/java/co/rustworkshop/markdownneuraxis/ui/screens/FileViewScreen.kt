@@ -25,8 +25,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -258,6 +260,76 @@ private fun RenderBlockTree(
     }
 }
 
+/**
+ * Recursively append segments to an AnnotatedString.Builder with proper styling.
+ * Handles nested formatting (e.g., bold within italic).
+ */
+private fun AnnotatedString.Builder.appendSegments(
+    segments: List<TextSegment>,
+    linkColor: Color,
+    codeBackground: Color
+) {
+    for (segment in segments) {
+        when (segment.kind) {
+            "text" -> append(segment.content)
+            "wiki_link" -> {
+                pushStringAnnotation(tag = "wiki_link", annotation = segment.content)
+                withStyle(SpanStyle(color = linkColor)) {
+                    append(segment.content)
+                }
+                pop()
+            }
+            "url" -> {
+                pushStringAnnotation(tag = "url", annotation = segment.content)
+                withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
+                    append(segment.content)
+                }
+                pop()
+            }
+            "link" -> {
+                // Format: "text|url"
+                val parts = segment.content.split("|", limit = 2)
+                val text = parts.getOrElse(0) { segment.content }
+                val url = parts.getOrElse(1) { "" }
+                pushStringAnnotation(tag = "url", annotation = url)
+                withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
+                    append(text)
+                }
+                pop()
+            }
+            "emphasis" -> {
+                withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                    appendSegments(segment.children, linkColor, codeBackground)
+                }
+            }
+            "strong" -> {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                    appendSegments(segment.children, linkColor, codeBackground)
+                }
+            }
+            "code" -> {
+                withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)) {
+                    append(segment.content)
+                }
+            }
+            "strikethrough" -> {
+                withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                    append(segment.content)
+                }
+            }
+            "image" -> {
+                // Format: "alt|url" - show as placeholder text for now
+                val parts = segment.content.split("|", limit = 2)
+                val alt = parts.getOrElse(0) { "image" }
+                append("[Image: $alt]")
+            }
+            "soft_break" -> append(" ")
+            "hard_break" -> append("\n")
+            else -> append(segment.content)
+        }
+    }
+}
+
 @Composable
 private fun RenderSegments(
     segments: List<TextSegment>,
@@ -281,29 +353,9 @@ private fun RenderSegments(
     }
 
     val linkColor = MaterialTheme.colorScheme.primary
+    val codeBackground = MaterialTheme.colorScheme.surfaceVariant
     val annotatedText = buildAnnotatedString {
-        for (segment in segments) {
-            when (segment.kind) {
-                "text" -> append(segment.content)
-                "wiki_link" -> {
-                    pushStringAnnotation(tag = "wiki_link", annotation = segment.content)
-                    withStyle(SpanStyle(color = linkColor)) {
-                        append(segment.content)
-                    }
-                    pop()
-                }
-                "url" -> {
-                    pushStringAnnotation(tag = "url", annotation = segment.content)
-                    withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
-                        append(segment.content)
-                    }
-                    pop()
-                }
-                "soft_break" -> append(" ")
-                "hard_break" -> append("\n")
-                else -> append(segment.content)
-            }
-        }
+        appendSegments(segments, linkColor, codeBackground)
     }
 
     ClickableText(
