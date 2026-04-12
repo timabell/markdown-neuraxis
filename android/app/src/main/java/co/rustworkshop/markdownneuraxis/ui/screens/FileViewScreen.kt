@@ -3,21 +3,35 @@ package co.rustworkshop.markdownneuraxis.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -28,6 +42,7 @@ import androidx.compose.foundation.border
 import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
+import co.rustworkshop.markdownneuraxis.io.writeFileContent
 import co.rustworkshop.markdownneuraxis.model.FileTree
 import uniffi.markdown_neuraxis_ffi.Block
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
@@ -61,11 +76,57 @@ fun FileViewScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val content = remember(file) {
-        readFileContent(context, file)
+
+    // Mutable content state that can be updated after edits
+    var content by remember(file) {
+        mutableStateOf(readFileContent(context, file))
     }
-    val blocks = remember(content) {
-        content?.let { parseDocument(it) }
+    var blocks by remember(file) {
+        mutableStateOf(content?.let { parseDocument(it) })
+    }
+
+    // Edit state
+    var editingBlockId by remember { mutableStateOf<String?>(null) }
+    var editText by remember { mutableStateOf(TextFieldValue("")) }
+    var editSourceRange by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    // Save edit and refresh document
+    val saveEdit: () -> Unit = saveEdit@{
+        val range = editSourceRange
+        val currentContent = content
+        if (range != null && currentContent != null && editingBlockId != null) {
+            // Convert content to UTF-8 bytes for correct byte-offset indexing
+            val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
+
+            // Bounds check - invalid range is a bug, crash to catch during development
+            require(range.first >= 0 && range.second <= utf8Bytes.size && range.first <= range.second) {
+                "Invalid byte range: ${range.first}..${range.second} for content of ${utf8Bytes.size} bytes"
+            }
+
+            // Extract original source text to check for changes
+            val originalText = String(utf8Bytes, range.first, range.second - range.first, Charsets.UTF_8)
+
+            // Only save if content actually changed
+            if (editText.text != originalText) {
+                // Replace the byte range with new text
+                val before = String(utf8Bytes, 0, range.first, Charsets.UTF_8)
+                val after = String(utf8Bytes, range.second, utf8Bytes.size - range.second, Charsets.UTF_8)
+                val newContent = before + editText.text + after
+
+                // Write to file
+                if (writeFileContent(context, file, newContent)) {
+                    // Update state with new content
+                    content = newContent
+                    blocks = parseDocument(newContent)
+                } else {
+                    Log.e(TAG, "Failed to save edit")
+                }
+            }
+        }
+        // Clear edit state
+        editingBlockId = null
+        editText = TextFieldValue("")
+        editSourceRange = null
     }
 
     val onWikiLinkClick: (String) -> Unit = { linkTarget ->
@@ -109,13 +170,39 @@ fun FileViewScreen(
             }
         }
         else -> {
+            val currentBlocks = blocks!! // Safe: we're in else branch where blocks != null
             Column(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                RenderBlockTree(blocks, depth = 0, onWikiLinkClick = onWikiLinkClick)
+                RenderBlockTree(
+                    blocks = currentBlocks,
+                    depth = 0,
+                    onWikiLinkClick = onWikiLinkClick,
+                    editingBlockId = editingBlockId,
+                    editText = editText,
+                    onStartEdit = { blockId, start, end ->
+                        // Save current edit before starting new one
+                        if (editingBlockId != null) {
+                            saveEdit()
+                        }
+                        // Extract raw source text using byte offsets
+                        val currentContent = content ?: return@RenderBlockTree
+                        val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
+                        // Bounds check - invalid range is a bug
+                        require(start >= 0 && end <= utf8Bytes.size && start <= end) {
+                            "Invalid byte range: $start..$end for content of ${utf8Bytes.size} bytes"
+                        }
+                        val sourceText = String(utf8Bytes, start, end - start, Charsets.UTF_8)
+                        editingBlockId = blockId
+                        editText = TextFieldValue(sourceText, TextRange(sourceText.length))
+                        editSourceRange = Pair(start, end)
+                    },
+                    onEditTextChange = { editText = it },
+                    onFinishEdit = saveEdit
+                )
             }
         }
     }
@@ -129,14 +216,37 @@ fun FileViewScreen(
 private fun RenderBlockTree(
     blocks: List<Block>,
     depth: Int,
-    onWikiLinkClick: (String) -> Unit
+    onWikiLinkClick: (String) -> Unit,
+    editingBlockId: String?,
+    editText: TextFieldValue,
+    onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
+    onEditTextChange: (TextFieldValue) -> Unit,
+    onFinishEdit: () -> Unit
 ) {
     for (block in blocks) {
-        RenderBlock(block, depth, onWikiLinkClick)
+        RenderBlock(
+            block = block,
+            depth = depth,
+            onWikiLinkClick = onWikiLinkClick,
+            editingBlockId = editingBlockId,
+            editText = editText,
+            onStartEdit = onStartEdit,
+            onEditTextChange = onEditTextChange,
+            onFinishEdit = onFinishEdit
+        )
         // List and table blocks handle their own children internally
         val handlesOwnChildren = block.kind in listOf("list", "table", "table_header_row", "table_row")
         if (!handlesOwnChildren && block.children.isNotEmpty()) {
-            RenderBlockTree(block.children, depth + 1, onWikiLinkClick)
+            RenderBlockTree(
+                blocks = block.children,
+                depth = depth + 1,
+                onWikiLinkClick = onWikiLinkClick,
+                editingBlockId = editingBlockId,
+                editText = editText,
+                onStartEdit = onStartEdit,
+                onEditTextChange = onEditTextChange,
+                onFinishEdit = onFinishEdit
+            )
         }
     }
 }
@@ -146,7 +256,8 @@ private fun RenderSegments(
     segments: List<TextSegment>,
     style: TextStyle = LocalTextStyle.current,
     modifier: Modifier = Modifier,
-    onWikiLinkClick: (String) -> Unit
+    onWikiLinkClick: (String) -> Unit,
+    onTextClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val contentColor = LocalContentColor.current
@@ -206,13 +317,25 @@ private fun RenderSegments(
             annotatedText.getStringAnnotations(tag = "wiki_link", start = offset, end = offset)
                 .firstOrNull()?.let { annotation ->
                     onWikiLinkClick(annotation.item)
+                    return@ClickableText
                 }
+            // No link clicked - call text click handler if provided
+            onTextClick?.invoke()
         }
     )
 }
 
 @Composable
-private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> Unit) {
+private fun RenderBlock(
+    block: Block,
+    depth: Int,
+    onWikiLinkClick: (String) -> Unit,
+    editingBlockId: String?,
+    editText: TextFieldValue,
+    onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
+    onEditTextChange: (TextFieldValue) -> Unit,
+    onFinishEdit: () -> Unit
+) {
     when (block.kind) {
         "heading" -> {
             val style = when (block.headingLevel.toInt()) {
@@ -250,7 +373,16 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
                             )
                             // Render nested content (e.g., nested lists)
                             if (item.children.isNotEmpty()) {
-                                RenderBlockTree(item.children, depth + 1, onWikiLinkClick)
+                                RenderBlockTree(
+                                    blocks = item.children,
+                                    depth = depth + 1,
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    editingBlockId = editingBlockId,
+                                    editText = editText,
+                                    onStartEdit = onStartEdit,
+                                    onEditTextChange = onEditTextChange,
+                                    onFinishEdit = onFinishEdit
+                                )
                             }
                         }
                     }
@@ -262,11 +394,51 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
             error("list_item rendered outside of list container - invalid block structure")
         }
         "paragraph" -> {
-            RenderSegments(
-                segments = block.segments,
-                modifier = Modifier.padding(vertical = 4.dp),
-                onWikiLinkClick = onWikiLinkClick
-            )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                // Edit mode: show text field with visible border
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                // Only save when focus is lost after having focus
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = LocalTextStyle.current.copy(
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                // View mode: tappable text (tap non-link area to edit)
+                RenderSegments(
+                    segments = block.segments,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    onWikiLinkClick = onWikiLinkClick,
+                    onTextClick = {
+                        onStartEdit(
+                            block.id,
+                            block.sourceStart.toInt(),
+                            block.sourceEnd.toInt()
+                        )
+                    }
+                )
+            }
         }
         "code_fence" -> {
             Surface(
