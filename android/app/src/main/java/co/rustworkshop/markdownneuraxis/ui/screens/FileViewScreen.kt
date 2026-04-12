@@ -27,6 +27,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -624,7 +625,7 @@ private fun RenderBlock(
                     focusRequester.requestFocus()
                 }
             } else {
-                // Render blockquote with children inside the Surface
+                // Render blockquote with left border styling
                 // Edit the entire blockquote as raw markdown when any text is tapped
                 val startBlockquoteEdit = {
                     onStartEdit(
@@ -633,20 +634,34 @@ private fun RenderBlock(
                         block.sourceEnd.toInt()
                     )
                 }
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                val borderColor = MaterialTheme.colorScheme.primary
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
                         .padding(vertical = 4.dp)
                 ) {
+                    // Left border bar
+                    Box(
+                        modifier = Modifier
+                            .width(4.dp)
+                            .fillMaxHeight()
+                            .background(borderColor)
+                    )
+                    // Content column
                     Column(
-                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp, end = 8.dp)
                     ) {
                         // Render any direct segments
                         if (block.segments.isNotEmpty()) {
                             RenderSegments(
                                 segments = block.segments,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Light,
+                                    fontStyle = FontStyle.Italic
+                                ),
                                 onWikiLinkClick = onWikiLinkClick,
                                 onTextClick = startBlockquoteEdit
                             )
@@ -654,17 +669,20 @@ private fun RenderBlock(
                         // Render child blocks - could be paragraphs or nested blockquotes
                         for (child in block.children) {
                             if (child.kind == "block_quote") {
-                                // Nested blockquote - render recursively with additional indent
+                                // Nested blockquote - render recursively
                                 RenderNestedBlockquote(
                                     block = child,
                                     onWikiLinkClick = onWikiLinkClick,
                                     onTextClick = startBlockquoteEdit
                                 )
                             } else {
-                                // Paragraph or other content - render segments directly
+                                // Paragraph or other content
                                 RenderSegments(
                                     segments = child.segments,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Light,
+                                        fontStyle = FontStyle.Italic
+                                    ),
                                     onWikiLinkClick = onWikiLinkClick,
                                     onTextClick = startBlockquoteEdit
                                 )
@@ -909,8 +927,7 @@ private fun RenderTableRow(
 }
 
 /**
- * Render a nested blockquote recursively.
- * Used within parent blockquotes to show nested `> >` content.
+ * Render a nested blockquote recursively with left border styling.
  */
 @Composable
 private fun RenderNestedBlockquote(
@@ -918,21 +935,35 @@ private fun RenderNestedBlockquote(
     onWikiLinkClick: (String) -> Unit,
     onTextClick: () -> Unit
 ) {
-    // Nested blockquote gets additional left border/indent
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
+    val borderColor = MaterialTheme.colorScheme.primary
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
+            .height(IntrinsicSize.Min)
+            .padding(top = 4.dp, bottom = 4.dp)
     ) {
+        // Left border bar
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(borderColor)
+        )
+        // Content column
         Column(
-            modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp, end = 4.dp)
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 10.dp)
         ) {
             // Render any direct segments
             if (block.segments.isNotEmpty()) {
                 RenderSegments(
                     segments = block.segments,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Light,
+                        fontStyle = FontStyle.Italic
+                    ),
                     onWikiLinkClick = onWikiLinkClick,
                     onTextClick = onTextClick
                 )
@@ -950,7 +981,10 @@ private fun RenderNestedBlockquote(
                     // Paragraph or other content
                     RenderSegments(
                         segments = child.segments,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Light,
+                            fontStyle = FontStyle.Italic
+                        ),
                         onWikiLinkClick = onWikiLinkClick,
                         onTextClick = onTextClick
                     )
