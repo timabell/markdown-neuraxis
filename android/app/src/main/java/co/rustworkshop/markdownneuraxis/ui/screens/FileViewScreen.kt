@@ -241,8 +241,8 @@ private fun RenderBlockTree(
             onEditTextChange = onEditTextChange,
             onFinishEdit = onFinishEdit
         )
-        // List and table blocks handle their own children internally
-        val handlesOwnChildren = block.kind in listOf("list", "table", "table_header_row", "table_row")
+        // These blocks handle their own children internally
+        val handlesOwnChildren = block.kind in listOf("list", "table", "table_header_row", "table_row", "block_quote")
         if (!handlesOwnChildren && block.children.isNotEmpty()) {
             RenderBlockTree(
                 blocks = block.children,
@@ -353,12 +353,50 @@ private fun RenderBlock(
                 5 -> MaterialTheme.typography.titleMedium
                 else -> MaterialTheme.typography.titleSmall
             }
-            RenderSegments(
-                segments = block.segments,
-                style = style.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(vertical = 8.dp),
-                onWikiLinkClick = onWikiLinkClick
-            )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = style.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                RenderSegments(
+                    segments = block.segments,
+                    style = style.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    onWikiLinkClick = onWikiLinkClick,
+                    onTextClick = {
+                        onStartEdit(
+                            block.id,
+                            block.sourceStart.toInt(),
+                            block.sourceEnd.toInt()
+                        )
+                    }
+                )
+            }
         }
         "list" -> {
             // List container renders its children with index-generated markers
@@ -368,16 +406,53 @@ private fun RenderBlock(
                 block.children.forEachIndexed { index, item ->
                     val marker = if (ordered) "${index + 1}." else "•"
                     val markerWidth = if (ordered) 24.dp else 16.dp
+                    val isEditing = editingBlockId == item.id
                     Row(modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
                         Text(
                             text = marker,
                             modifier = Modifier.width(markerWidth)
                         )
                         Column {
-                            RenderSegments(
-                                segments = item.segments,
-                                onWikiLinkClick = onWikiLinkClick
-                            )
+                            if (isEditing) {
+                                val focusRequester = remember { FocusRequester() }
+                                var hasFocused by remember { mutableStateOf(false) }
+                                BasicTextField(
+                                    value = editText,
+                                    onValueChange = onEditTextChange,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                                        .padding(8.dp)
+                                        .focusRequester(focusRequester)
+                                        .onFocusChanged { focusState ->
+                                            if (focusState.isFocused) {
+                                                hasFocused = true
+                                            } else if (hasFocused) {
+                                                onFinishEdit()
+                                            }
+                                        },
+                                    textStyle = LocalTextStyle.current.copy(
+                                        color = LocalContentColor.current
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                                )
+                                LaunchedEffect(Unit) {
+                                    focusRequester.requestFocus()
+                                }
+                            } else {
+                                RenderSegments(
+                                    segments = item.segments,
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    onTextClick = {
+                                        onStartEdit(
+                                            item.id,
+                                            item.sourceStart.toInt(),
+                                            item.sourceEnd.toInt()
+                                        )
+                                    }
+                                )
+                            }
                             // Render nested content (e.g., nested lists)
                             if (item.children.isNotEmpty()) {
                                 RenderBlockTree(
@@ -448,38 +523,185 @@ private fun RenderBlock(
             }
         }
         "code_fence" -> {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Text(
-                    text = segmentsToText(block.segments),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(8.dp)
-                )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                ) {
+                    BasicTextField(
+                        value = editText,
+                        onValueChange = onEditTextChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    hasFocused = true
+                                } else if (hasFocused) {
+                                    onFinishEdit()
+                                }
+                            },
+                        textStyle = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            color = LocalContentColor.current
+                        ),
+                        // Code blocks may be multiline, use default IME
+                        keyboardOptions = KeyboardOptions.Default
+                    )
+                }
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            onStartEdit(
+                                block.id,
+                                block.sourceStart.toInt(),
+                                block.sourceEnd.toInt()
+                            )
+                        }
+                ) {
+                    Text(
+                        text = segmentsToText(block.segments),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
         }
         "block_quote" -> {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                RenderSegments(
-                    segments = block.segments,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
-                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
-                    onWikiLinkClick = onWikiLinkClick
-                )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                // Edit the entire blockquote as raw markdown
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                ) {
+                    BasicTextField(
+                        value = editText,
+                        onValueChange = onEditTextChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    hasFocused = true
+                                } else if (hasFocused) {
+                                    onFinishEdit()
+                                }
+                            },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Light,
+                            color = LocalContentColor.current
+                        ),
+                        // Blockquotes may be multiline
+                        keyboardOptions = KeyboardOptions.Default
+                    )
+                }
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                // Render blockquote with children inside the Surface
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            onStartEdit(
+                                block.id,
+                                block.sourceStart.toInt(),
+                                block.sourceEnd.toInt()
+                            )
+                        }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
+                    ) {
+                        // Render any direct segments
+                        if (block.segments.isNotEmpty()) {
+                            RenderSegments(
+                                segments = block.segments,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                                onWikiLinkClick = onWikiLinkClick
+                            )
+                        }
+                        // Render child blocks (paragraphs inside the quote)
+                        for (child in block.children) {
+                            RenderSegments(
+                                segments = child.segments,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                                onWikiLinkClick = onWikiLinkClick
+                            )
+                        }
+                    }
+                }
             }
         }
         "thematic_break" -> {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = LocalTextStyle.current.copy(
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                HorizontalDivider(
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .clickable {
+                            onStartEdit(
+                                block.id,
+                                block.sourceStart.toInt(),
+                                block.sourceEnd.toInt()
+                            )
+                        }
+                )
+            }
         }
         "table" -> {
             // Table container - calculate column count for consistent widths
@@ -490,7 +712,16 @@ private fun RenderBlock(
                     .border(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 block.children.forEachIndexed { index, row ->
-                    RenderTableRow(row, columnCount, onWikiLinkClick)
+                    RenderTableRow(
+                        block = row,
+                        columnCount = columnCount,
+                        onWikiLinkClick = onWikiLinkClick,
+                        editingBlockId = editingBlockId,
+                        editText = editText,
+                        onStartEdit = onStartEdit,
+                        onEditTextChange = onEditTextChange,
+                        onFinishEdit = onFinishEdit
+                    )
                     // Add divider between rows (not after last)
                     if (index < block.children.size - 1) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -500,7 +731,16 @@ private fun RenderBlock(
         }
         "table_header_row", "table_row" -> {
             // Rows are rendered via RenderTableRow, this handles standalone case
-            RenderTableRow(block, block.children.size, onWikiLinkClick)
+            RenderTableRow(
+                block = block,
+                columnCount = block.children.size,
+                onWikiLinkClick = onWikiLinkClick,
+                editingBlockId = editingBlockId,
+                editText = editText,
+                onStartEdit = onStartEdit,
+                onEditTextChange = onEditTextChange,
+                onFinishEdit = onFinishEdit
+            )
         }
         "table_cell" -> {
             // Standalone cell (shouldn't happen - rows handle cells)
@@ -510,10 +750,48 @@ private fun RenderBlock(
             )
         }
         else -> {
-            Text(
-                text = segmentsToText(block.segments),
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = LocalTextStyle.current.copy(
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                Text(
+                    text = segmentsToText(block.segments),
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            onStartEdit(
+                                block.id,
+                                block.sourceStart.toInt(),
+                                block.sourceEnd.toInt()
+                            )
+                        }
+                )
+            }
         }
     }
 }
@@ -522,7 +800,12 @@ private fun RenderBlock(
 private fun RenderTableRow(
     block: Block,
     columnCount: Int,
-    onWikiLinkClick: (String) -> Unit
+    onWikiLinkClick: (String) -> Unit,
+    editingBlockId: String?,
+    editText: TextFieldValue,
+    onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
+    onEditTextChange: (TextFieldValue) -> Unit,
+    onFinishEdit: () -> Unit
 ) {
     val isHeader = block.kind == "table_header_row"
     val cells = block.children
@@ -551,15 +834,60 @@ private fun RenderTableRow(
                     .padding(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 if (i < cells.size) {
-                    RenderSegments(
-                        segments = cells[i].segments,
-                        style = if (isHeader) {
-                            MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                        } else {
-                            MaterialTheme.typography.bodyMedium
-                        },
-                        onWikiLinkClick = onWikiLinkClick
-                    )
+                    val cell = cells[i]
+                    val isEditing = editingBlockId == cell.id
+                    if (isEditing) {
+                        val focusRequester = remember { FocusRequester() }
+                        var hasFocused by remember { mutableStateOf(false) }
+                        BasicTextField(
+                            value = editText,
+                            onValueChange = onEditTextChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.extraSmall)
+                                .padding(4.dp)
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused) {
+                                        hasFocused = true
+                                    } else if (hasFocused) {
+                                        onFinishEdit()
+                                    }
+                                },
+                            textStyle = if (isHeader) {
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = LocalContentColor.current
+                                )
+                            } else {
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    color = LocalContentColor.current
+                                )
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                        )
+                        LaunchedEffect(Unit) {
+                            focusRequester.requestFocus()
+                        }
+                    } else {
+                        RenderSegments(
+                            segments = cell.segments,
+                            style = if (isHeader) {
+                                MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                            } else {
+                                MaterialTheme.typography.bodyMedium
+                            },
+                            onWikiLinkClick = onWikiLinkClick,
+                            onTextClick = {
+                                onStartEdit(
+                                    cell.id,
+                                    cell.sourceStart.toInt(),
+                                    cell.sourceEnd.toInt()
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
