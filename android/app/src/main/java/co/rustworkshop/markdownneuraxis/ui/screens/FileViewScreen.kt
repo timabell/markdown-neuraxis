@@ -651,14 +651,24 @@ private fun RenderBlock(
                                 onTextClick = startBlockquoteEdit
                             )
                         }
-                        // Render child blocks (paragraphs inside the quote)
+                        // Render child blocks - could be paragraphs or nested blockquotes
                         for (child in block.children) {
-                            RenderSegments(
-                                segments = child.segments,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
-                                onWikiLinkClick = onWikiLinkClick,
-                                onTextClick = startBlockquoteEdit
-                            )
+                            if (child.kind == "block_quote") {
+                                // Nested blockquote - render recursively with additional indent
+                                RenderNestedBlockquote(
+                                    block = child,
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    onTextClick = startBlockquoteEdit
+                                )
+                            } else {
+                                // Paragraph or other content - render segments directly
+                                RenderSegments(
+                                    segments = child.segments,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    onTextClick = startBlockquoteEdit
+                                )
+                            }
                         }
                     }
                 }
@@ -892,6 +902,58 @@ private fun RenderTableRow(
                             }
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Render a nested blockquote recursively.
+ * Used within parent blockquotes to show nested `> >` content.
+ */
+@Composable
+private fun RenderNestedBlockquote(
+    block: Block,
+    onWikiLinkClick: (String) -> Unit,
+    onTextClick: () -> Unit
+) {
+    // Nested blockquote gets additional left border/indent
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp, end = 4.dp)
+        ) {
+            // Render any direct segments
+            if (block.segments.isNotEmpty()) {
+                RenderSegments(
+                    segments = block.segments,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                    onWikiLinkClick = onWikiLinkClick,
+                    onTextClick = onTextClick
+                )
+            }
+            // Render children recursively
+            for (child in block.children) {
+                if (child.kind == "block_quote") {
+                    // Further nested blockquote
+                    RenderNestedBlockquote(
+                        block = child,
+                        onWikiLinkClick = onWikiLinkClick,
+                        onTextClick = onTextClick
+                    )
+                } else {
+                    // Paragraph or other content
+                    RenderSegments(
+                        segments = child.segments,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                        onWikiLinkClick = onWikiLinkClick,
+                        onTextClick = onTextClick
+                    )
                 }
             }
         }
