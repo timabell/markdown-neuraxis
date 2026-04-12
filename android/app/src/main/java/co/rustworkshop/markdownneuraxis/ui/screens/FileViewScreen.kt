@@ -105,13 +105,18 @@ fun FileViewScreen(
 
             // Extract original source text to check for changes
             val originalText = String(utf8Bytes, range.first, range.second - range.first, Charsets.UTF_8)
+            // Check if original had trailing newline (to restore it)
+            val hadTrailingNewline = originalText.endsWith("\n")
+            val originalWithoutNewline = originalText.removeSuffix("\n")
 
             // Only save if content actually changed
-            if (editText.text != originalText) {
+            if (editText.text != originalWithoutNewline) {
+                // Restore trailing newline if original had one
+                val textToSave = if (hadTrailingNewline) editText.text + "\n" else editText.text
                 // Replace the byte range with new text
                 val before = String(utf8Bytes, 0, range.first, Charsets.UTF_8)
                 val after = String(utf8Bytes, range.second, utf8Bytes.size - range.second, Charsets.UTF_8)
-                val newContent = before + editText.text + after
+                val newContent = before + textToSave + after
 
                 // Write to file
                 if (writeFileContent(context, file, newContent)) {
@@ -196,8 +201,10 @@ fun FileViewScreen(
                             "Invalid byte range: $start..$end for content of ${utf8Bytes.size} bytes"
                         }
                         val sourceText = String(utf8Bytes, start, end - start, Charsets.UTF_8)
+                        // Strip trailing newline for editing (will restore on save)
+                        val editableText = sourceText.removeSuffix("\n")
                         editingBlockId = blockId
-                        editText = TextFieldValue(sourceText, TextRange(sourceText.length))
+                        editText = TextFieldValue(editableText, TextRange(editableText.length))
                         editSourceRange = Pair(start, end)
                     },
                     onEditTextChange = { editText = it },
