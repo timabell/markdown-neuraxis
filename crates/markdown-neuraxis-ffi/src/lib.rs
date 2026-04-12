@@ -207,6 +207,8 @@ fn convert_block_into(block: &engine::Block, result: &mut Vec<Block>) {
         list_ordered,
         segments,
         children,
+        source_start: block.node_range.start as u64,
+        source_end: block.node_range.end as u64,
     });
 }
 
@@ -227,6 +229,10 @@ pub struct Block {
     pub segments: Vec<TextSegment>,
     /// Child blocks (e.g., nested list items)
     pub children: Vec<Block>,
+    /// Start byte offset in source document (for editing)
+    pub source_start: u64,
+    /// End byte offset in source document (for editing)
+    pub source_end: u64,
 }
 
 /// A segment of inline content within a block.
@@ -393,6 +399,64 @@ mod tests {
         assert_eq!(heading.heading_level, 1);
         // Content is now extracted from segments
         assert_eq!(segments_to_text(&heading.segments), "Heading");
+    }
+
+    #[test]
+    fn test_source_byte_ranges() {
+        let content = "# Heading\n\nParagraph text\n";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        // Heading: "# Heading\n" = bytes 0..10
+        let heading = &snapshot.blocks[0];
+        assert_eq!(heading.kind, "heading");
+        assert_eq!(heading.source_start, 0);
+        assert_eq!(heading.source_end, 10);
+        assert_eq!(
+            &content[heading.source_start as usize..heading.source_end as usize],
+            "# Heading\n"
+        );
+
+        // Paragraph: "Paragraph text\n" = bytes 11..26
+        let para = &snapshot.blocks[1];
+        assert_eq!(para.kind, "paragraph");
+        assert_eq!(para.source_start, 11);
+        assert_eq!(para.source_end, 26);
+        assert_eq!(
+            &content[para.source_start as usize..para.source_end as usize],
+            "Paragraph text\n"
+        );
+    }
+
+    #[test]
+    fn test_source_byte_ranges_nested() {
+        let content = "- parent\n  - child\n";
+        let doc = DocumentHandle::from_string(content.to_string()).unwrap();
+        let snapshot = doc.get_snapshot();
+
+        // Top-level list contains entire content
+        let list = &snapshot.blocks[0];
+        assert_eq!(list.kind, "list");
+        assert_eq!(list.source_start, 0);
+        assert_eq!(list.source_end, 19);
+
+        // Parent list item
+        let parent = &list.children[0];
+        assert_eq!(parent.kind, "list_item");
+        assert_eq!(
+            &content[parent.source_start as usize..parent.source_end as usize],
+            "- parent\n  - child\n"
+        );
+
+        // Nested list within parent
+        let nested_list = &parent.children[0];
+        assert_eq!(nested_list.kind, "list");
+
+        // Child list item - range contained within parent
+        let child = &nested_list.children[0];
+        assert_eq!(child.kind, "list_item");
+        assert!(child.source_start >= parent.source_start);
+        assert!(child.source_end <= parent.source_end);
     }
 
     #[test]
