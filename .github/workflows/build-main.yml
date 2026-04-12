@@ -75,6 +75,7 @@ jobs:
   ci:
     needs: check-release
     uses: ./.github/workflows/_ci.yml
+    secrets: inherit
     with:
       release_tag: ${{ needs.check-release.outputs.release_tag }}
 

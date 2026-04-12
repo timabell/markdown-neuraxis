@@ -16,3 +16,6 @@ gradle/wrapper/gradle-wrapper.jar
 # IDE
 .idea/
 *.iml
+
+# Signing keys
+release.keystore

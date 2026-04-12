@@ -8,6 +8,21 @@ android {
     namespace = "co.rustworkshop.markdownneuraxis"
     compileSdk = 35
 
+    val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+    val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    val hasSigningConfig = keystorePath != null && keystorePassword != null
+
+    if (hasSigningConfig) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = "mdnx-gh-apk-signing"
+                keyPassword = keystorePassword
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "co.rustworkshop.markdownneuraxis"
         minSdk = 29
@@ -25,6 +40,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

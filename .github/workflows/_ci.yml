@@ -223,15 +223,32 @@ jobs:
           sed -i "s/versionName = .*/versionName = \"$version\"/" android/app/build.gradle.kts
 
       - name: Build Android APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           cd android
-          gradle assembleDebug
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "Building signed release APK"
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.keystore
+            ANDROID_KEYSTORE_PATH="$(pwd)/release.keystore" \
+              ANDROID_KEYSTORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
+              gradle assembleRelease
+          else
+            echo "Secrets unavailable, building debug APK"
+            gradle assembleDebug
+          fi
 
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk \
-             artifacts/markdown-neuraxis-android.apk
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk \
+               artifacts/markdown-neuraxis-android.apk
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk \
+               artifacts/markdown-neuraxis-android.apk
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
