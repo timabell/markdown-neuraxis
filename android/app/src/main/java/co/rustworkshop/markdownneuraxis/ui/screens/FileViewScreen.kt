@@ -27,7 +27,6 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -635,11 +634,13 @@ private fun RenderBlock(
                     )
                 }
                 val borderColor = MaterialTheme.colorScheme.primary
+                val bgColor = MaterialTheme.colorScheme.surfaceVariant
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(IntrinsicSize.Min)
                         .padding(vertical = 4.dp)
+                        .background(bgColor)
                 ) {
                     // Left border bar
                     Box(
@@ -652,16 +653,13 @@ private fun RenderBlock(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = 12.dp, end = 8.dp)
+                            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
                     ) {
                         // Render any direct segments
                         if (block.segments.isNotEmpty()) {
                             RenderSegments(
                                 segments = block.segments,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Light,
-                                    fontStyle = FontStyle.Italic
-                                ),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
                                 onWikiLinkClick = onWikiLinkClick,
                                 onTextClick = startBlockquoteEdit
                             )
@@ -679,10 +677,7 @@ private fun RenderBlock(
                                 // Paragraph or other content
                                 RenderSegments(
                                     segments = child.segments,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = FontWeight.Light,
-                                        fontStyle = FontStyle.Italic
-                                    ),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
                                     onWikiLinkClick = onWikiLinkClick,
                                     onTextClick = startBlockquoteEdit
                                 )
@@ -960,10 +955,7 @@ private fun RenderNestedBlockquote(
             if (block.segments.isNotEmpty()) {
                 RenderSegments(
                     segments = block.segments,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Light,
-                        fontStyle = FontStyle.Italic
-                    ),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
                     onWikiLinkClick = onWikiLinkClick,
                     onTextClick = onTextClick
                 )
@@ -981,10 +973,7 @@ private fun RenderNestedBlockquote(
                     // Paragraph or other content
                     RenderSegments(
                         segments = child.segments,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Light,
-                            fontStyle = FontStyle.Italic
-                        ),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
                         onWikiLinkClick = onWikiLinkClick,
                         onTextClick = onTextClick
                     )
