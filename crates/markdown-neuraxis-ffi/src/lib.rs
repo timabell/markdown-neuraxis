@@ -174,6 +174,15 @@ fn convert_block_into(block: &engine::Block, result: &mut Vec<Block>) {
         BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None, None),
         BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None, None),
         BlockKind::BlockQuote => ("block_quote".to_string(), 0, None, None),
+        BlockKind::Table => ("table".to_string(), 0, None, None),
+        BlockKind::TableRow { is_header } => {
+            if *is_header {
+                ("table_header_row".to_string(), 0, None, None)
+            } else {
+                ("table_row".to_string(), 0, None, None)
+            }
+        }
+        BlockKind::TableCell => ("table_cell".to_string(), 0, None, None),
     };
 
     // Convert engine segments (engine now provides flat segments)

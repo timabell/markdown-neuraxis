@@ -899,3 +899,36 @@ hr {
     background: var(--base1);
     margin: 4px 0;
 }
+
+/* Table styles */
+.table {
+    border-collapse: collapse;
+    width: auto;
+}
+
+.table-container {
+    margin: 16px 0;
+}
+
+.table-header-row {
+    background-color: var(--base2);
+}
+
+.table-row {
+    background-color: var(--base3);
+}
+
+.table-row:hover {
+    background-color: var(--base2);
+}
+
+.table-cell {
+    border: 1px solid var(--base1);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.table-header-row .table-cell {
+    font-weight: 600;
+    color: var(--base02);
+}
