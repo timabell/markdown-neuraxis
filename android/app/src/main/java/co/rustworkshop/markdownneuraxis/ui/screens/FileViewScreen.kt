@@ -191,9 +191,12 @@ fun FileViewScreen(
                     editingBlockId = editingBlockId,
                     editText = editText,
                     onStartEdit = { blockId, start, end ->
-                        // Save current edit before starting new one
-                        if (editingBlockId != null) {
+                        // If currently editing another block, just save and return.
+                        // The byte offsets passed here are stale after saveEdit() modifies
+                        // the document. User can click again with fresh offsets.
+                        if (editingBlockId != null && editingBlockId != blockId) {
                             saveEdit()
+                            return@RenderBlockTree
                         }
                         // Extract raw source text using byte offsets
                         val currentContent = content ?: return@RenderBlockTree
