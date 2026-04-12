@@ -3,21 +3,37 @@ package co.rustworkshop.markdownneuraxis.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -28,6 +44,7 @@ import androidx.compose.foundation.border
 import androidx.documentfile.provider.DocumentFile
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
+import co.rustworkshop.markdownneuraxis.io.writeFileContent
 import co.rustworkshop.markdownneuraxis.model.FileTree
 import uniffi.markdown_neuraxis_ffi.Block
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
@@ -61,11 +78,62 @@ fun FileViewScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val content = remember(file) {
-        readFileContent(context, file)
+
+    // Mutable content state that can be updated after edits
+    var content by remember(file) {
+        mutableStateOf(readFileContent(context, file))
     }
-    val blocks = remember(content) {
-        content?.let { parseDocument(it) }
+    var blocks by remember(file) {
+        mutableStateOf(content?.let { parseDocument(it) })
+    }
+
+    // Edit state
+    var editingBlockId by remember { mutableStateOf<String?>(null) }
+    var editText by remember { mutableStateOf(TextFieldValue("")) }
+    var editSourceRange by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    // Save edit and refresh document
+    val saveEdit: () -> Unit = saveEdit@{
+        val range = editSourceRange
+        val currentContent = content
+        if (range != null && currentContent != null && editingBlockId != null) {
+            // Convert content to UTF-8 bytes for correct byte-offset indexing
+            val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
+
+            // Bounds check - invalid range is a bug, crash to catch during development
+            require(range.first >= 0 && range.second <= utf8Bytes.size && range.first <= range.second) {
+                "Invalid byte range: ${range.first}..${range.second} for content of ${utf8Bytes.size} bytes"
+            }
+
+            // Extract original source text to check for changes
+            val originalText = String(utf8Bytes, range.first, range.second - range.first, Charsets.UTF_8)
+            // Check if original had trailing newline (to restore it)
+            val hadTrailingNewline = originalText.endsWith("\n")
+            val originalWithoutNewline = originalText.removeSuffix("\n")
+
+            // Only save if content actually changed
+            if (editText.text != originalWithoutNewline) {
+                // Restore trailing newline if original had one
+                val textToSave = if (hadTrailingNewline) editText.text + "\n" else editText.text
+                // Replace the byte range with new text
+                val before = String(utf8Bytes, 0, range.first, Charsets.UTF_8)
+                val after = String(utf8Bytes, range.second, utf8Bytes.size - range.second, Charsets.UTF_8)
+                val newContent = before + textToSave + after
+
+                // Write to file
+                if (writeFileContent(context, file, newContent)) {
+                    // Update state with new content
+                    content = newContent
+                    blocks = parseDocument(newContent)
+                } else {
+                    Log.e(TAG, "Failed to save edit")
+                }
+            }
+        }
+        // Clear edit state
+        editingBlockId = null
+        editText = TextFieldValue("")
+        editSourceRange = null
     }
 
     val onWikiLinkClick: (String) -> Unit = { linkTarget ->
@@ -109,13 +177,41 @@ fun FileViewScreen(
             }
         }
         else -> {
+            val currentBlocks = blocks!! // Safe: we're in else branch where blocks != null
             Column(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                RenderBlockTree(blocks, depth = 0, onWikiLinkClick = onWikiLinkClick)
+                RenderBlockTree(
+                    blocks = currentBlocks,
+                    depth = 0,
+                    onWikiLinkClick = onWikiLinkClick,
+                    editingBlockId = editingBlockId,
+                    editText = editText,
+                    onStartEdit = { blockId, start, end ->
+                        // Save current edit before starting new one
+                        if (editingBlockId != null) {
+                            saveEdit()
+                        }
+                        // Extract raw source text using byte offsets
+                        val currentContent = content ?: return@RenderBlockTree
+                        val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
+                        // Bounds check - invalid range is a bug
+                        require(start >= 0 && end <= utf8Bytes.size && start <= end) {
+                            "Invalid byte range: $start..$end for content of ${utf8Bytes.size} bytes"
+                        }
+                        val sourceText = String(utf8Bytes, start, end - start, Charsets.UTF_8)
+                        // Strip trailing newline for editing (will restore on save)
+                        val editableText = sourceText.removeSuffix("\n")
+                        editingBlockId = blockId
+                        editText = TextFieldValue(editableText, TextRange(editableText.length))
+                        editSourceRange = Pair(start, end)
+                    },
+                    onEditTextChange = { editText = it },
+                    onFinishEdit = saveEdit
+                )
             }
         }
     }
@@ -129,14 +225,107 @@ fun FileViewScreen(
 private fun RenderBlockTree(
     blocks: List<Block>,
     depth: Int,
-    onWikiLinkClick: (String) -> Unit
+    onWikiLinkClick: (String) -> Unit,
+    editingBlockId: String?,
+    editText: TextFieldValue,
+    onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
+    onEditTextChange: (TextFieldValue) -> Unit,
+    onFinishEdit: () -> Unit
 ) {
     for (block in blocks) {
-        RenderBlock(block, depth, onWikiLinkClick)
-        // List and table blocks handle their own children internally
-        val handlesOwnChildren = block.kind in listOf("list", "table", "table_header_row", "table_row")
+        RenderBlock(
+            block = block,
+            depth = depth,
+            onWikiLinkClick = onWikiLinkClick,
+            editingBlockId = editingBlockId,
+            editText = editText,
+            onStartEdit = onStartEdit,
+            onEditTextChange = onEditTextChange,
+            onFinishEdit = onFinishEdit
+        )
+        // These blocks handle their own children internally
+        val handlesOwnChildren = block.kind in listOf("list", "table", "table_header_row", "table_row", "block_quote")
         if (!handlesOwnChildren && block.children.isNotEmpty()) {
-            RenderBlockTree(block.children, depth + 1, onWikiLinkClick)
+            RenderBlockTree(
+                blocks = block.children,
+                depth = depth + 1,
+                onWikiLinkClick = onWikiLinkClick,
+                editingBlockId = editingBlockId,
+                editText = editText,
+                onStartEdit = onStartEdit,
+                onEditTextChange = onEditTextChange,
+                onFinishEdit = onFinishEdit
+            )
+        }
+    }
+}
+
+/**
+ * Recursively append segments to an AnnotatedString.Builder with proper styling.
+ * Handles nested formatting (e.g., bold within italic).
+ */
+private fun AnnotatedString.Builder.appendSegments(
+    segments: List<TextSegment>,
+    linkColor: Color,
+    codeBackground: Color
+) {
+    for (segment in segments) {
+        when (segment.kind) {
+            "text" -> append(segment.content)
+            "wiki_link" -> {
+                pushStringAnnotation(tag = "wiki_link", annotation = segment.content)
+                withStyle(SpanStyle(color = linkColor)) {
+                    append(segment.content)
+                }
+                pop()
+            }
+            "url" -> {
+                pushStringAnnotation(tag = "url", annotation = segment.content)
+                withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
+                    append(segment.content)
+                }
+                pop()
+            }
+            "link" -> {
+                // Format: "text|url"
+                val parts = segment.content.split("|", limit = 2)
+                val text = parts.getOrElse(0) { segment.content }
+                val url = parts.getOrElse(1) { "" }
+                pushStringAnnotation(tag = "url", annotation = url)
+                withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
+                    append(text)
+                }
+                pop()
+            }
+            "emphasis" -> {
+                withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                    appendSegments(segment.children, linkColor, codeBackground)
+                }
+            }
+            "strong" -> {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                    appendSegments(segment.children, linkColor, codeBackground)
+                }
+            }
+            "code" -> {
+                withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)) {
+                    append(segment.content)
+                }
+            }
+            "strikethrough" -> {
+                withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                    append(segment.content)
+                }
+            }
+            "image" -> {
+                // Format: "alt|url" - show as placeholder text for now
+                val parts = segment.content.split("|", limit = 2)
+                val alt = parts.getOrElse(0) { "image" }
+                append("[Image: $alt]")
+            }
+            "soft_break" -> append(" ")
+            "hard_break" -> append("\n")
+            else -> append(segment.content)
         }
     }
 }
@@ -146,7 +335,8 @@ private fun RenderSegments(
     segments: List<TextSegment>,
     style: TextStyle = LocalTextStyle.current,
     modifier: Modifier = Modifier,
-    onWikiLinkClick: (String) -> Unit
+    onWikiLinkClick: (String) -> Unit,
+    onTextClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val contentColor = LocalContentColor.current
@@ -163,29 +353,9 @@ private fun RenderSegments(
     }
 
     val linkColor = MaterialTheme.colorScheme.primary
+    val codeBackground = MaterialTheme.colorScheme.surfaceVariant
     val annotatedText = buildAnnotatedString {
-        for (segment in segments) {
-            when (segment.kind) {
-                "text" -> append(segment.content)
-                "wiki_link" -> {
-                    pushStringAnnotation(tag = "wiki_link", annotation = segment.content)
-                    withStyle(SpanStyle(color = linkColor)) {
-                        append(segment.content)
-                    }
-                    pop()
-                }
-                "url" -> {
-                    pushStringAnnotation(tag = "url", annotation = segment.content)
-                    withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) {
-                        append(segment.content)
-                    }
-                    pop()
-                }
-                "soft_break" -> append(" ")
-                "hard_break" -> append("\n")
-                else -> append(segment.content)
-            }
-        }
+        appendSegments(segments, linkColor, codeBackground)
     }
 
     ClickableText(
@@ -206,13 +376,25 @@ private fun RenderSegments(
             annotatedText.getStringAnnotations(tag = "wiki_link", start = offset, end = offset)
                 .firstOrNull()?.let { annotation ->
                     onWikiLinkClick(annotation.item)
+                    return@ClickableText
                 }
+            // No link clicked - call text click handler if provided
+            onTextClick?.invoke()
         }
     )
 }
 
 @Composable
-private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> Unit) {
+private fun RenderBlock(
+    block: Block,
+    depth: Int,
+    onWikiLinkClick: (String) -> Unit,
+    editingBlockId: String?,
+    editText: TextFieldValue,
+    onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
+    onEditTextChange: (TextFieldValue) -> Unit,
+    onFinishEdit: () -> Unit
+) {
     when (block.kind) {
         "heading" -> {
             val style = when (block.headingLevel.toInt()) {
@@ -223,12 +405,50 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
                 5 -> MaterialTheme.typography.titleMedium
                 else -> MaterialTheme.typography.titleSmall
             }
-            RenderSegments(
-                segments = block.segments,
-                style = style.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(vertical = 8.dp),
-                onWikiLinkClick = onWikiLinkClick
-            )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = style.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                RenderSegments(
+                    segments = block.segments,
+                    style = style.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    onWikiLinkClick = onWikiLinkClick,
+                    onTextClick = {
+                        onStartEdit(
+                            block.id,
+                            block.sourceStart.toInt(),
+                            block.sourceEnd.toInt()
+                        )
+                    }
+                )
+            }
         }
         "list" -> {
             // List container renders its children with index-generated markers
@@ -238,19 +458,66 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
                 block.children.forEachIndexed { index, item ->
                     val marker = if (ordered) "${index + 1}." else "•"
                     val markerWidth = if (ordered) 24.dp else 16.dp
+                    val isEditing = editingBlockId == item.id
                     Row(modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
                         Text(
                             text = marker,
                             modifier = Modifier.width(markerWidth)
                         )
                         Column {
-                            RenderSegments(
-                                segments = item.segments,
-                                onWikiLinkClick = onWikiLinkClick
-                            )
+                            if (isEditing) {
+                                val focusRequester = remember { FocusRequester() }
+                                var hasFocused by remember { mutableStateOf(false) }
+                                BasicTextField(
+                                    value = editText,
+                                    onValueChange = onEditTextChange,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                                        .padding(8.dp)
+                                        .focusRequester(focusRequester)
+                                        .onFocusChanged { focusState ->
+                                            if (focusState.isFocused) {
+                                                hasFocused = true
+                                            } else if (hasFocused) {
+                                                onFinishEdit()
+                                            }
+                                        },
+                                    textStyle = LocalTextStyle.current.copy(
+                                        color = LocalContentColor.current
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                                )
+                                LaunchedEffect(Unit) {
+                                    focusRequester.requestFocus()
+                                }
+                            } else {
+                                RenderSegments(
+                                    segments = item.segments,
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    onTextClick = {
+                                        // Use contentStart/contentEnd to exclude nested children
+                                        onStartEdit(
+                                            item.id,
+                                            item.contentStart.toInt(),
+                                            item.contentEnd.toInt()
+                                        )
+                                    }
+                                )
+                            }
                             // Render nested content (e.g., nested lists)
                             if (item.children.isNotEmpty()) {
-                                RenderBlockTree(item.children, depth + 1, onWikiLinkClick)
+                                RenderBlockTree(
+                                    blocks = item.children,
+                                    depth = depth + 1,
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    editingBlockId = editingBlockId,
+                                    editText = editText,
+                                    onStartEdit = onStartEdit,
+                                    onEditTextChange = onEditTextChange,
+                                    onFinishEdit = onFinishEdit
+                                )
                             }
                         }
                     }
@@ -262,45 +529,258 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
             error("list_item rendered outside of list container - invalid block structure")
         }
         "paragraph" -> {
-            RenderSegments(
-                segments = block.segments,
-                modifier = Modifier.padding(vertical = 4.dp),
-                onWikiLinkClick = onWikiLinkClick
-            )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                // Edit mode: show text field with visible border
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                // Only save when focus is lost after having focus
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = LocalTextStyle.current.copy(
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                // View mode: tappable text (tap non-link area to edit)
+                RenderSegments(
+                    segments = block.segments,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    onWikiLinkClick = onWikiLinkClick,
+                    onTextClick = {
+                        onStartEdit(
+                            block.id,
+                            block.sourceStart.toInt(),
+                            block.sourceEnd.toInt()
+                        )
+                    }
+                )
+            }
         }
         "code_fence" -> {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Text(
-                    text = segmentsToText(block.segments),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(8.dp)
-                )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                ) {
+                    BasicTextField(
+                        value = editText,
+                        onValueChange = onEditTextChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    hasFocused = true
+                                } else if (hasFocused) {
+                                    onFinishEdit()
+                                }
+                            },
+                        textStyle = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            color = LocalContentColor.current
+                        ),
+                        // Code blocks may be multiline, use default IME
+                        keyboardOptions = KeyboardOptions.Default
+                    )
+                }
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            onStartEdit(
+                                block.id,
+                                block.sourceStart.toInt(),
+                                block.sourceEnd.toInt()
+                            )
+                        }
+                ) {
+                    Text(
+                        text = segmentsToText(block.segments),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
         }
         "block_quote" -> {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                RenderSegments(
-                    segments = block.segments,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
-                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
-                    onWikiLinkClick = onWikiLinkClick
-                )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                // Edit the entire blockquote as raw markdown
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                ) {
+                    BasicTextField(
+                        value = editText,
+                        onValueChange = onEditTextChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    hasFocused = true
+                                } else if (hasFocused) {
+                                    onFinishEdit()
+                                }
+                            },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Light,
+                            color = LocalContentColor.current
+                        ),
+                        // Blockquotes may be multiline
+                        keyboardOptions = KeyboardOptions.Default
+                    )
+                }
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                // Render blockquote with left border styling
+                // Edit the entire blockquote as raw markdown when any text is tapped
+                val startBlockquoteEdit = {
+                    onStartEdit(
+                        block.id,
+                        block.sourceStart.toInt(),
+                        block.sourceEnd.toInt()
+                    )
+                }
+                val borderColor = MaterialTheme.colorScheme.primary
+                val bgColor = MaterialTheme.colorScheme.surfaceVariant
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
+                        .padding(vertical = 4.dp)
+                        .background(bgColor)
+                ) {
+                    // Left border bar
+                    Box(
+                        modifier = Modifier
+                            .width(4.dp)
+                            .fillMaxHeight()
+                            .background(borderColor)
+                    )
+                    // Content column
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
+                    ) {
+                        // Render any direct segments
+                        if (block.segments.isNotEmpty()) {
+                            RenderSegments(
+                                segments = block.segments,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                                onWikiLinkClick = onWikiLinkClick,
+                                onTextClick = startBlockquoteEdit
+                            )
+                        }
+                        // Render child blocks - could be paragraphs or nested blockquotes
+                        for (child in block.children) {
+                            if (child.kind == "block_quote") {
+                                // Nested blockquote - render recursively
+                                RenderNestedBlockquote(
+                                    block = child,
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    onTextClick = startBlockquoteEdit
+                                )
+                            } else {
+                                // Paragraph or other content
+                                RenderSegments(
+                                    segments = child.segments,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                                    onWikiLinkClick = onWikiLinkClick,
+                                    onTextClick = startBlockquoteEdit
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         "thematic_break" -> {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = LocalTextStyle.current.copy(
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                HorizontalDivider(
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .clickable {
+                            onStartEdit(
+                                block.id,
+                                block.sourceStart.toInt(),
+                                block.sourceEnd.toInt()
+                            )
+                        }
+                )
+            }
         }
         "table" -> {
             // Table container - calculate column count for consistent widths
@@ -311,7 +791,16 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
                     .border(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 block.children.forEachIndexed { index, row ->
-                    RenderTableRow(row, columnCount, onWikiLinkClick)
+                    RenderTableRow(
+                        block = row,
+                        columnCount = columnCount,
+                        onWikiLinkClick = onWikiLinkClick,
+                        editingBlockId = editingBlockId,
+                        editText = editText,
+                        onStartEdit = onStartEdit,
+                        onEditTextChange = onEditTextChange,
+                        onFinishEdit = onFinishEdit
+                    )
                     // Add divider between rows (not after last)
                     if (index < block.children.size - 1) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -321,7 +810,16 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
         }
         "table_header_row", "table_row" -> {
             // Rows are rendered via RenderTableRow, this handles standalone case
-            RenderTableRow(block, block.children.size, onWikiLinkClick)
+            RenderTableRow(
+                block = block,
+                columnCount = block.children.size,
+                onWikiLinkClick = onWikiLinkClick,
+                editingBlockId = editingBlockId,
+                editText = editText,
+                onStartEdit = onStartEdit,
+                onEditTextChange = onEditTextChange,
+                onFinishEdit = onFinishEdit
+            )
         }
         "table_cell" -> {
             // Standalone cell (shouldn't happen - rows handle cells)
@@ -331,10 +829,48 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
             )
         }
         else -> {
-            Text(
-                text = segmentsToText(block.segments),
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
+            val isEditing = editingBlockId == block.id
+            if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hasFocused by remember { mutableStateOf(false) }
+                BasicTextField(
+                    value = editText,
+                    onValueChange = onEditTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                        .padding(8.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            if (focusState.isFocused) {
+                                hasFocused = true
+                            } else if (hasFocused) {
+                                onFinishEdit()
+                            }
+                        },
+                    textStyle = LocalTextStyle.current.copy(
+                        color = LocalContentColor.current
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                )
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
+            } else {
+                Text(
+                    text = segmentsToText(block.segments),
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            onStartEdit(
+                                block.id,
+                                block.sourceStart.toInt(),
+                                block.sourceEnd.toInt()
+                            )
+                        }
+                )
+            }
         }
     }
 }
@@ -343,7 +879,12 @@ private fun RenderBlock(block: Block, depth: Int, onWikiLinkClick: (String) -> U
 private fun RenderTableRow(
     block: Block,
     columnCount: Int,
-    onWikiLinkClick: (String) -> Unit
+    onWikiLinkClick: (String) -> Unit,
+    editingBlockId: String?,
+    editText: TextFieldValue,
+    onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
+    onEditTextChange: (TextFieldValue) -> Unit,
+    onFinishEdit: () -> Unit
 ) {
     val isHeader = block.kind == "table_header_row"
     val cells = block.children
@@ -372,14 +913,121 @@ private fun RenderTableRow(
                     .padding(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 if (i < cells.size) {
+                    val cell = cells[i]
+                    val isEditing = editingBlockId == cell.id
+                    if (isEditing) {
+                        val focusRequester = remember { FocusRequester() }
+                        var hasFocused by remember { mutableStateOf(false) }
+                        BasicTextField(
+                            value = editText,
+                            onValueChange = onEditTextChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.extraSmall)
+                                .padding(4.dp)
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused) {
+                                        hasFocused = true
+                                    } else if (hasFocused) {
+                                        onFinishEdit()
+                                    }
+                                },
+                            textStyle = if (isHeader) {
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = LocalContentColor.current
+                                )
+                            } else {
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    color = LocalContentColor.current
+                                )
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { onFinishEdit() })
+                        )
+                        LaunchedEffect(Unit) {
+                            focusRequester.requestFocus()
+                        }
+                    } else {
+                        RenderSegments(
+                            segments = cell.segments,
+                            style = if (isHeader) {
+                                MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                            } else {
+                                MaterialTheme.typography.bodyMedium
+                            },
+                            onWikiLinkClick = onWikiLinkClick,
+                            onTextClick = {
+                                onStartEdit(
+                                    cell.id,
+                                    cell.sourceStart.toInt(),
+                                    cell.sourceEnd.toInt()
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Render a nested blockquote recursively with left border styling.
+ */
+@Composable
+private fun RenderNestedBlockquote(
+    block: Block,
+    onWikiLinkClick: (String) -> Unit,
+    onTextClick: () -> Unit
+) {
+    val borderColor = MaterialTheme.colorScheme.primary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .padding(top = 4.dp, bottom = 4.dp)
+    ) {
+        // Left border bar
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(borderColor)
+        )
+        // Content column
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 10.dp)
+        ) {
+            // Render any direct segments
+            if (block.segments.isNotEmpty()) {
+                RenderSegments(
+                    segments = block.segments,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                    onWikiLinkClick = onWikiLinkClick,
+                    onTextClick = onTextClick
+                )
+            }
+            // Render children recursively
+            for (child in block.children) {
+                if (child.kind == "block_quote") {
+                    // Further nested blockquote
+                    RenderNestedBlockquote(
+                        block = child,
+                        onWikiLinkClick = onWikiLinkClick,
+                        onTextClick = onTextClick
+                    )
+                } else {
+                    // Paragraph or other content
                     RenderSegments(
-                        segments = cells[i].segments,
-                        style = if (isHeader) {
-                            MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                        } else {
-                            MaterialTheme.typography.bodyMedium
-                        },
-                        onWikiLinkClick = onWikiLinkClick
+                        segments = child.segments,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
+                        onWikiLinkClick = onWikiLinkClick,
+                        onTextClick = onTextClick
                     )
                 }
             }

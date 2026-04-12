@@ -159,6 +159,25 @@ fun readFileContent(context: Context, file: DocumentFile): String? {
     }
 }
 
+fun writeFileContent(context: Context, file: DocumentFile, content: String): Boolean {
+    return try {
+        val stream = context.contentResolver.openOutputStream(file.uri, "wt")
+        if (stream == null) {
+            Log.e(TAG, "Failed to open output stream for: ${file.uri}")
+            return false
+        }
+        stream.use { outputStream ->
+            outputStream.bufferedWriter().use { writer ->
+                writer.write(content)
+            }
+        }
+        true
+    } catch (e: Exception) {
+        Log.e(TAG, "Error writing file: ${file.uri}", e)
+        false
+    }
+}
+
 fun loadFileCache(context: Context): List<String> {
     val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
     return if (cacheFile.exists()) {
