@@ -625,18 +625,19 @@ private fun RenderBlock(
                 }
             } else {
                 // Render blockquote with children inside the Surface
+                // Edit the entire blockquote as raw markdown when any text is tapped
+                val startBlockquoteEdit = {
+                    onStartEdit(
+                        block.id,
+                        block.sourceStart.toInt(),
+                        block.sourceEnd.toInt()
+                    )
+                }
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clickable {
-                            onStartEdit(
-                                block.id,
-                                block.sourceStart.toInt(),
-                                block.sourceEnd.toInt()
-                            )
-                        }
                 ) {
                     Column(
                         modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
@@ -646,7 +647,8 @@ private fun RenderBlock(
                             RenderSegments(
                                 segments = block.segments,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
-                                onWikiLinkClick = onWikiLinkClick
+                                onWikiLinkClick = onWikiLinkClick,
+                                onTextClick = startBlockquoteEdit
                             )
                         }
                         // Render child blocks (paragraphs inside the quote)
@@ -654,7 +656,8 @@ private fun RenderBlock(
                             RenderSegments(
                                 segments = child.segments,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Light),
-                                onWikiLinkClick = onWikiLinkClick
+                                onWikiLinkClick = onWikiLinkClick,
+                                onTextClick = startBlockquoteEdit
                             )
                         }
                     }
