@@ -9,6 +9,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -59,6 +62,10 @@ fun App() {
     val hasMissing = missingFileName != null
     val hasFile = fileStack.isNotEmpty()
 
+    // Editing state from FileViewScreen
+    var isEditing by remember { mutableStateOf(false) }
+    var saveEditCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     BackHandler(enabled = drawerState.isOpen || hasFile || hasMissing) {
         when {
             drawerState.isOpen -> scope.launch { drawerState.close() }
@@ -67,20 +74,21 @@ fun App() {
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = !isSetup,
-        drawerContent = {
-            AppDrawerContent(
-                onChangeFolder = {
-                    previousUri = notesUri
-                    notesUri = null
-                },
-                onCloseDrawer = { scope.launch { drawerState.close() } }
-            )
-        }
-    ) {
-        Scaffold(
+    Box(modifier = Modifier.fillMaxSize().imePadding()) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = !isSetup,
+            drawerContent = {
+                AppDrawerContent(
+                    onChangeFolder = {
+                        previousUri = notesUri
+                        notesUri = null
+                    },
+                    onCloseDrawer = { scope.launch { drawerState.close() } }
+                )
+            }
+        ) {
+            Scaffold(
             topBar = {
                 when {
                     isSetup -> TopAppBar(title = { Text("Markdown Neuraxis") })
@@ -110,7 +118,9 @@ fun App() {
                         onHomeClick = {
                             fileStack.clear()
                             missingFileName = null
-                        }
+                        },
+                        isEditing = isEditing,
+                        onDoneClick = saveEditCallback
                     )
                 }
             }
@@ -159,6 +169,10 @@ fun App() {
                             treeVersion++
                         },
                         onMissingFile = { name -> missingFileName = name },
+                        onEditingChanged = { editing, saveEdit ->
+                            isEditing = editing
+                            saveEditCallback = if (editing) saveEdit else null
+                        },
                         modifier = Modifier.padding(padding)
                     )
                 }
@@ -176,6 +190,7 @@ fun App() {
                     )
                 }
             }
+        }
         }
     }
 }

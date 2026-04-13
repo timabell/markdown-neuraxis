@@ -6,8 +6,6 @@ import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -76,6 +74,7 @@ fun FileViewScreen(
     onNavigateToFile: (DocumentFile) -> Unit,
     onNavigateToFolder: (String) -> Unit,
     onMissingFile: (String) -> Unit,
+    onEditingChanged: (isEditing: Boolean, saveEdit: () -> Unit) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -137,6 +136,11 @@ fun FileViewScreen(
         editSourceRange = null
     }
 
+    // Notify parent when editing state changes
+    LaunchedEffect(editingBlockId) {
+        onEditingChanged(editingBlockId != null, saveEdit)
+    }
+
     val onWikiLinkClick: (String) -> Unit = { linkTarget ->
         // First check if target matches a folder
         val folder = fileTree.findFolderByName(linkTarget)
@@ -179,56 +183,43 @@ fun FileViewScreen(
         }
         else -> {
             val currentBlocks = blocks!! // Safe: we're in else branch where blocks != null
-            Box(modifier = modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    RenderBlockTree(
-                        blocks = currentBlocks,
-                        depth = 0,
-                        onWikiLinkClick = onWikiLinkClick,
-                        editingBlockId = editingBlockId,
-                        editText = editText,
-                        onStartEdit = { blockId, start, end ->
-                            // If currently editing another block, just save and return.
-                            // The byte offsets passed here are stale after saveEdit() modifies
-                            // the document. User can click again with fresh offsets.
-                            if (editingBlockId != null && editingBlockId != blockId) {
-                                saveEdit()
-                                return@RenderBlockTree
-                            }
-                            // Extract raw source text using byte offsets
-                            val currentContent = content ?: return@RenderBlockTree
-                            val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
-                            // Bounds check - invalid range is a bug
-                            require(start >= 0 && end <= utf8Bytes.size && start <= end) {
-                                "Invalid byte range: $start..$end for content of ${utf8Bytes.size} bytes"
-                            }
-                            val sourceText = String(utf8Bytes, start, end - start, Charsets.UTF_8)
-                            // Strip trailing newline for editing (will restore on save)
-                            val editableText = sourceText.removeSuffix("\n")
-                            editingBlockId = blockId
-                            editText = TextFieldValue(editableText, TextRange(editableText.length))
-                            editSourceRange = Pair(start, end)
-                        },
-                        onEditTextChange = { editText = it },
-                        onFinishEdit = saveEdit
-                    )
-                }
-                // Floating Done button - appears when editing
-                if (editingBlockId != null) {
-                    FloatingActionButton(
-                        onClick = saveEdit,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp)
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = "Done editing")
-                    }
-                }
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                RenderBlockTree(
+                    blocks = currentBlocks,
+                    depth = 0,
+                    onWikiLinkClick = onWikiLinkClick,
+                    editingBlockId = editingBlockId,
+                    editText = editText,
+                    onStartEdit = { blockId, start, end ->
+                        // If currently editing another block, just save and return.
+                        // The byte offsets passed here are stale after saveEdit() modifies
+                        // the document. User can click again with fresh offsets.
+                        if (editingBlockId != null && editingBlockId != blockId) {
+                            saveEdit()
+                            return@RenderBlockTree
+                        }
+                        // Extract raw source text using byte offsets
+                        val currentContent = content ?: return@RenderBlockTree
+                        val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
+                        // Bounds check - invalid range is a bug
+                        require(start >= 0 && end <= utf8Bytes.size && start <= end) {
+                            "Invalid byte range: $start..$end for content of ${utf8Bytes.size} bytes"
+                        }
+                        val sourceText = String(utf8Bytes, start, end - start, Charsets.UTF_8)
+                        // Strip trailing newline for editing (will restore on save)
+                        val editableText = sourceText.removeSuffix("\n")
+                        editingBlockId = blockId
+                        editText = TextFieldValue(editableText, TextRange(editableText.length))
+                        editSourceRange = Pair(start, end)
+                    },
+                    onEditTextChange = { editText = it },
+                    onFinishEdit = saveEdit
+                )
             }
         }
     }
