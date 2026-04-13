@@ -14,50 +14,46 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun SetupScreen(
-    onFolderSelected: (Uri) -> Unit,
-    onCancel: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val folderPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri?.let {
-            val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            context.contentResolver.takePersistableUriPermission(it, takeFlags)
-            onFolderSelected(it)
-        }
-    }
+fun SetupScreen(onFolderSelected: (Uri) -> Unit, onCancel: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+	val context = LocalContext.current
+	val folderPicker = rememberLauncherForActivityResult(
+		contract = ActivityResultContracts.OpenDocumentTree()
+	) { uri ->
+		uri?.let {
+			val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+				android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+			context.contentResolver.takePersistableUriPermission(it, takeFlags)
+			onFolderSelected(it)
+		}
+	}
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Welcome to Markdown Neuraxis",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Select your notes folder to get started",
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = { folderPicker.launch(null) }) {
-            Icon(Icons.Default.FolderOpen, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Choose Folder")
-        }
-        if (onCancel != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(onClick = onCancel) {
-                Text("Cancel")
-            }
-        }
-    }
+	Column(
+		modifier = modifier
+			.fillMaxSize()
+			.padding(24.dp),
+		verticalArrangement = Arrangement.Center,
+		horizontalAlignment = Alignment.CenterHorizontally
+	) {
+		Text(
+			text = "Welcome to Markdown Neuraxis",
+			style = MaterialTheme.typography.headlineMedium
+		)
+		Spacer(modifier = Modifier.height(16.dp))
+		Text(
+			text = "Select your notes folder to get started",
+			style = MaterialTheme.typography.bodyLarge
+		)
+		Spacer(modifier = Modifier.height(32.dp))
+		Button(onClick = { folderPicker.launch(null) }) {
+			Icon(Icons.Default.FolderOpen, contentDescription = null)
+			Spacer(modifier = Modifier.width(8.dp))
+			Text("Choose Folder")
+		}
+		if (onCancel != null) {
+			Spacer(modifier = Modifier.height(12.dp))
+			OutlinedButton(onClick = onCancel) {
+				Text("Cancel")
+			}
+		}
+	}
 }

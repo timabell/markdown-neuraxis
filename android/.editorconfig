@@ -1,0 +1,11 @@
+[*.{kt,kts}]
+ktlint_code_style = android_studio
+max_line_length = 120
+# Allow wildcard imports (common in Compose)
+ktlint_standard_no-wildcard-imports = disabled
+# Allow PascalCase for @Composable functions (Compose convention)
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
+# Disable ktlint for generated UniFFI bindings
+[app/src/main/java/uniffi/**/*.kt]
+ktlint_standard = disabled

@@ -19,60 +19,60 @@ private const val TAG = "MarkdownNeuraxis"
 
 @Composable
 fun FileTreeNodeItem(
-    node: FileTreeNode,
-    notesUri: Uri,
-    onFileSelected: (DocumentFile) -> Unit,
-    onFolderToggle: (FileTreeNode.Folder) -> Unit
+	node: FileTreeNode,
+	notesUri: Uri,
+	onFileSelected: (DocumentFile) -> Unit,
+	onFolderToggle: (FileTreeNode.Folder) -> Unit
 ) {
-    val context = LocalContext.current
-    val indentPadding = (node.depth * 16).dp
+	val context = LocalContext.current
+	val indentPadding = (node.depth * 16).dp
 
-    when (node) {
-        is FileTreeNode.Folder -> {
-            ListItem(
-                headlineContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (node.isExpanded) "▼" else "▶",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.width(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = node.name,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-                    }
-                },
-                modifier = Modifier
-                    .clickable { onFolderToggle(node) }
-                    .padding(start = indentPadding)
-            )
-        }
-        is FileTreeNode.File -> {
-            ListItem(
-                headlineContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(modifier = Modifier.width(20.dp))
-                        Text(node.name)
-                    }
-                },
-                modifier = Modifier
-                    .clickable {
-                        val docFile = node.documentFile
-                            ?: resolveDocumentFile(context, notesUri, node.relativePath)
-                        if (docFile != null) {
-                            node.documentFile = docFile
-                            onFileSelected(docFile)
-                        } else {
-                            Log.e(TAG, "Could not resolve file: ${node.relativePath}")
-                        }
-                    }
-                    .padding(start = indentPadding)
-            )
-        }
-    }
-    HorizontalDivider()
+	when (node) {
+		is FileTreeNode.Folder -> {
+			ListItem(
+				headlineContent = {
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						Text(
+							text = if (node.isExpanded) "▼" else "▶",
+							style = MaterialTheme.typography.bodySmall,
+							modifier = Modifier.width(16.dp)
+						)
+						Spacer(modifier = Modifier.width(4.dp))
+						Text(
+							text = node.name,
+							style = MaterialTheme.typography.bodyLarge.copy(
+								fontWeight = FontWeight.Medium
+							)
+						)
+					}
+				},
+				modifier = Modifier
+					.clickable { onFolderToggle(node) }
+					.padding(start = indentPadding)
+			)
+		}
+		is FileTreeNode.File -> {
+			ListItem(
+				headlineContent = {
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						Spacer(modifier = Modifier.width(20.dp))
+						Text(node.name)
+					}
+				},
+				modifier = Modifier
+					.clickable {
+						val docFile = node.documentFile
+							?: resolveDocumentFile(context, notesUri, node.relativePath)
+						if (docFile != null) {
+							node.documentFile = docFile
+							onFileSelected(docFile)
+						} else {
+							Log.e(TAG, "Could not resolve file: ${node.relativePath}")
+						}
+					}
+					.padding(start = indentPadding)
+			)
+		}
+	}
+	HorizontalDivider()
 }

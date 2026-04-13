@@ -22,8 +22,8 @@ private const val FILE_CACHE_NAME = "file_cache.txt"
  * it is resolved on demand when the user clicks a file.
  */
 data class FileWithPath(
-    val file: DocumentFile?,
-    val pathSegments: List<String>
+	val file: DocumentFile?,
+	val pathSegments: List<String>
 )
 
 /**
@@ -31,20 +31,16 @@ data class FileWithPath(
  * Uses DocumentsContract + ContentResolver.query() directly instead of DocumentFile.listFiles()
  * for dramatically better performance (single cursor query per folder vs N+1 queries).
  */
-suspend fun scanMarkdownFilesProgressively(
-    context: Context,
-    folderUri: Uri,
-    onBatch: (List<FileWithPath>) -> Unit
-) {
-    withContext(Dispatchers.IO) {
-        val rootDocId = DocumentsContract.getTreeDocumentId(folderUri)
-        val mainThreadCallback: suspend (List<FileWithPath>) -> Unit = { files ->
-            withContext(Dispatchers.Main) {
-                onBatch(files)
-            }
-        }
-        scanFolderRecursively(context, folderUri, rootDocId, emptyList(), mainThreadCallback)
-    }
+suspend fun scanMarkdownFilesProgressively(context: Context, folderUri: Uri, onBatch: (List<FileWithPath>) -> Unit) {
+	withContext(Dispatchers.IO) {
+		val rootDocId = DocumentsContract.getTreeDocumentId(folderUri)
+		val mainThreadCallback: suspend (List<FileWithPath>) -> Unit = { files ->
+			withContext(Dispatchers.Main) {
+				onBatch(files)
+			}
+		}
+		scanFolderRecursively(context, folderUri, rootDocId, emptyList(), mainThreadCallback)
+	}
 }
 
 /**
@@ -53,66 +49,66 @@ suspend fun scanMarkdownFilesProgressively(
  * using coroutines, so IPC latency is overlapped across branches of the tree.
  */
 private suspend fun scanFolderRecursively(
-    context: Context,
-    treeUri: Uri,
-    parentDocId: String,
-    pathPrefix: List<String>,
-    onBatch: suspend (List<FileWithPath>) -> Unit
+	context: Context,
+	treeUri: Uri,
+	parentDocId: String,
+	pathPrefix: List<String>,
+	onBatch: suspend (List<FileWithPath>) -> Unit
 ) {
-    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
-    val projection = arrayOf(
-        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-        DocumentsContract.Document.COLUMN_MIME_TYPE
-    )
+	val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+	val projection = arrayOf(
+		DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+		DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+		DocumentsContract.Document.COLUMN_MIME_TYPE
+	)
 
-    val cursor = context.contentResolver.query(childrenUri, projection, null, null, null)
-    if (cursor == null) {
-        Log.w(TAG, "ContentResolver query returned null for: $childrenUri")
-        return
-    }
+	val cursor = context.contentResolver.query(childrenUri, projection, null, null, null)
+	if (cursor == null) {
+		Log.w(TAG, "ContentResolver query returned null for: $childrenUri")
+		return
+	}
 
-    val subfolders = mutableListOf<Pair<String, String>>() // docId to name
-    val fileBatch = mutableListOf<FileWithPath>()
+	val subfolders = mutableListOf<Pair<String, String>>() // docId to name
+	val fileBatch = mutableListOf<FileWithPath>()
 
-    cursor.use {
-        val idIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-        val nameIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-        val mimeIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+	cursor.use {
+		val idIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+		val nameIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+		val mimeIndex = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
 
-        while (it.moveToNext()) {
-            val docId = it.getString(idIndex) ?: continue
-            val name = it.getString(nameIndex) ?: continue
-            val mimeType = it.getString(mimeIndex) ?: ""
+		while (it.moveToNext()) {
+			val docId = it.getString(idIndex) ?: continue
+			val name = it.getString(nameIndex) ?: continue
+			val mimeType = it.getString(mimeIndex) ?: ""
 
-            if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
-                subfolders.add(docId to name)
-            } else if (name.endsWith(".md")) {
-                fileBatch.add(FileWithPath(null, pathPrefix + name))
-                if (fileBatch.size >= FILE_SCAN_BATCH_SIZE) {
-                    onBatch(fileBatch.toList())
-                    fileBatch.clear()
-                    yield()
-                }
-            }
-        }
-    }
+			if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+				subfolders.add(docId to name)
+			} else if (name.endsWith(".md")) {
+				fileBatch.add(FileWithPath(null, pathPrefix + name))
+				if (fileBatch.size >= FILE_SCAN_BATCH_SIZE) {
+					onBatch(fileBatch.toList())
+					fileBatch.clear()
+					yield()
+				}
+			}
+		}
+	}
 
-    // Emit remaining files from this folder
-    if (fileBatch.isNotEmpty()) {
-        onBatch(fileBatch.toList())
-    }
+	// Emit remaining files from this folder
+	if (fileBatch.isNotEmpty()) {
+		onBatch(fileBatch.toList())
+	}
 
-    // Scan subfolders in parallel
-    if (subfolders.isNotEmpty()) {
-        coroutineScope {
-            subfolders.map { (docId, name) ->
-                async {
-                    scanFolderRecursively(context, treeUri, docId, pathPrefix + name, onBatch)
-                }
-            }.awaitAll()
-        }
-    }
+	// Scan subfolders in parallel
+	if (subfolders.isNotEmpty()) {
+		coroutineScope {
+			subfolders.map { (docId, name) ->
+				async {
+					scanFolderRecursively(context, treeUri, docId, pathPrefix + name, onBatch)
+				}
+			}.awaitAll()
+		}
+	}
 }
 
 /**
@@ -121,88 +117,88 @@ private suspend fun scanFolderRecursively(
  * which does a full directory listing per path segment.
  */
 fun resolveDocumentFile(context: Context, notesUri: Uri, relativePath: String): DocumentFile? {
-    val segments = relativePath.split("/")
-    var currentDocId = DocumentsContract.getTreeDocumentId(notesUri)
+	val segments = relativePath.split("/")
+	var currentDocId = DocumentsContract.getTreeDocumentId(notesUri)
 
-    for (segment in segments) {
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(notesUri, currentDocId)
-        val projection = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME
-        )
-        var foundId: String? = null
-        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-            val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-            val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-            while (cursor.moveToNext()) {
-                if (cursor.getString(nameIndex) == segment) {
-                    foundId = cursor.getString(idIndex)
-                    break
-                }
-            }
-        }
-        currentDocId = foundId ?: return null
-    }
+	for (segment in segments) {
+		val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(notesUri, currentDocId)
+		val projection = arrayOf(
+			DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+			DocumentsContract.Document.COLUMN_DISPLAY_NAME
+		)
+		var foundId: String? = null
+		context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+			val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+			val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+			while (cursor.moveToNext()) {
+				if (cursor.getString(nameIndex) == segment) {
+					foundId = cursor.getString(idIndex)
+					break
+				}
+			}
+		}
+		currentDocId = foundId ?: return null
+	}
 
-    val docUri = DocumentsContract.buildDocumentUriUsingTree(notesUri, currentDocId)
-    return DocumentFile.fromSingleUri(context, docUri)
+	val docUri = DocumentsContract.buildDocumentUriUsingTree(notesUri, currentDocId)
+	return DocumentFile.fromSingleUri(context, docUri)
 }
 
 fun readFileContent(context: Context, file: DocumentFile): String? {
-    return try {
-        context.contentResolver.openInputStream(file.uri)?.use { stream ->
-            stream.bufferedReader().readText()
-        }
-    } catch (e: Exception) {
-        Log.e(TAG, "Error reading file: ${file.uri}", e)
-        null
-    }
+	return try {
+		context.contentResolver.openInputStream(file.uri)?.use { stream ->
+			stream.bufferedReader().readText()
+		}
+	} catch (e: Exception) {
+		Log.e(TAG, "Error reading file: ${file.uri}", e)
+		null
+	}
 }
 
 fun writeFileContent(context: Context, file: DocumentFile, content: String): Boolean {
-    return try {
-        val stream = context.contentResolver.openOutputStream(file.uri, "wt")
-        if (stream == null) {
-            Log.e(TAG, "Failed to open output stream for: ${file.uri}")
-            return false
-        }
-        stream.use { outputStream ->
-            outputStream.bufferedWriter().use { writer ->
-                writer.write(content)
-            }
-        }
-        true
-    } catch (e: Exception) {
-        Log.e(TAG, "Error writing file: ${file.uri}", e)
-        false
-    }
+	return try {
+		val stream = context.contentResolver.openOutputStream(file.uri, "wt")
+		if (stream == null) {
+			Log.e(TAG, "Failed to open output stream for: ${file.uri}")
+			return false
+		}
+		stream.use { outputStream ->
+			outputStream.bufferedWriter().use { writer ->
+				writer.write(content)
+			}
+		}
+		true
+	} catch (e: Exception) {
+		Log.e(TAG, "Error writing file: ${file.uri}", e)
+		false
+	}
 }
 
 fun loadFileCache(context: Context): List<String> {
-    val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
-    return if (cacheFile.exists()) {
-        try {
-            cacheFile.readLines().filter { it.isNotBlank() }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error loading file cache", e)
-            emptyList()
-        }
-    } else {
-        emptyList()
-    }
+	val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
+	return if (cacheFile.exists()) {
+		try {
+			cacheFile.readLines().filter { it.isNotBlank() }
+		} catch (e: Exception) {
+			Log.w(TAG, "Error loading file cache", e)
+			emptyList()
+		}
+	} else {
+		emptyList()
+	}
 }
 
 fun clearFileCache(context: Context) {
-    val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
-    cacheFile.delete()
+	val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
+	cacheFile.delete()
 }
 
 fun saveFileCache(context: Context, paths: List<String>) {
-    val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
-    try {
-        cacheFile.writeText(paths.joinToString("\n"))
-        Log.d(TAG, "Saved ${paths.size} paths to cache")
-    } catch (e: Exception) {
-        Log.e(TAG, "Error saving file cache", e)
-    }
+	val cacheFile = java.io.File(context.filesDir, FILE_CACHE_NAME)
+	try {
+		cacheFile.writeText(paths.joinToString("\n"))
+		Log.d(TAG, "Saved ${paths.size} paths to cache")
+	} catch (e: Exception) {
+		Log.e(TAG, "Error saving file cache", e)
+	}
 }

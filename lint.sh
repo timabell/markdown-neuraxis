@@ -8,7 +8,7 @@ cargo test
 
 # Android lint
 source ./set-android-envs.sh
-(cd android && ./gradlew lint)
+(cd android && ./gradlew ktlintFormat lint)
 
 ./build-android.sh
 

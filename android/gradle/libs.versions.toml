@@ -1,6 +1,7 @@
 [versions]
 agp = "8.7.3"
 kotlin = "2.0.21"
+ktlint = "12.1.0"
 coreKtx = "1.15.0"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
@@ -26,3 +27,4 @@ jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
