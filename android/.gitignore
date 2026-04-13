@@ -19,3 +19,6 @@ gradle/wrapper/gradle-wrapper.jar
 
 # Signing keys
 release.keystore
+
+# Error logs
+.kotlin/errors/
