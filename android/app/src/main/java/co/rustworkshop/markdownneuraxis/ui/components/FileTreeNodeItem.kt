@@ -4,6 +4,8 @@ import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,7 +24,8 @@ fun FileTreeNodeItem(
 	node: FileTreeNode,
 	notesUri: Uri,
 	onFileSelected: (DocumentFile) -> Unit,
-	onFolderToggle: (FileTreeNode.Folder) -> Unit
+	onFolderToggle: (FileTreeNode.Folder) -> Unit,
+	onNewFileInFolder: ((relativePath: String) -> Unit)? = null
 ) {
 	val context = LocalContext.current
 	val indentPadding = (node.depth * 16).dp
@@ -45,6 +48,22 @@ fun FileTreeNodeItem(
 							)
 						)
 					}
+				},
+				trailingContent = if (onNewFileInFolder != null) {
+					{
+						IconButton(
+							onClick = { onNewFileInFolder(node.relativePath) },
+							modifier = Modifier.size(32.dp)
+						) {
+							Icon(
+								Icons.Default.Add,
+								contentDescription = "New file in ${node.name}",
+								modifier = Modifier.size(20.dp)
+							)
+						}
+					}
+				} else {
+					null
 				},
 				modifier = Modifier
 					.clickable { onFolderToggle(node) }

@@ -34,6 +34,7 @@ fun FileListScreen(
 	hasScannedThisSession: Boolean,
 	onHasScannedChange: (Boolean) -> Unit,
 	onFileSelected: (DocumentFile) -> Unit,
+	onNewFile: ((folderRelativePath: String) -> Unit)? = null,
 	modifier: Modifier = Modifier
 ) {
 	val context = LocalContext.current
@@ -198,7 +199,8 @@ fun FileListScreen(
 								onFolderToggle = {
 									discoveryState.tree.toggleFolder(it)
 									onTreeVersionIncrement()
-								}
+								},
+								onNewFileInFolder = onNewFile
 							)
 						}
 					}

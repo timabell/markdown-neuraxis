@@ -182,7 +182,11 @@ class FileTree {
 		return stalePaths.size
 	}
 
-	private fun removeFile(relativePath: String) {
+	/**
+	 * Remove a file from the tree by its relative path.
+	 * Also cleans up any empty parent folders.
+	 */
+	fun removeFile(relativePath: String) {
 		fileMap.remove(relativePath) ?: return
 
 		val segments = relativePath.split("/")
@@ -233,6 +237,21 @@ class FileTree {
 		}
 		flatten(root)
 		return result
+	}
+
+	/**
+	 * Find the relative path for a DocumentFile by matching its URI.
+	 * Returns null if not found in the tree.
+	 */
+	fun findRelativePath(documentFile: DocumentFile): String? {
+		val targetUri = documentFile.uri.toString()
+		for ((path, fileNode) in fileMap) {
+			val nodeDoc = fileNode.documentFile
+			if (nodeDoc != null && nodeDoc.uri.toString() == targetUri) {
+				return path
+			}
+		}
+		return null
 	}
 }
 

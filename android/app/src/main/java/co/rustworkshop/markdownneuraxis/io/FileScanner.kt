@@ -202,3 +202,249 @@ fun saveFileCache(context: Context, paths: List<String>) {
 		Log.e(TAG, "Error saving file cache", e)
 	}
 }
+
+/**
+ * Get the document ID for a folder by relative path.
+ * Returns null if the folder doesn't exist.
+ */
+fun getFolderDocId(context: Context, notesUri: Uri, relativePath: String): String? {
+	if (relativePath.isEmpty()) {
+		return DocumentsContract.getTreeDocumentId(notesUri)
+	}
+
+	val segments = relativePath.split("/")
+	var currentDocId = DocumentsContract.getTreeDocumentId(notesUri)
+
+	for (segment in segments) {
+		val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(notesUri, currentDocId)
+		val projection = arrayOf(
+			DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+			DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+			DocumentsContract.Document.COLUMN_MIME_TYPE
+		)
+		var foundId: String? = null
+		context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+			val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+			val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+			val mimeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+			while (cursor.moveToNext()) {
+				val name = cursor.getString(nameIndex)
+				val mimeType = cursor.getString(mimeIndex) ?: ""
+				if (name == segment && mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+					foundId = cursor.getString(idIndex)
+					break
+				}
+			}
+		}
+		currentDocId = foundId ?: return null
+	}
+
+	return currentDocId
+}
+
+/**
+ * Generate a unique filename in the given folder.
+ * Returns "new.md", "new-1.md", "new-2.md", etc.
+ */
+fun generateUniqueFilename(context: Context, treeUri: Uri, folderDocId: String): String {
+	val existingNames = mutableSetOf<String>()
+	val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, folderDocId)
+	val projection = arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+
+	context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+		val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+		while (cursor.moveToNext()) {
+			existingNames.add(cursor.getString(nameIndex).lowercase())
+		}
+	}
+
+	if ("new.md" !in existingNames) {
+		return "new.md"
+	}
+
+	var counter = 1
+	while ("new-$counter.md" in existingNames) {
+		counter++
+	}
+	return "new-$counter.md"
+}
+
+/**
+ * Create a new markdown file in the given parent folder.
+ * Returns the created DocumentFile or null on failure.
+ * @param displayName The filename with .md extension (e.g., "new.md")
+ * @param treeUri The root tree URI (needed for DocumentsContract operations)
+ */
+fun createNewFile(context: Context, treeUri: Uri, parentFolder: DocumentFile, displayName: String): DocumentFile? {
+	return try {
+		val parentDocId = DocumentsContract.getDocumentId(parentFolder.uri)
+		// Use application/octet-stream to prevent SAF from adding extensions
+		val newDocUri = DocumentsContract.createDocument(
+			context.contentResolver,
+			DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocId),
+			"application/octet-stream",
+			displayName
+		)
+		newDocUri?.let { DocumentFile.fromSingleUri(context, it) }
+	} catch (e: Exception) {
+		Log.e(TAG, "Error creating file: $displayName", e)
+		null
+	}
+}
+
+/**
+ * Check if a file exists at the given relative path.
+ */
+fun fileExists(context: Context, notesUri: Uri, relativePath: String): Boolean {
+	return resolveDocumentFile(context, notesUri, relativePath) != null
+}
+
+/**
+ * Create nested folders as needed for the given relative path.
+ * Returns the deepest folder's DocumentFile or null on failure.
+ */
+fun createFolderPath(context: Context, notesUri: Uri, relativePath: String): DocumentFile? {
+	if (relativePath.isEmpty()) {
+		return DocumentFile.fromTreeUri(context, notesUri)
+	}
+
+	val segments = relativePath.split("/")
+	var currentDocId = DocumentsContract.getTreeDocumentId(notesUri)
+
+	for (segment in segments) {
+		val existingDocId = findChildFolderDocId(context, notesUri, currentDocId, segment)
+		currentDocId = existingDocId ?: run {
+			val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(notesUri, currentDocId)
+			val newFolderUri = DocumentsContract.createDocument(
+				context.contentResolver,
+				parentDocUri,
+				DocumentsContract.Document.MIME_TYPE_DIR,
+				segment
+			) ?: return null
+			DocumentsContract.getDocumentId(newFolderUri)
+		}
+	}
+
+	val folderUri = DocumentsContract.buildDocumentUriUsingTree(notesUri, currentDocId)
+	return DocumentFile.fromSingleUri(context, folderUri)
+}
+
+/**
+ * Find a child folder's document ID by name within a parent folder.
+ */
+private fun findChildFolderDocId(context: Context, treeUri: Uri, parentDocId: String, folderName: String): String? {
+	val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+	val projection = arrayOf(
+		DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+		DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+		DocumentsContract.Document.COLUMN_MIME_TYPE
+	)
+
+	context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+		val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+		val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+		val mimeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+
+		while (cursor.moveToNext()) {
+			val name = cursor.getString(nameIndex)
+			val mimeType = cursor.getString(mimeIndex)
+			if (name == folderName && mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+				return cursor.getString(idIndex)
+			}
+		}
+	}
+	return null
+}
+
+/**
+ * Move or rename a file. Handles both same-folder rename and cross-folder move.
+ * For cross-folder moves: reads content, creates new file, writes content, deletes old.
+ * Returns the new DocumentFile or null on failure.
+ */
+fun moveFile(context: Context, notesUri: Uri, oldPath: String, newPath: String): DocumentFile? {
+	val oldFile = resolveDocumentFile(context, notesUri, oldPath) ?: return null
+
+	val oldSegments = oldPath.split("/")
+	val newSegments = newPath.split("/")
+	val oldParentPath = if (oldSegments.size > 1) oldSegments.dropLast(1).joinToString("/") else ""
+	val newParentPath = if (newSegments.size > 1) newSegments.dropLast(1).joinToString("/") else ""
+	val newFileName = newSegments.last()
+
+	// Same folder: just rename using DocumentsContract directly
+	if (oldParentPath == newParentPath) {
+		return try {
+			val oldDocId = DocumentsContract.getDocumentId(oldFile.uri)
+			val docUri = DocumentsContract.buildDocumentUriUsingTree(notesUri, oldDocId)
+			val renamedUri = DocumentsContract.renameDocument(context.contentResolver, docUri, newFileName)
+			if (renamedUri != null) {
+				DocumentFile.fromSingleUri(context, renamedUri)
+			} else {
+				Log.e(TAG, "Failed to rename file from $oldPath to $newPath")
+				null
+			}
+		} catch (e: Exception) {
+			Log.e(TAG, "Error renaming file from $oldPath to $newPath", e)
+			null
+		}
+	}
+
+	// Cross-folder move: read content, create new, write, delete old
+	val content = readFileContent(context, oldFile) ?: return null
+
+	// Create parent folders if needed
+	val newParentFolder = createFolderPath(context, notesUri, newParentPath) ?: return null
+
+	// Create new file
+	val newFile = createNewFile(context, notesUri, newParentFolder, newFileName) ?: return null
+
+	// Write content
+	if (!writeFileContent(context, newFile, content)) {
+		newFile.delete()
+		return null
+	}
+
+	// Delete old file
+	check(oldFile.delete()) { "Failed to delete old file after move: $oldPath" }
+
+	// Cleanup empty parent folders
+	cleanupEmptyFolders(context, notesUri, oldParentPath)
+
+	return newFile
+}
+
+/**
+ * Remove empty parent folders up to the root.
+ */
+fun cleanupEmptyFolders(context: Context, notesUri: Uri, path: String) {
+	if (path.isEmpty()) return
+
+	val segments = path.split("/")
+
+	// Work from deepest to shallowest
+	for (i in segments.size downTo 1) {
+		val folderPath = segments.take(i).joinToString("/")
+		val folderDocId = getFolderDocId(context, notesUri, folderPath) ?: continue
+
+		// Check if folder is empty
+		val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(notesUri, folderDocId)
+		val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+		var hasChildren = false
+
+		context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+			hasChildren = cursor.moveToFirst()
+		}
+
+		if (!hasChildren) {
+			val docUri = DocumentsContract.buildDocumentUriUsingTree(notesUri, folderDocId)
+			try {
+				DocumentsContract.deleteDocument(context.contentResolver, docUri)
+				Log.d(TAG, "Deleted empty folder: $folderPath")
+			} catch (e: Exception) {
+				Log.w(TAG, "Failed to delete empty folder: $folderPath", e)
+				break
+			}
+		} else {
+			break
+		}
+	}
+}
