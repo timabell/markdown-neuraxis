@@ -311,6 +311,24 @@ hr {
     width: auto;
 }
 
+/* Checkbox styles for task lists */
+.list-item.has-checkbox {
+    list-style-type: none;
+}
+
+.list-item.has-checkbox .list-item-content.clickable-block {
+    display: inline;
+    width: auto;
+}
+
+.checkbox {
+    cursor: pointer;
+    margin-right: 6px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--blue);
+}
+
 /* Code block styles */
 .code-block {
     margin: 16px 0;

@@ -165,24 +165,76 @@ fn convert_block_into(block: &engine::Block, result: &mut Vec<Block>) {
         return;
     }
 
-    let (kind, heading_level, list_marker, list_ordered) = match &block.kind {
+    let (
+        kind,
+        heading_level,
+        list_marker,
+        list_ordered,
+        checkbox_checked,
+        checkbox_start,
+        checkbox_end,
+    ) = match &block.kind {
         BlockKind::Root => unreachable!(), // Handled above
-        BlockKind::Paragraph => ("paragraph".to_string(), 0, None, None),
-        BlockKind::Heading { level } => ("heading".to_string(), *level, None, None),
-        BlockKind::List { ordered } => ("list".to_string(), 0, None, Some(*ordered)),
-        BlockKind::ListItem { marker } => ("list_item".to_string(), 0, Some(marker.clone()), None),
-        BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None, None),
-        BlockKind::ThematicBreak => ("thematic_break".to_string(), 0, None, None),
-        BlockKind::BlockQuote => ("block_quote".to_string(), 0, None, None),
-        BlockKind::Table => ("table".to_string(), 0, None, None),
+        BlockKind::Paragraph => ("paragraph".to_string(), 0, None, None, None, None, None),
+        BlockKind::Heading { level } => {
+            ("heading".to_string(), *level, None, None, None, None, None)
+        }
+        BlockKind::List { ordered } => (
+            "list".to_string(),
+            0,
+            None,
+            Some(*ordered),
+            None,
+            None,
+            None,
+        ),
+        BlockKind::ListItem { marker, checkbox } => {
+            let (checked, start, end) = match checkbox {
+                Some(cb) => (
+                    Some(cb.checked),
+                    Some(cb.byte_range.start as u64),
+                    Some(cb.byte_range.end as u64),
+                ),
+                None => (None, None, None),
+            };
+            (
+                "list_item".to_string(),
+                0,
+                Some(marker.clone()),
+                None,
+                checked,
+                start,
+                end,
+            )
+        }
+        BlockKind::FencedCode { .. } => ("code_fence".to_string(), 0, None, None, None, None, None),
+        BlockKind::ThematicBreak => (
+            "thematic_break".to_string(),
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ),
+        BlockKind::BlockQuote => ("block_quote".to_string(), 0, None, None, None, None, None),
+        BlockKind::Table => ("table".to_string(), 0, None, None, None, None, None),
         BlockKind::TableRow { is_header } => {
             if *is_header {
-                ("table_header_row".to_string(), 0, None, None)
+                (
+                    "table_header_row".to_string(),
+                    0,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
             } else {
-                ("table_row".to_string(), 0, None, None)
+                ("table_row".to_string(), 0, None, None, None, None, None)
             }
         }
-        BlockKind::TableCell => ("table_cell".to_string(), 0, None, None),
+        BlockKind::TableCell => ("table_cell".to_string(), 0, None, None, None, None, None),
     };
 
     // Convert engine segments (engine now provides flat segments)
@@ -206,6 +258,9 @@ fn convert_block_into(block: &engine::Block, result: &mut Vec<Block>) {
         heading_level,
         list_marker,
         list_ordered,
+        checkbox_checked,
+        checkbox_start,
+        checkbox_end,
         segments,
         children,
         source_start: block.node_range.start as u64,
@@ -228,6 +283,12 @@ pub struct Block {
     pub list_marker: Option<String>,
     /// Whether this is an ordered list (only set for kind="list")
     pub list_ordered: Option<bool>,
+    /// Checkbox state: None if not a checkbox, Some(true) if checked, Some(false) if unchecked
+    pub checkbox_checked: Option<bool>,
+    /// Byte offset where checkbox starts (for editing)
+    pub checkbox_start: Option<u64>,
+    /// Byte offset where checkbox ends (for editing)
+    pub checkbox_end: Option<u64>,
     /// Parsed inline segments (wiki-links, URLs, plain text)
     pub segments: Vec<TextSegment>,
     /// Child blocks (e.g., nested list items)

@@ -62,6 +62,15 @@ pub enum InlineNode {
     SoftBreak,
 }
 
+/// Checkbox state for task list items (`- [ ]` or `- [x]`)
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckboxState {
+    /// Whether the checkbox is checked
+    pub checked: bool,
+    /// Byte range of the checkbox in source (for editing)
+    pub byte_range: Range<usize>,
+}
+
 /// The kind of block
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockKind {
@@ -69,8 +78,11 @@ pub enum BlockKind {
     Root,
     /// List container (wraps LIST_ITEMs)
     List { ordered: bool },
-    /// Individual list item
-    ListItem { marker: String },
+    /// Individual list item, optionally with a checkbox
+    ListItem {
+        marker: String,
+        checkbox: Option<CheckboxState>,
+    },
     /// Blockquote (can span multiple lines)
     BlockQuote,
     /// Paragraph
@@ -478,6 +490,48 @@ fn process_list(
     })
 }
 
+/// Extract checkbox state from a LIST_ITEM node, if present.
+///
+/// Returns (checkbox_state, checkbox_len) where:
+/// - checkbox_state.byte_range covers only "[ ]" or "[x]" - the exact text to replace on toggle
+/// - checkbox_len includes trailing whitespace - used to calculate where content text starts
+fn extract_checkbox(node: &SyntaxNode) -> Option<(CheckboxState, usize)> {
+    // Find CHECKBOX child
+    let checkbox_node = node.children().find(|c| c.kind() == SyntaxKind::CHECKBOX)?;
+
+    let range = checkbox_node.text_range();
+    let byte_range: Range<usize> = (range.start().into())..(range.end().into());
+
+    // Determine checked state by examining the middle child
+    // Structure: LBRACKET, (WHITESPACE or TEXT), RBRACKET
+    let checked = checkbox_node
+        .children_with_tokens()
+        .filter_map(|el| match el {
+            SyntaxElement::Token(t) => Some(t),
+            _ => None,
+        })
+        .nth(1) // Second token (after LBRACKET)
+        .map(|t| t.kind() == SyntaxKind::TEXT && (t.text() == "x" || t.text() == "X"))
+        .unwrap_or(false);
+
+    // Calculate total length including trailing whitespace after checkbox
+    // Look for whitespace immediately after the checkbox
+    let mut total_len = byte_range.len();
+    if let Some(SyntaxElement::Token(t)) = checkbox_node.next_sibling_or_token()
+        && t.kind() == SyntaxKind::WHITESPACE
+    {
+        total_len += t.text().len();
+    }
+
+    Some((
+        CheckboxState {
+            checked,
+            byte_range,
+        },
+        total_len,
+    ))
+}
+
 fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Option<Block> {
     let text_range = node.text_range();
     let node_range: Range<usize> = (text_range.start().into())..(text_range.end().into());
@@ -489,8 +543,13 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
     let marker = extract_list_marker(first_line);
     let marker_len = marker.len();
 
-    // Content starts after marker, ends before newline
-    let content_start = node_range.start + marker_len;
+    // Extract checkbox if present
+    let (checkbox, checkbox_len) = extract_checkbox(&node)
+        .map(|(cb, len)| (Some(cb), len))
+        .unwrap_or((None, 0));
+
+    // Content starts after marker (and checkbox if present), ends before newline
+    let content_start = node_range.start + marker_len + checkbox_len;
     let fallback_content_end = node_range.start + first_line_content_end;
 
     // Process children (nested content)
@@ -556,7 +615,7 @@ fn process_list_item(source: &str, node: SyntaxNode, anchors: &[Anchor]) -> Opti
 
     Some(Block {
         id,
-        kind: BlockKind::ListItem { marker },
+        kind: BlockKind::ListItem { marker, checkbox },
         node_range,
         segments,
         content,
@@ -1194,11 +1253,25 @@ mod tests {
 
         let prefix = "  ".repeat(indent);
 
-        // Block header
+        // Block header - special handling for ListItem to omit checkbox: None
+        let kind_str = match &block.kind {
+            BlockKind::ListItem { marker, checkbox } => {
+                if let Some(cb) = checkbox {
+                    format!(
+                        "ListItem {{ marker: {:?}, checkbox: {} }}",
+                        marker,
+                        if cb.checked { "[x]" } else { "[ ]" }
+                    )
+                } else {
+                    format!("ListItem {{ marker: {:?} }}", marker)
+                }
+            }
+            other => format!("{:?}", other),
+        };
         writeln!(
             out,
-            "{}{:?} [{}..{}]",
-            prefix, block.kind, block.node_range.start, block.node_range.end
+            "{}{} [{}..{}]",
+            prefix, kind_str, block.node_range.start, block.node_range.end
         )
         .unwrap();
 

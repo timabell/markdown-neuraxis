@@ -139,6 +139,27 @@ fun FileViewScreen(
 		onEditingChanged(editingBlockId != null, saveEdit)
 	}
 
+	// Toggle checkbox state in file
+	val toggleCheckbox: (Block) -> Unit = { item ->
+		val checkboxStart = item.checkboxStart?.toInt()
+		val checkboxEnd = item.checkboxEnd?.toInt()
+		val checked = item.checkboxChecked
+		val currentContent = content
+
+		if (checkboxStart != null && checkboxEnd != null && checked != null && currentContent != null) {
+			val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
+			val newCheckbox = if (checked) "[ ]" else "[x]"
+			val before = String(utf8Bytes, 0, checkboxStart, Charsets.UTF_8)
+			val after = String(utf8Bytes, checkboxEnd, utf8Bytes.size - checkboxEnd, Charsets.UTF_8)
+			val newContent = before + newCheckbox + after
+
+			if (writeFileContent(context, file, newContent)) {
+				content = newContent
+				blocks = parseDocument(newContent)
+			}
+		}
+	}
+
 	val onWikiLinkClick: (String) -> Unit = { linkTarget ->
 		// First check if target matches a folder
 		val folder = fileTree.findFolderByName(linkTarget)
@@ -191,6 +212,7 @@ fun FileViewScreen(
 					blocks = currentBlocks,
 					depth = 0,
 					onWikiLinkClick = onWikiLinkClick,
+					onCheckboxToggle = toggleCheckbox,
 					editingBlockId = editingBlockId,
 					editText = editText,
 					onStartEdit = { blockId, start, end ->
@@ -232,6 +254,7 @@ private fun RenderBlockTree(
 	blocks: List<Block>,
 	depth: Int,
 	onWikiLinkClick: (String) -> Unit,
+	onCheckboxToggle: (Block) -> Unit,
 	editingBlockId: String?,
 	editText: TextFieldValue,
 	onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
@@ -243,6 +266,7 @@ private fun RenderBlockTree(
 			block = block,
 			depth = depth,
 			onWikiLinkClick = onWikiLinkClick,
+			onCheckboxToggle = onCheckboxToggle,
 			editingBlockId = editingBlockId,
 			editText = editText,
 			onStartEdit = onStartEdit,
@@ -256,6 +280,7 @@ private fun RenderBlockTree(
 				blocks = block.children,
 				depth = depth + 1,
 				onWikiLinkClick = onWikiLinkClick,
+				onCheckboxToggle = onCheckboxToggle,
 				editingBlockId = editingBlockId,
 				editText = editText,
 				onStartEdit = onStartEdit,
@@ -395,6 +420,7 @@ private fun RenderBlock(
 	block: Block,
 	depth: Int,
 	onWikiLinkClick: (String) -> Unit,
+	onCheckboxToggle: (Block) -> Unit,
 	editingBlockId: String?,
 	editText: TextFieldValue,
 	onStartEdit: (blockId: String, start: Int, end: Int) -> Unit,
@@ -460,14 +486,27 @@ private fun RenderBlock(
 			val ordered = block.listOrdered == true
 			Column {
 				block.children.forEachIndexed { index, item ->
-					val marker = if (ordered) "${index + 1}." else "•"
-					val markerWidth = if (ordered) 24.dp else 16.dp
+					val hasCheckbox = item.checkboxChecked != null
 					val isEditing = editingBlockId == item.id
-					Row(modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
-						Text(
-							text = marker,
-							modifier = Modifier.width(markerWidth)
-						)
+					Row(
+						modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+						verticalAlignment = Alignment.CenterVertically
+					) {
+						if (hasCheckbox) {
+							Checkbox(
+								checked = item.checkboxChecked == true,
+								onCheckedChange = { onCheckboxToggle(item) },
+								modifier = Modifier.size(24.dp)
+							)
+							Spacer(modifier = Modifier.width(8.dp))
+						} else {
+							val marker = if (ordered) "${index + 1}." else "•"
+							val markerWidth = if (ordered) 24.dp else 16.dp
+							Text(
+								text = marker,
+								modifier = Modifier.width(markerWidth)
+							)
+						}
 						Column {
 							if (isEditing) {
 								val focusRequester = remember { FocusRequester() }
@@ -514,6 +553,7 @@ private fun RenderBlock(
 									blocks = item.children,
 									depth = depth + 1,
 									onWikiLinkClick = onWikiLinkClick,
+									onCheckboxToggle = onCheckboxToggle,
 									editingBlockId = editingBlockId,
 									editText = editText,
 									onStartEdit = onStartEdit,

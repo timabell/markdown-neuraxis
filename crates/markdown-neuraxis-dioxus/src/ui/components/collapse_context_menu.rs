@@ -246,6 +246,7 @@ mod tests {
             id,
             BlockKind::ListItem {
                 marker: "- ".to_string(),
+                checkbox: None,
             },
             BlockContent::Leaf,
         )
@@ -256,6 +257,7 @@ mod tests {
             id,
             BlockKind::ListItem {
                 marker: "- ".to_string(),
+                checkbox: None,
             },
             BlockContent::Children(children),
         )

@@ -83,4 +83,6 @@ pub use anchors::{Anchor, AnchorId};
 pub use commands::Cmd;
 pub use document::{Document, Marker};
 pub use patch::Patch;
-pub use snapshot::{Block, BlockContent, BlockKind, InlineNode, InlineSegment, Snapshot};
+pub use snapshot::{
+    Block, BlockContent, BlockKind, CheckboxState, InlineNode, InlineSegment, Snapshot,
+};

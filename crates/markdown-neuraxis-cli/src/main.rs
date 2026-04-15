@@ -189,17 +189,24 @@ impl App {
                         }
                     }
                 }
-                BlockKind::ListItem { marker } => {
-                    // Use bullet for display
-                    let marker_display = if marker.trim().starts_with('-')
-                        || marker.trim().starts_with('*')
-                        || marker.trim().starts_with('+')
-                    {
-                        "•"
-                    } else {
-                        marker.trim()
+                BlockKind::ListItem { marker, checkbox } => {
+                    // Show checkbox or bullet marker
+                    let prefix = match checkbox {
+                        Some(cb) if cb.checked => "✅",
+                        Some(_) => "🔲",
+                        None => {
+                            // Use bullet for non-checkbox items
+                            if marker.trim().starts_with('-')
+                                || marker.trim().starts_with('*')
+                                || marker.trim().starts_with('+')
+                            {
+                                "•"
+                            } else {
+                                marker.trim()
+                            }
+                        }
                     };
-                    lines.push(format!("{} {}", marker_display, content));
+                    lines.push(format!("{} {}", prefix, content));
                     // Process nested content
                     if let BlockContent::Children(children) = &block.content {
                         for child in children {

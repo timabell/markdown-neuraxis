@@ -110,7 +110,7 @@ fn test_specific_outline_properties() {
 - YAML snapshots make complex tree structures human-readable in tests
 - `rstest` parameterization eliminates boilerplate for parser testing
 - Leverages battle-tested, widely-adopted Rust testing ecosystem
-- Interactive snapshot review with `cargo insta review`
+- Auto-update snapshots with `INSTA_UPDATE=always cargo test` (use git diff to review changes)
 
 ### Negative  
 - Adds external snapshot files to repository

@@ -3,8 +3,36 @@ use crate::ui::components::{
     paragraph::Paragraph, text_segment::InlineSegments, thematic_break::ThematicBreak,
 };
 use dioxus::prelude::*;
-use markdown_neuraxis_engine::editing::{AnchorId, Block, BlockContent, BlockKind, Cmd};
+use markdown_neuraxis_engine::editing::{
+    AnchorId, Block, BlockContent, BlockKind, CheckboxState, Cmd,
+};
 use std::collections::HashSet;
+
+/// Render a checkbox for task list items
+fn render_checkbox(checkbox: &Option<CheckboxState>, on_command: Callback<Cmd>) -> Element {
+    let Some(cb) = checkbox else {
+        return rsx! {};
+    };
+
+    let checked = cb.checked;
+    let byte_range = cb.byte_range.clone();
+
+    rsx! {
+        input {
+            r#type: "checkbox",
+            class: "checkbox",
+            checked: checked,
+            onclick: move |evt| {
+                evt.stop_propagation();
+                let new_text = if checked { "[ ]" } else { "[x]" };
+                on_command.call(Cmd::ReplaceRange {
+                    range: byte_range.clone(),
+                    text: new_text.to_string(),
+                });
+            }
+        }
+    }
+}
 
 /// Collapse toggle component for blocks with children
 #[component]
@@ -121,9 +149,10 @@ pub fn BlockRenderer(
                 rsx! {}
             }
         }
-        BlockKind::ListItem { .. } => {
+        BlockKind::ListItem { checkbox, .. } => {
             let has_children = matches!(&block.content, BlockContent::Children(c) if !c.is_empty());
             let block_id = block.id;
+            let checkbox = checkbox.clone();
 
             if is_focused {
                 // Use content_range() - excludes nested children
@@ -168,12 +197,19 @@ pub fn BlockRenderer(
                 }
             } else {
                 let segments = block.segments.clone();
+                let list_class = if checkbox.is_some() {
+                    "list-item has-checkbox"
+                } else {
+                    "list-item"
+                };
                 rsx! {
                     li {
-                        class: "list-item",
+                        class: "{list_class}",
                         if has_children {
                             CollapseToggle { block_id, is_collapsed, collapsed_ids, on_context_menu }
                         }
+                        // Render checkbox if present
+                        {render_checkbox(&checkbox, on_command)}
                         span {
                             class: "list-item-content clickable-block",
                             onclick: {

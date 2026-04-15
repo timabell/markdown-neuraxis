@@ -13,11 +13,11 @@ Heading { level: 2 } [88..103]
     Text [91..102] "ction Items"
 List { ordered: false } [103..230]
   children:
-    ListItem { marker: "- " } [103..136]
+    ListItem { marker: "- ", checkbox: [ ] } [103..136]
       segments:
         Text [109..114] "Call "
         WikiLink [114..135] target:"John] about proje"
-    ListItem { marker: "- " } [136..157]
+    ListItem { marker: "- ", checkbox: [x] } [136..157]
       segments:
         Text [142..156] "Review PR #123"
     ListItem { marker: "* " } [157..178]
