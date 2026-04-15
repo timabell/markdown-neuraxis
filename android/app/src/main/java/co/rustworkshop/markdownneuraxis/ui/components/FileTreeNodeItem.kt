@@ -75,7 +75,7 @@ fun FileTreeNodeItem(
 				headlineContent = {
 					Row(verticalAlignment = Alignment.CenterVertically) {
 						Spacer(modifier = Modifier.width(20.dp))
-						Text(node.name)
+						Text(node.displayName)
 					}
 				},
 				modifier = Modifier

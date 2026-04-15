@@ -24,7 +24,10 @@ sealed class FileTreeNode {
 		override val depth: Int,
 		override val relativePath: String,
 		var documentFile: DocumentFile? = null
-	) : FileTreeNode()
+	) : FileTreeNode() {
+		val displayName: String
+			get() = name.removeSuffix(".md")
+	}
 }
 
 /**
