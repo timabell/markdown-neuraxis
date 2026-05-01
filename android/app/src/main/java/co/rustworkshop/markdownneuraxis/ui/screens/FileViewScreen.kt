@@ -492,7 +492,7 @@ private fun RenderBlock(
 						modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
 						verticalAlignment = Alignment.CenterVertically
 					) {
-						if (hasCheckbox) {
+						if (hasCheckbox && !isEditing) {
 							Checkbox(
 								checked = item.checkboxChecked == true,
 								onCheckedChange = { onCheckboxToggle(item) },
