@@ -427,6 +427,7 @@ pub fn App(notes_path: PathBuf) -> Element {
 }
 
 /// Helper function to load and parse a document from an existing file
+#[allow(clippy::too_many_arguments)]
 fn load_existing_document(
     markdown_file: &MarkdownFile,
     notes_path: &Path,
@@ -473,6 +474,7 @@ fn load_existing_document(
 }
 
 /// Load a document or create a blank one if it doesn't exist
+#[allow(clippy::too_many_arguments)]
 pub fn load_document(
     markdown_file: MarkdownFile,
     notes_path: &Path,
@@ -532,6 +534,7 @@ pub fn load_document(
 }
 
 /// Navigate to a file from an absolute path
+#[allow(clippy::too_many_arguments)]
 fn navigate_to_path(
     file_path: PathBuf,
     notes_path: &Path,
@@ -611,6 +614,7 @@ fn generate_unique_filename(folder_path: &RelativePathBuf, notes_path: &Path) ->
 }
 
 /// Create a command callback for document editing
+#[allow(clippy::too_many_arguments)]
 fn create_command_callback(
     notes_path: Signal<PathBuf>,
     selected_file: Signal<Option<MarkdownFile>>,
@@ -639,12 +643,7 @@ fn create_command_callback(
                     Some(meta) => {
                         // Existing file: guard against external writes
                         // landing between load and save (ADR-0014 §5).
-                        match io::write_file_guarded(
-                            file.relative_path(),
-                            &path,
-                            &content,
-                            meta,
-                        ) {
+                        match io::write_file_guarded(file.relative_path(), &path, &content, meta) {
                             Ok(new_meta) => {
                                 open_file_meta.set(Some(new_meta));
                             }
