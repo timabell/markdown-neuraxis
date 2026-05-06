@@ -1,7 +1,11 @@
 use crate::models::FileTree;
-use relative_path::RelativePath;
+use relative_path::{RelativePath, RelativePathBuf};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
+use time::OffsetDateTime;
+use time::format_description::FormatItem;
+use time::macros::format_description;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IoError {
@@ -13,6 +17,41 @@ pub enum IoError {
     InvalidNotesDir(String),
     #[error("File already exists: {0}")]
     FileExists(PathBuf),
+}
+
+/// Metadata of an open file used to detect external changes (ADR-0014).
+///
+/// The `(mtime, size)` pair is the canonical change signal; if either
+/// differs from the value captured at load time, the file has been
+/// modified by another process (or another device's Syncthing).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenFileMeta {
+    pub mtime: SystemTime,
+    pub size: u64,
+}
+
+impl OpenFileMeta {
+    fn from_metadata(meta: &fs::Metadata) -> std::io::Result<Self> {
+        Ok(Self {
+            mtime: meta.modified()?,
+            size: meta.len(),
+        })
+    }
+}
+
+/// Outcome of a guarded write that aborted because the file changed on
+/// disk between load and save.
+#[derive(Debug, thiserror::Error)]
+pub enum GuardedWriteError {
+    /// The on-disk file no longer matches the meta the caller loaded with.
+    /// The current disk content and its meta are returned so the caller
+    /// can present the user with the same banner the watcher would.
+    #[error("File changed externally before save")]
+    ExternalChange { bytes: Vec<u8>, meta: OpenFileMeta },
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("File not found: {0}")]
+    NotFound(PathBuf),
 }
 
 /// Read a markdown file and return its content
@@ -133,6 +172,117 @@ fn cleanup_empty_parents(path: &Path, notes_root: &Path) {
         // Directory is empty, remove it
         let _ = fs::remove_dir(parent);
         current = parent.parent();
+    }
+}
+
+/// Read a file and return both its content and `OpenFileMeta`.
+pub fn read_file_with_meta(
+    relative_path: &RelativePath,
+    notes_root: &Path,
+) -> Result<(String, OpenFileMeta), IoError> {
+    let absolute_path = relative_path.to_path(notes_root);
+    if !absolute_path.exists() {
+        return Err(IoError::NotFound(absolute_path));
+    }
+    let content = fs::read_to_string(&absolute_path).map_err(IoError::Io)?;
+    let meta = fs::metadata(&absolute_path).map_err(IoError::Io)?;
+    let open_meta = OpenFileMeta::from_metadata(&meta).map_err(IoError::Io)?;
+    Ok((content, open_meta))
+}
+
+/// Write `content` to `relative_path` only if the file's current
+/// `(mtime, size)` still matches `expected_meta` (ADR-0014 §5).
+///
+/// On success returns the post-write `OpenFileMeta`. On detected
+/// external change returns `GuardedWriteError::ExternalChange` carrying
+/// the on-disk bytes so the caller can route them into the same banner
+/// state the watcher uses.
+pub fn write_file_guarded(
+    relative_path: &RelativePath,
+    notes_root: &Path,
+    content: &str,
+    expected_meta: OpenFileMeta,
+) -> Result<OpenFileMeta, GuardedWriteError> {
+    let absolute_path = relative_path.to_path(notes_root);
+
+    // If the file no longer exists or its meta drifted, treat as external
+    // change and surface the disk version (or empty bytes if absent).
+    match fs::metadata(&absolute_path) {
+        Ok(disk_meta) => {
+            let current = OpenFileMeta::from_metadata(&disk_meta)?;
+            if current != expected_meta {
+                let bytes = fs::read(&absolute_path).unwrap_or_default();
+                return Err(GuardedWriteError::ExternalChange {
+                    bytes,
+                    meta: current,
+                });
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(GuardedWriteError::NotFound(absolute_path));
+        }
+        Err(e) => return Err(GuardedWriteError::Io(e)),
+    }
+
+    if let Some(parent) = absolute_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&absolute_path, content)?;
+    let written_meta = fs::metadata(&absolute_path)?;
+    Ok(OpenFileMeta::from_metadata(&written_meta)?)
+}
+
+const CONFLICT_TIMESTAMP_FMT: &[FormatItem<'static>] =
+    format_description!("[year][month][day]-[hour][minute][second]");
+
+/// Build a conflict filename for `original` (ADR-0014 §6).
+///
+/// Format: `{stem}.mdnx-conflict-YYYYMMDD-HHMMSS-{device}.{ext}` (UTC).
+/// The `mdnx-conflict-` prefix is deliberately distinct from Syncthing's
+/// own `.sync-conflict-` pattern so a markdown-neuraxis save-race
+/// conflict cannot be confused with a Syncthing device-level conflict.
+pub fn conflict_path(original: &RelativePath, when: SystemTime, device: &str) -> RelativePathBuf {
+    let parent = original.parent();
+    let stem = original.file_stem().unwrap_or("");
+    let extension = original.extension();
+
+    let datetime: OffsetDateTime = when.into();
+    let timestamp = datetime
+        .format(&CONFLICT_TIMESTAMP_FMT)
+        .expect("static format description always succeeds for OffsetDateTime");
+
+    let safe_device = sanitize_device(device);
+    let new_stem = format!("{stem}.mdnx-conflict-{timestamp}-{safe_device}");
+
+    let new_name = match extension {
+        Some(ext) => format!("{new_stem}.{ext}"),
+        None => new_stem,
+    };
+
+    // RelativePath::parent() returns Some("") for top-level files; joining
+    // an empty parent would yield a leading `/`, so fall back to the bare
+    // name in that case.
+    match parent {
+        Some(p) if !p.as_str().is_empty() => p.join(new_name),
+        _ => RelativePathBuf::from(new_name),
+    }
+}
+
+fn sanitize_device(device: &str) -> String {
+    let cleaned: String = device
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    if cleaned.is_empty() {
+        String::from("device")
+    } else {
+        cleaned
     }
 }
 
@@ -404,5 +554,170 @@ mod tests {
         // Parent folder with other file should remain
         assert!(folder.exists());
         assert!(folder.join("other.md").exists());
+    }
+
+    // --- conflict_path ---------------------------------------------------
+
+    fn fixed_time() -> SystemTime {
+        // 2026-05-06 14:30:15 UTC
+        SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_777_811_415)
+    }
+
+    #[test]
+    fn test_conflict_path_simple_file() {
+        let original = RelativePath::new("notes.md");
+        let result = conflict_path(original, fixed_time(), "laptop");
+        assert_eq!(
+            result.as_str(),
+            "notes.mdnx-conflict-20260506-143015-laptop.md"
+        );
+    }
+
+    #[test]
+    fn test_conflict_path_nested() {
+        let original = RelativePath::new("1_Projects/sub/notes.md");
+        let result = conflict_path(original, fixed_time(), "laptop");
+        assert_eq!(
+            result.as_str(),
+            "1_Projects/sub/notes.mdnx-conflict-20260506-143015-laptop.md"
+        );
+    }
+
+    #[test]
+    fn test_conflict_path_no_extension() {
+        let original = RelativePath::new("notes");
+        let result = conflict_path(original, fixed_time(), "laptop");
+        assert_eq!(
+            result.as_str(),
+            "notes.mdnx-conflict-20260506-143015-laptop"
+        );
+    }
+
+    #[test]
+    fn test_conflict_path_multiple_dots() {
+        // Only the last extension component is split off.
+        let original = RelativePath::new("notes.backup.md");
+        let result = conflict_path(original, fixed_time(), "laptop");
+        assert_eq!(
+            result.as_str(),
+            "notes.backup.mdnx-conflict-20260506-143015-laptop.md"
+        );
+    }
+
+    #[test]
+    fn test_conflict_path_empty_device_falls_back() {
+        let original = RelativePath::new("notes.md");
+        let result = conflict_path(original, fixed_time(), "");
+        assert_eq!(
+            result.as_str(),
+            "notes.mdnx-conflict-20260506-143015-device.md"
+        );
+    }
+
+    #[test]
+    fn test_conflict_path_non_ascii_device() {
+        // Non-ASCII chars get replaced so the filename stays portable
+        // across filesystems (FAT/SD-card on Android in particular).
+        let original = RelativePath::new("notes.md");
+        let result = conflict_path(original, fixed_time(), "ümlaut");
+        // 'ü' is one Unicode scalar (U+00FC); it is replaced with '-'.
+        assert_eq!(
+            result.as_str(),
+            "notes.mdnx-conflict-20260506-143015--mlaut.md"
+        );
+    }
+
+    #[test]
+    fn test_conflict_path_sanitizes_device() {
+        let original = RelativePath::new("notes.md");
+        let result = conflict_path(original, fixed_time(), "Tim's Laptop / 2");
+        // spaces, apostrophes, slashes → '-'
+        assert_eq!(
+            result.as_str(),
+            "notes.mdnx-conflict-20260506-143015-Tim-s-Laptop---2.md"
+        );
+    }
+
+    // --- read_file_with_meta / write_file_guarded ------------------------
+
+    #[test]
+    fn test_read_file_with_meta_returns_content_and_meta() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "test.md", "hello");
+
+        let (content, meta) =
+            read_file_with_meta(RelativePath::new("test.md"), notes_dir.path()).unwrap();
+        assert_eq!(content, "hello");
+        assert_eq!(meta.size, 5);
+    }
+
+    #[test]
+    fn test_write_file_guarded_happy_path() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "test.md", "first");
+
+        let (_content, meta) =
+            read_file_with_meta(RelativePath::new("test.md"), notes_dir.path()).unwrap();
+
+        let new_meta = write_file_guarded(
+            RelativePath::new("test.md"),
+            notes_dir.path(),
+            "second",
+            meta,
+        )
+        .expect("guarded write should succeed when meta matches");
+
+        assert_eq!(new_meta.size, 6);
+        let on_disk = std::fs::read_to_string(notes_dir.path().join("test.md")).unwrap();
+        assert_eq!(on_disk, "second");
+    }
+
+    #[test]
+    fn test_write_file_guarded_detects_external_change() {
+        let notes_dir = create_test_notes_dir();
+        create_test_file(&notes_dir, "test.md", "original");
+
+        let (_content, captured_meta) =
+            read_file_with_meta(RelativePath::new("test.md"), notes_dir.path()).unwrap();
+
+        // Simulate external write that bumps mtime/size enough that the
+        // captured meta becomes stale. Sleep briefly to guarantee mtime
+        // changes on filesystems with second-resolution timestamps.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(notes_dir.path().join("test.md"), "external write").unwrap();
+
+        let result = write_file_guarded(
+            RelativePath::new("test.md"),
+            notes_dir.path(),
+            "our pending edit",
+            captured_meta,
+        );
+
+        match result {
+            Err(GuardedWriteError::ExternalChange { bytes, meta: _ }) => {
+                assert_eq!(bytes, b"external write");
+            }
+            other => panic!("expected ExternalChange, got {other:?}"),
+        }
+
+        // Crucially, the file on disk is the external version, not ours.
+        let on_disk = std::fs::read_to_string(notes_dir.path().join("test.md")).unwrap();
+        assert_eq!(on_disk, "external write");
+    }
+
+    #[test]
+    fn test_write_file_guarded_missing_file_returns_not_found() {
+        let notes_dir = create_test_notes_dir();
+        let bogus_meta = OpenFileMeta {
+            mtime: SystemTime::UNIX_EPOCH,
+            size: 0,
+        };
+        let result = write_file_guarded(
+            RelativePath::new("absent.md"),
+            notes_dir.path(),
+            "anything",
+            bogus_meta,
+        );
+        assert!(matches!(result, Err(GuardedWriteError::NotFound(_))));
     }
 }

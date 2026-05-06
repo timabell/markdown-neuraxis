@@ -3018,6 +3018,7 @@ dependencies = [
  "rstest",
  "tempfile",
  "thiserror 2.0.17",
+ "time",
  "tree-sitter",
  "tree-sitter-md",
  "xi-rope",

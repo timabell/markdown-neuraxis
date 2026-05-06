@@ -129,10 +129,11 @@ up any external change that lands in that window on the next event.
   above the editor:
   - **Discard mine** → reload disk version, drop the in-progress edit.
   - **Save copy** → write the in-memory content (with the pending edit
-    applied) to a sibling `name.sync-conflict-YYYYMMDD-HHMMSS-{device}.md`
-    file, then reload the disk version. Mirrors Syncthing's own conflict
-    naming (with our device tag, so we never collide with Syncthing's own
-    conflict files).
+    applied) to a sibling `name.mdnx-conflict-YYYYMMDD-HHMMSS-{device}.md`
+    file, then reload the disk version. The `mdnx-conflict-` prefix is
+    deliberately distinct from Syncthing's own `.sync-conflict-` pattern
+    so a markdown-neuraxis save-race conflict cannot be confused with
+    (or cleaned up alongside) a Syncthing device-level conflict.
 
 Device tag: hostname on desktop; `Build.MODEL` (sanitised) on Android.
 

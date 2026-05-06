@@ -13,6 +13,7 @@ pulldown-cmark = { workspace = true }
 thiserror = { workspace = true }
 relative-path = { workspace = true }
 xi-rope = { workspace = true }
+time = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-md = { workspace = true }
 markdown-neuraxis-syntax = { path = "../markdown-neuraxis-syntax" }
