@@ -91,8 +91,7 @@ pub fn App(notes_path: PathBuf) -> Element {
     // Signal — Signal storage requires Send+Sync but the watcher's
     // notify::RecommendedWatcher and the bridging futures channel
     // sender are component-thread-local and don't need to be.
-    let watcher_holder: Rc<RefCell<Option<WatcherSlot>>> =
-        use_hook(|| Rc::new(RefCell::new(None)));
+    let watcher_holder: Rc<RefCell<Option<WatcherSlot>>> = use_hook(|| Rc::new(RefCell::new(None)));
 
     // Reactive (re)start of the watcher whenever the open file
     // changes. The closure intentionally only restarts when the
@@ -120,9 +119,10 @@ pub fn App(notes_path: PathBuf) -> Element {
             // exit cleanly without us joining either.
             *holder.borrow_mut() = None;
 
-            let (Some(file), Some(meta)) =
-                (selected_file.read().as_ref().cloned(), *open_file_meta.read())
-            else {
+            let (Some(file), Some(meta)) = (
+                selected_file.read().as_ref().cloned(),
+                *open_file_meta.read(),
+            ) else {
                 return;
             };
 
@@ -131,7 +131,7 @@ pub fn App(notes_path: PathBuf) -> Element {
             match FileWatcher::watch(absolute, meta, Duration::from_secs(5)) {
                 Ok((watcher, std_rx)) => {
                     let (async_tx, mut async_rx) =
-                        futures_util::channel::mpsc::unbounded::<ExternalChange>();
+                        futures_channel::mpsc::unbounded::<ExternalChange>();
                     // Bridge the std mpsc::Receiver (blocking recv) into
                     // an async stream. Lives until the watcher is
                     // dropped, which closes std_rx.

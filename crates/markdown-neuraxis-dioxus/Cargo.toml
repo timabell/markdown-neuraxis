@@ -16,6 +16,7 @@ markdown-neuraxis-engine = { path = "../markdown-neuraxis-engine" }
 markdown-neuraxis-config = { path = "../markdown-neuraxis-config" }
 dioxus = { workspace = true }
 relative-path = { workspace = true }
+futures-channel = "0.3"
 futures-util = "0.3"
 log = "0.4"
 
