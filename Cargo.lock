@@ -3055,6 +3055,8 @@ dependencies = [
  "dioxus-ssr",
  "dirs",
  "env_logger",
+ "futures-channel",
+ "futures-util",
  "insta",
  "log",
  "markdown-neuraxis-config",

@@ -17,6 +17,10 @@ pub fn MainPanel(
     on_command: Callback<Cmd>,
     on_wikilink_click: Callback<String>,
     on_rename: Callback<String>,
+    /// Fires whenever a block becomes focused or focus is cleared, so
+    /// the parent App can decide whether the user is mid-edit (used by
+    /// the external-change banner per ADR-0014).
+    on_focus_change: Callback<bool>,
     #[props(default = false)] is_new_file: bool,
 ) -> Element {
     let mut focused_anchor_id = use_signal(|| None::<AnchorId>);
@@ -25,6 +29,10 @@ pub fn MainPanel(
     let context_menu_block = use_signal(|| None::<AnchorId>);
     let snapshot_clone = snapshot.clone();
     let mut navigate_to_block = create_navigation_handler(focused_anchor_id, snapshot_clone);
+
+    use_effect(move || {
+        on_focus_change.call(focused_anchor_id.read().is_some());
+    });
 
     // Editable filename state (display path without .md extension)
     let initial_path = file.display_path().to_string();

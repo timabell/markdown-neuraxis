@@ -18,6 +18,7 @@ dioxus = { workspace = true }
 relative-path = { workspace = true }
 futures-channel = "0.3"
 futures-util = "0.3"
+gethostname = "1.0"
 log = "0.4"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]

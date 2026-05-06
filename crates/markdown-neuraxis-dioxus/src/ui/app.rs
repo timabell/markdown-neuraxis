@@ -79,6 +79,16 @@ pub fn App(notes_path: PathBuf) -> Element {
     // watcher coroutine below populates this; downstream UI (banner
     // and silent-reload paths) react to it.
     let external_change = use_signal(|| None::<ExternalChange>);
+    // Whether any editor block currently has focus. Drives the
+    // banner-vs-silent-reload decision when external_change fires.
+    let is_editing = use_signal(|| false);
+    // Latch: once we've decided to show the banner for an external
+    // change (because the user was editing when it arrived), the
+    // banner stays until they click Discard or Save copy. Without
+    // this latch the banner would disappear the instant the textarea
+    // loses focus to the banner button — and the button's click
+    // event would never fire because the button unmounted first.
+    let banner_latched = use_signal(|| false);
     let focused_folder = use_signal(|| None::<RelativePathBuf>);
     // Track if current file is newly created (for focusing title input)
     let is_new_file = use_signal(|| false);
@@ -157,6 +167,65 @@ pub fn App(notes_path: PathBuf) -> Element {
                     log::error!("Failed to start file watcher for {file_relative}: {e}");
                 }
             }
+        });
+    }
+
+    // Silent-reload arm of the external-change UX (ADR-0014 §6).
+    // When the watcher fires and the user is not in an edit session,
+    // rebuild the in-memory document from the freshly-read disk
+    // bytes. If the user IS editing when it arrives, latch the
+    // banner instead — the user picks Discard or Save copy. Once
+    // latched the banner stays even if the user blurs (e.g. clicks
+    // a banner button), which is what makes the button click
+    // actually reach its handler.
+    {
+        let mut current_document = current_document;
+        let mut current_snapshot = current_snapshot;
+        let mut open_file_meta = open_file_meta;
+        let mut external_change = external_change;
+        let mut banner_latched = banner_latched;
+        let mut error_state = error_state;
+        use_effect(move || {
+            let event = external_change.read().clone();
+            let Some(event) = event else {
+                return;
+            };
+            if *banner_latched.read() {
+                return;
+            }
+            if *is_editing.read() {
+                banner_latched.set(true);
+                return;
+            }
+            match Document::from_bytes(&event.bytes) {
+                Ok(document) => {
+                    let snapshot = document.snapshot();
+                    *current_document.write() = Some(Arc::new(document));
+                    *current_snapshot.write() = Some(snapshot);
+                    open_file_meta.set(Some(event.meta));
+                    external_change.set(None);
+                }
+                Err(e) => {
+                    RuntimeError::log_and_set(
+                        &mut error_state,
+                        "Failed to reload externally changed file".to_string(),
+                        e,
+                    );
+                }
+            }
+        });
+    }
+
+    // Reset the external-change state on file switch: a stale latch
+    // from the previous file would otherwise prevent the silent-
+    // reload effect from firing for the new file.
+    {
+        let mut external_change = external_change;
+        let mut banner_latched = banner_latched;
+        use_effect(move || {
+            let _ = selected_file.read();
+            external_change.set(None);
+            banner_latched.set(false);
         });
     }
 
@@ -438,6 +507,109 @@ pub fn App(notes_path: PathBuf) -> Element {
                     current_snapshot.read().as_ref(),
                     current_document.read().as_ref()
                 ) {
+                    if *banner_latched.read() {
+                        super::components::ExternalChangeBanner {
+                            file_display_path: file.display_path().to_string(),
+                            on_discard: {
+                                let mut current_document = current_document;
+                                let mut current_snapshot = current_snapshot;
+                                let mut open_file_meta = open_file_meta;
+                                let mut external_change = external_change;
+                                let mut banner_latched = banner_latched;
+                                let mut error_state = error_state;
+                                Callback::new(move |_: ()| {
+                                    let event = external_change.read().clone();
+                                    let Some(event) = event else {
+                                        banner_latched.set(false);
+                                        return;
+                                    };
+                                    match Document::from_bytes(&event.bytes) {
+                                        Ok(document) => {
+                                            let snapshot = document.snapshot();
+                                            *current_document.write() = Some(Arc::new(document));
+                                            *current_snapshot.write() = Some(snapshot);
+                                            open_file_meta.set(Some(event.meta));
+                                            external_change.set(None);
+                                            banner_latched.set(false);
+                                        }
+                                        Err(e) => {
+                                            RuntimeError::log_and_set(
+                                                &mut error_state,
+                                                "Failed to reload externally changed file"
+                                                    .to_string(),
+                                                e,
+                                            );
+                                        }
+                                    }
+                                })
+                            },
+                            on_save_copy: {
+                                let mut current_document = current_document;
+                                let mut current_snapshot = current_snapshot;
+                                let mut open_file_meta = open_file_meta;
+                                let mut external_change = external_change;
+                                let mut banner_latched = banner_latched;
+                                let mut error_state = error_state;
+                                let selected_file = selected_file;
+                                let mut file_tree = file_tree;
+                                let notes_path = notes_path;
+                                Callback::new(move |_: ()| {
+                                    let Some(event) = external_change.read().clone() else {
+                                        banner_latched.set(false);
+                                        return;
+                                    };
+                                    let Some(file) = selected_file.read().clone() else {
+                                        return;
+                                    };
+                                    let Some(doc_arc) = current_document.read().clone() else {
+                                        return;
+                                    };
+                                    let path = notes_path.read().clone();
+                                    let device = device_tag();
+                                    let conflict_rel = io::conflict_path(
+                                        file.relative_path(),
+                                        std::time::SystemTime::now(),
+                                        &device,
+                                    );
+                                    if let Err(e) = io::write_file(
+                                        &conflict_rel,
+                                        &path,
+                                        &doc_arc.text(),
+                                    ) {
+                                        RuntimeError::log_and_set(
+                                            &mut error_state,
+                                            format!(
+                                                "Failed to write conflict copy '{conflict_rel}'"
+                                            ),
+                                            e,
+                                        );
+                                        return;
+                                    }
+                                    let absolute = conflict_rel.to_path(&path);
+                                    file_tree.write().add_file(&absolute, &path);
+                                    match Document::from_bytes(&event.bytes) {
+                                        Ok(document) => {
+                                            let snapshot = document.snapshot();
+                                            *current_document.write() =
+                                                Some(Arc::new(document));
+                                            *current_snapshot.write() = Some(snapshot);
+                                            open_file_meta.set(Some(event.meta));
+                                            external_change.set(None);
+                                            banner_latched.set(false);
+                                        }
+                                        Err(e) => {
+                                            RuntimeError::log_and_set(
+                                                &mut error_state,
+                                                "Failed to reload externally changed file"
+                                                    .to_string(),
+                                                e,
+                                            );
+                                        }
+                                    }
+                                })
+                            },
+                        }
+                    }
                     super::components::MainPanel {
                         key: "{file.relative_path()}",
                         file: file.clone(),
@@ -447,6 +619,10 @@ pub fn App(notes_path: PathBuf) -> Element {
                         on_file_select: Some(Callback::new(on_file_navigate)),
                         on_command,
                         on_wikilink_click: on_wikilink_navigate,
+                        on_focus_change: {
+                            let mut is_editing = is_editing;
+                            Callback::new(move |focused: bool| is_editing.set(focused))
+                        },
                         on_rename: {
                             let mut selected_file = selected_file;
                             let mut file_tree = file_tree;
@@ -506,6 +682,19 @@ pub fn App(notes_path: PathBuf) -> Element {
                 }
             }
         }
+    }
+}
+
+/// Best-effort device identifier for conflict filenames (ADR-0014).
+/// Falls back to "desktop" if the host has no resolvable name. The
+/// raw value is sanitised by io::conflict_path before reaching disk.
+fn device_tag() -> String {
+    let raw = gethostname::gethostname();
+    let s = raw.to_string_lossy();
+    if s.trim().is_empty() {
+        "desktop".to_string()
+    } else {
+        s.into_owned()
     }
 }
 
