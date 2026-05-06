@@ -559,8 +559,9 @@ mod tests {
     // --- conflict_path ---------------------------------------------------
 
     fn fixed_time() -> SystemTime {
-        // 2026-05-06 14:30:15 UTC
-        SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_777_811_415)
+        // 2026-05-06 14:30:15 UTC. (1970-01-01 → 2026-05-06 = 20579 days
+        // = 1,778,025,600s; plus 14h30m15s = 52,215s.)
+        SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_778_077_815)
     }
 
     #[test]

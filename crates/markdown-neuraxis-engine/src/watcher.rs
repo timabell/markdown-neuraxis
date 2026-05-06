@@ -290,8 +290,7 @@ mod tests {
         let initial = read_meta(&path);
 
         let (_w, rx) =
-            FileWatcher::watch_poll_only(path.clone(), initial, Duration::from_millis(50))
-                .unwrap();
+            FileWatcher::watch_poll_only(path.clone(), initial, Duration::from_millis(50)).unwrap();
 
         // Several poll ticks elapse without any external write.
         // Nothing should be emitted because (mtime, size) is unchanged.
@@ -309,10 +308,11 @@ mod tests {
         };
 
         let (watcher, rx) =
-            FileWatcher::watch_poll_only(path.clone(), initial, Duration::from_millis(50))
-                .unwrap();
+            FileWatcher::watch_poll_only(path.clone(), initial, Duration::from_millis(50)).unwrap();
         // First poll detects the divergence from the bogus initial meta.
-        let _ = rx.recv_timeout(Duration::from_secs(1)).expect("first event");
+        let _ = rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("first event");
         drop(watcher);
 
         // After a generous grace window, no more events arrive
