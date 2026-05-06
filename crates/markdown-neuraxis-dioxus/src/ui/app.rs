@@ -502,12 +502,12 @@ pub fn App(notes_path: PathBuf) -> Element {
             }
             div {
                 class: if *mobile_nav_open.read() { "main-content mobile-hidden" } else { "main-content" },
-                if let (Some(file), Some(snapshot), Some(document)) = (
-                    selected_file.read().as_ref(),
-                    current_snapshot.read().as_ref(),
-                    current_document.read().as_ref()
-                ) {
-                    if *banner_latched.read() {
+                // ExternalChangeBanner sits as a sibling of the
+                // main-content if-let so that the keyed MainPanel
+                // remains the only node in its own rsx block (Dioxus
+                // requires keys to be on the first node of a block).
+                if *banner_latched.read() {
+                    if let Some(file) = selected_file.read().as_ref() {
                         super::components::ExternalChangeBanner {
                             file_display_path: file.display_path().to_string(),
                             on_discard: {
@@ -550,9 +550,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                 let mut external_change = external_change;
                                 let mut banner_latched = banner_latched;
                                 let mut error_state = error_state;
-                                let selected_file = selected_file;
                                 let mut file_tree = file_tree;
-                                let notes_path = notes_path;
                                 Callback::new(move |_: ()| {
                                     let Some(event) = external_change.read().clone() else {
                                         banner_latched.set(false);
@@ -610,6 +608,12 @@ pub fn App(notes_path: PathBuf) -> Element {
                             },
                         }
                     }
+                }
+                if let (Some(file), Some(snapshot), Some(document)) = (
+                    selected_file.read().as_ref(),
+                    current_snapshot.read().as_ref(),
+                    current_document.read().as_ref()
+                ) {
                     super::components::MainPanel {
                         key: "{file.relative_path()}",
                         file: file.clone(),
