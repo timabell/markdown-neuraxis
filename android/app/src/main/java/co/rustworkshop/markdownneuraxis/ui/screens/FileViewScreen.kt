@@ -2,6 +2,7 @@ package co.rustworkshop.markdownneuraxis.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,13 +40,18 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
+import co.rustworkshop.markdownneuraxis.io.FileMeta
+import co.rustworkshop.markdownneuraxis.io.WatcherEvent
 import co.rustworkshop.markdownneuraxis.io.readFileContent
 import co.rustworkshop.markdownneuraxis.io.resolveDocumentFile
+import co.rustworkshop.markdownneuraxis.io.watchFile
 import co.rustworkshop.markdownneuraxis.io.writeFileContent
 import co.rustworkshop.markdownneuraxis.model.FileTree
+import co.rustworkshop.markdownneuraxis.ui.components.ExternalChangeBanner
 import uniffi.markdown_neuraxis_ffi.Block
 import uniffi.markdown_neuraxis_ffi.DocumentHandle
 import uniffi.markdown_neuraxis_ffi.TextSegment
+import uniffi.markdown_neuraxis_ffi.conflictPath
 import uniffi.markdown_neuraxis_ffi.resolveWikilink
 
 private const val TAG = "MarkdownNeuraxis"
@@ -84,6 +90,18 @@ fun FileViewScreen(
 	var blocks by remember(file) {
 		mutableStateOf(content?.let { parseDocument(it) })
 	}
+	// (mtime, size) baseline used to detect external writes (ADR-0014).
+	var openFileMeta by remember(file) {
+		mutableStateOf(FileMeta(file.lastModified(), file.length()))
+	}
+	// Most recent external change, set by the file watcher or by the
+	// guarded write inside saveEdit. Drives the banner UI.
+	var externalChange by remember(file) { mutableStateOf<WatcherEvent?>(null) }
+	// Latch: once the banner is shown the user has to act on it
+	// (Discard / Save copy). Without the latch the banner would
+	// disappear the instant the textarea blurs to a banner button
+	// and the click would never reach its handler.
+	var bannerLatched by remember(file) { mutableStateOf(false) }
 
 	// Edit state
 	var editingBlockId by remember { mutableStateOf<String?>(null) }
@@ -118,17 +136,101 @@ fun FileViewScreen(
 				val after = String(utf8Bytes, range.second, utf8Bytes.size - range.second, Charsets.UTF_8)
 				val newContent = before + textToSave + after
 
-				// Write to file
-				if (writeFileContent(context, file, newContent)) {
-					// Update state with new content
+				// Guard against external writes that landed between
+				// load and save (ADR-0014 §5). If the on-disk
+				// (mtime, size) no longer matches our baseline, abort
+				// the write and surface the disk version through the
+				// same banner the watcher uses. Apply the user's edit
+				// to in-memory content anyway so Save copy can
+				// preserve it.
+				val currentMeta = FileMeta(file.lastModified(), file.length())
+				if (currentMeta != openFileMeta) {
+					val externalContent = readFileContent(context, file)
+					if (externalContent != null) {
+						externalChange = WatcherEvent(externalContent, currentMeta)
+						bannerLatched = true
+					}
 					content = newContent
 					blocks = parseDocument(newContent)
+				} else if (writeFileContent(context, file, newContent)) {
+					content = newContent
+					blocks = parseDocument(newContent)
+					openFileMeta = FileMeta(file.lastModified(), file.length())
 				} else {
 					Log.e(TAG, "Failed to save edit")
 				}
 			}
 		}
 		// Clear edit state
+		editingBlockId = null
+		editText = TextFieldValue("")
+		editSourceRange = null
+	}
+
+	// Hybrid file watcher (ADR-0014). Silent reload when nothing is
+	// being edited and the banner isn't already latched; otherwise
+	// latch the banner and let the user pick Discard or Save copy.
+	LaunchedEffect(file) {
+		watchFile(context, file, openFileMeta).collect { event ->
+			// Echo-suppress: when our own guarded write updates
+			// openFileMeta, the watcher will still emit one event
+			// because its internal last_emitted is one tick behind.
+			// Drop events that match our current baseline so the
+			// banner doesn't fire for our own writes.
+			if (event.meta == openFileMeta) {
+				return@collect
+			}
+			if (editingBlockId == null && !bannerLatched) {
+				content = event.content
+				blocks = parseDocument(event.content)
+				openFileMeta = event.meta
+			} else {
+				externalChange = event
+				bannerLatched = true
+			}
+		}
+	}
+
+	// Banner action: drop the in-progress edit and reload disk version.
+	val onDiscardExternal: () -> Unit = {
+		val event = externalChange
+		if (event != null) {
+			content = event.content
+			blocks = parseDocument(event.content)
+			openFileMeta = event.meta
+		}
+		externalChange = null
+		bannerLatched = false
+		editingBlockId = null
+		editText = TextFieldValue("")
+		editSourceRange = null
+	}
+
+	// Banner action: write the in-memory document (with the pending
+	// edit applied — saveEdit's guarded miss already updated content)
+	// to a sibling .mdnx-conflict file, then accept the disk version.
+	val onSaveCopyExternal: () -> Unit = saveCopy@{
+		val event = externalChange ?: return@saveCopy
+		val currentContent = content ?: return@saveCopy
+		val parent = file.parentFile
+		if (parent == null) {
+			Log.e(TAG, "Cannot save conflict copy: file has no parent")
+			return@saveCopy
+		}
+		val originalName = file.name ?: "untitled.md"
+		val nowSeconds = (System.currentTimeMillis() / 1000).toULong()
+		val device = (Build.MODEL ?: "android").ifBlank { "android" }
+		val conflictName = conflictPath(originalName, nowSeconds, device)
+		val conflict = parent.createFile("text/markdown", conflictName)
+		if (conflict == null || !writeFileContent(context, conflict, currentContent)) {
+			Log.e(TAG, "Failed to write conflict copy '$conflictName'")
+			return@saveCopy
+		}
+		content = event.content
+		blocks = parseDocument(event.content)
+		openFileMeta = event.meta
+		externalChange = null
+		bannerLatched = false
 		editingBlockId = null
 		editText = TextFieldValue("")
 		editSourceRange = null
@@ -153,9 +255,19 @@ fun FileViewScreen(
 			val after = String(utf8Bytes, checkboxEnd, utf8Bytes.size - checkboxEnd, Charsets.UTF_8)
 			val newContent = before + newCheckbox + after
 
-			if (writeFileContent(context, file, newContent)) {
+			val currentMeta = FileMeta(file.lastModified(), file.length())
+			if (currentMeta != openFileMeta) {
+				val externalContent = readFileContent(context, file)
+				if (externalContent != null) {
+					externalChange = WatcherEvent(externalContent, currentMeta)
+					bannerLatched = true
+				}
 				content = newContent
 				blocks = parseDocument(newContent)
+			} else if (writeFileContent(context, file, newContent)) {
+				content = newContent
+				blocks = parseDocument(newContent)
+				openFileMeta = FileMeta(file.lastModified(), file.length())
 			}
 		}
 	}
@@ -205,41 +317,49 @@ fun FileViewScreen(
 			Column(
 				modifier = modifier
 					.fillMaxSize()
-					.padding(horizontal = 16.dp)
 					.verticalScroll(rememberScrollState())
 			) {
-				RenderBlockTree(
-					blocks = currentBlocks,
-					depth = 0,
-					onWikiLinkClick = onWikiLinkClick,
-					onCheckboxToggle = toggleCheckbox,
-					editingBlockId = editingBlockId,
-					editText = editText,
-					onStartEdit = { blockId, start, end ->
-						// If currently editing another block, just save and return.
-						// The byte offsets passed here are stale after saveEdit() modifies
-						// the document. User can click again with fresh offsets.
-						if (editingBlockId != null && editingBlockId != blockId) {
-							saveEdit()
-							return@RenderBlockTree
-						}
-						// Extract raw source text using byte offsets
-						val currentContent = content ?: return@RenderBlockTree
-						val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
-						// Bounds check - invalid range is a bug
-						require(start >= 0 && end <= utf8Bytes.size && start <= end) {
-							"Invalid byte range: $start..$end for content of ${utf8Bytes.size} bytes"
-						}
-						val sourceText = String(utf8Bytes, start, end - start, Charsets.UTF_8)
-						// Strip trailing newline for editing (will restore on save)
-						val editableText = sourceText.removeSuffix("\n")
-						editingBlockId = blockId
-						editText = TextFieldValue(editableText, TextRange(editableText.length))
-						editSourceRange = Pair(start, end)
-					},
-					onEditTextChange = { editText = it },
-					onFinishEdit = saveEdit
-				)
+				if (bannerLatched) {
+					ExternalChangeBanner(
+						fileDisplayName = file.name ?: "(unknown)",
+						onDiscard = onDiscardExternal,
+						onSaveCopy = onSaveCopyExternal
+					)
+				}
+				Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+					RenderBlockTree(
+						blocks = currentBlocks,
+						depth = 0,
+						onWikiLinkClick = onWikiLinkClick,
+						onCheckboxToggle = toggleCheckbox,
+						editingBlockId = editingBlockId,
+						editText = editText,
+						onStartEdit = { blockId, start, end ->
+							// If currently editing another block, just save and return.
+							// The byte offsets passed here are stale after saveEdit() modifies
+							// the document. User can click again with fresh offsets.
+							if (editingBlockId != null && editingBlockId != blockId) {
+								saveEdit()
+								return@RenderBlockTree
+							}
+							// Extract raw source text using byte offsets
+							val currentContent = content ?: return@RenderBlockTree
+							val utf8Bytes = currentContent.toByteArray(Charsets.UTF_8)
+							// Bounds check - invalid range is a bug
+							require(start >= 0 && end <= utf8Bytes.size && start <= end) {
+								"Invalid byte range: $start..$end for content of ${utf8Bytes.size} bytes"
+							}
+							val sourceText = String(utf8Bytes, start, end - start, Charsets.UTF_8)
+							// Strip trailing newline for editing (will restore on save)
+							val editableText = sourceText.removeSuffix("\n")
+							editingBlockId = blockId
+							editText = TextFieldValue(editableText, TextRange(editableText.length))
+							editSourceRange = Pair(start, end)
+						},
+						onEditTextChange = { editText = it },
+						onFinishEdit = saveEdit
+					)
+				}
 			}
 		}
 	}

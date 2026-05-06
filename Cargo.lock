@@ -3094,6 +3094,7 @@ name = "markdown-neuraxis-ffi"
 version = "0.1.0"
 dependencies = [
  "markdown-neuraxis-engine",
+ "relative-path 2.0.1",
  "thiserror 2.0.17",
  "uniffi",
 ]
