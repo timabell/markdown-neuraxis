@@ -1,6 +1,7 @@
 pub mod editing;
 pub mod io;
 pub mod models;
+pub mod watcher;
 
 #[cfg(test)]
 pub mod tests;
@@ -9,3 +10,4 @@ pub mod tests;
 pub use editing::{anchors::*, commands::*, document::*, snapshot::*};
 pub use io::*;
 pub use models::{file_model::*, file_tree::*, markdown_file::*};
+pub use watcher::{ExternalChange, FileWatcher, WatcherError};

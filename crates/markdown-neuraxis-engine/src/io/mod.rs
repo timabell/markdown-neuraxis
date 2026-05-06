@@ -31,7 +31,7 @@ pub struct OpenFileMeta {
 }
 
 impl OpenFileMeta {
-    fn from_metadata(meta: &fs::Metadata) -> std::io::Result<Self> {
+    pub fn from_metadata(meta: &fs::Metadata) -> std::io::Result<Self> {
         Ok(Self {
             mtime: meta.modified()?,
             size: meta.len(),
