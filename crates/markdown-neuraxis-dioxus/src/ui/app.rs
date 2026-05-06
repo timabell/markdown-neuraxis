@@ -2,7 +2,9 @@ use crate::platform::pick_folder;
 use dioxus::prelude::*;
 use markdown_neuraxis_config::Config;
 use markdown_neuraxis_engine::{
-    Document, FileTree, MarkdownFile, Snapshot, editing::commands::Cmd, io,
+    Document, FileTree, MarkdownFile, Snapshot,
+    editing::commands::Cmd,
+    io::{self, GuardedWriteError, OpenFileMeta},
 };
 use relative_path::RelativePathBuf;
 use std::path::{Path, PathBuf};
@@ -65,6 +67,9 @@ pub fn App(notes_path: PathBuf) -> Element {
     let selected_file = use_signal(|| None::<MarkdownFile>);
     let current_document = use_signal(|| None::<Arc<Document>>);
     let current_snapshot = use_signal(|| None::<Snapshot>);
+    // (mtime, size) of the loaded file used to detect external writes
+    // and guard our autosaves (ADR-0014).
+    let open_file_meta = use_signal(|| None::<OpenFileMeta>);
     let focused_folder = use_signal(|| None::<RelativePathBuf>);
     // Track if current file is newly created (for focusing title input)
     let is_new_file = use_signal(|| false);
@@ -77,6 +82,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
+        let mut open_file_meta = open_file_meta;
         let mut error_state = error_state;
         let mut mobile_nav_open = mobile_nav_open;
         let mut focused_folder = focused_folder;
@@ -89,6 +95,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
+                &mut open_file_meta,
                 &mut error_state,
                 &mut is_new_file,
             );
@@ -103,6 +110,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
+        let mut open_file_meta = open_file_meta;
         let mut error_state = error_state;
         let mut is_new_file = is_new_file;
         move |file_path: PathBuf| {
@@ -113,6 +121,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
+                &mut open_file_meta,
                 &mut error_state,
                 &mut is_new_file,
             );
@@ -123,6 +132,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         let mut selected_file = selected_file;
         let mut current_document = current_document;
         let mut current_snapshot = current_snapshot;
+        let mut open_file_meta = open_file_meta;
         let mut error_state = error_state;
         let mut file_tree = file_tree;
         let mut focused_folder = focused_folder;
@@ -138,6 +148,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 selected_file.set(None);
                 current_document.set(None);
                 current_snapshot.set(None);
+                open_file_meta.set(None);
                 focused_folder.set(Some(folder_path));
                 return;
             }
@@ -159,6 +170,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                 &mut selected_file,
                 &mut current_document,
                 &mut current_snapshot,
+                &mut open_file_meta,
                 &mut error_state,
                 &mut is_new_file,
             );
@@ -170,6 +182,7 @@ pub fn App(notes_path: PathBuf) -> Element {
         selected_file,
         current_document,
         current_snapshot,
+        open_file_meta,
         file_tree,
         error_state,
         is_new_file,
@@ -209,6 +222,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                 let mut selected_file = selected_file;
                                 let mut current_document = current_document;
                                 let mut current_snapshot = current_snapshot;
+                                let mut open_file_meta = open_file_meta;
                                 let mut error_state = error_state;
                                 let mut focused_folder = focused_folder;
                                 let mut mobile_nav_open = mobile_nav_open;
@@ -225,6 +239,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                         &mut selected_file,
                                         &mut current_document,
                                         &mut current_snapshot,
+                                        &mut open_file_meta,
                                         &mut error_state,
                                         &mut is_new_file,
                                     );
@@ -243,6 +258,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                 let mut selected_file = selected_file;
                                 let mut current_document = current_document;
                                 let mut current_snapshot = current_snapshot;
+                                let mut open_file_meta = open_file_meta;
                                 let mut focused_folder = focused_folder;
                                 let mut error_state = error_state;
 
@@ -274,6 +290,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                                 selected_file.set(None);
                                                 current_document.set(None);
                                                 current_snapshot.set(None);
+                                                open_file_meta.set(None);
                                                 focused_folder.set(None);
                                                 error_state.set(None);
                                             }
@@ -305,6 +322,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                         let mut selected_file = selected_file;
                         let mut current_document = current_document;
                         let mut current_snapshot = current_snapshot;
+                        let mut open_file_meta = open_file_meta;
                         let mut error_state = error_state;
                         let mut focused_folder = focused_folder;
                         let mut mobile_nav_open = mobile_nav_open;
@@ -320,6 +338,7 @@ pub fn App(notes_path: PathBuf) -> Element {
                                 &mut selected_file,
                                 &mut current_document,
                                 &mut current_snapshot,
+                                &mut open_file_meta,
                                 &mut error_state,
                                 &mut is_new_file,
                             );
@@ -414,6 +433,7 @@ fn load_existing_document(
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
+    open_file_meta: &mut Signal<Option<OpenFileMeta>>,
     error_state: &mut Signal<Option<RuntimeError>>,
     is_new_file: &mut Signal<bool>,
 ) {
@@ -421,17 +441,19 @@ fn load_existing_document(
     error_state.set(None);
     is_new_file.set(false);
 
-    match io::read_file(markdown_file.relative_path(), notes_path) {
-        Ok(content) => match Document::from_bytes(content.as_bytes()) {
+    match io::read_file_with_meta(markdown_file.relative_path(), notes_path) {
+        Ok((content, meta)) => match Document::from_bytes(content.as_bytes()) {
             Ok(document) => {
                 // Create snapshot for rendering
                 let snapshot = document.snapshot();
 
                 *current_document.write() = Some(Arc::new(document));
                 *current_snapshot.write() = Some(snapshot);
+                *open_file_meta.write() = Some(meta);
                 *selected_file.write() = Some(markdown_file.clone());
             }
             Err(e) => {
+                open_file_meta.set(None);
                 RuntimeError::log_and_set(
                     error_state,
                     format!("Failed to parse '{}'", markdown_file.relative_path()),
@@ -440,6 +462,7 @@ fn load_existing_document(
             }
         },
         Err(e) => {
+            open_file_meta.set(None);
             RuntimeError::log_and_set(
                 error_state,
                 format!("Failed to read '{}'", markdown_file.relative_path()),
@@ -456,23 +479,26 @@ pub fn load_document(
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
+    open_file_meta: &mut Signal<Option<OpenFileMeta>>,
     error_state: &mut Signal<Option<RuntimeError>>,
     is_new_file: &mut Signal<bool>,
 ) {
     // Clear any previous error
     error_state.set(None);
 
-    match io::read_file(markdown_file.relative_path(), notes_path) {
-        Ok(content) => {
+    match io::read_file_with_meta(markdown_file.relative_path(), notes_path) {
+        Ok((content, meta)) => {
             is_new_file.set(false);
             match Document::from_bytes(content.as_bytes()) {
                 Ok(document) => {
                     let snapshot = document.snapshot();
                     *current_document.write() = Some(Arc::new(document));
                     *current_snapshot.write() = Some(snapshot);
+                    *open_file_meta.write() = Some(meta);
                     *selected_file.write() = Some(markdown_file);
                 }
                 Err(e) => {
+                    open_file_meta.set(None);
                     RuntimeError::log_and_set(
                         error_state,
                         format!("Failed to parse '{}'", markdown_file.relative_path()),
@@ -482,8 +508,10 @@ pub fn load_document(
             }
         }
         Err(_) => {
-            // File doesn't exist - create a blank document
+            // File doesn't exist - create a blank document. Meta stays
+            // None until the first save creates the file.
             is_new_file.set(true);
+            open_file_meta.set(None);
             match Document::from_bytes(b"") {
                 Ok(document) => {
                     let snapshot = document.snapshot();
@@ -510,6 +538,7 @@ fn navigate_to_path(
     selected_file: &mut Signal<Option<MarkdownFile>>,
     current_document: &mut Signal<Option<Arc<Document>>>,
     current_snapshot: &mut Signal<Option<Snapshot>>,
+    open_file_meta: &mut Signal<Option<OpenFileMeta>>,
     error_state: &mut Signal<Option<RuntimeError>>,
     is_new_file: &mut Signal<bool>,
 ) {
@@ -530,6 +559,7 @@ fn navigate_to_path(
         selected_file,
         current_document,
         current_snapshot,
+        open_file_meta,
         error_state,
         is_new_file,
     );
@@ -586,6 +616,7 @@ fn create_command_callback(
     selected_file: Signal<Option<MarkdownFile>>,
     mut current_document: Signal<Option<Arc<Document>>>,
     mut current_snapshot: Signal<Option<Snapshot>>,
+    mut open_file_meta: Signal<Option<OpenFileMeta>>,
     mut file_tree: Signal<FileTree>,
     mut error_state: Signal<Option<RuntimeError>>,
     mut is_new_file: Signal<bool>,
@@ -602,36 +633,84 @@ fn create_command_callback(
             // Auto-save the document to disk
             if let Some(file) = selected_file.read().as_ref() {
                 let content = document.text();
+                let expected_meta = *open_file_meta.read();
 
-                // Check if file exists before writing
-                let file_existed = io::read_file(file.relative_path(), &path).is_ok();
-
-                // Only create new files if there's actual content
-                if !file_existed && content.trim().is_empty() {
-                    // Skip creating empty files
-                    *current_document.write() = Some(document_arc);
-                    *current_snapshot.write() = Some(new_snapshot);
-                    return;
-                }
-
-                match io::write_file(file.relative_path(), &path, &content) {
-                    Ok(()) => {
-                        if !file_existed {
-                            let absolute_path = file.relative_path().to_path(&*path);
-                            file_tree.write().add_file(&absolute_path, &path);
-                            is_new_file.set(false);
-                            log::info!(
-                                "New file created and auto-saved: {:?}",
-                                file.relative_path()
-                            );
+                match expected_meta {
+                    Some(meta) => {
+                        // Existing file: guard against external writes
+                        // landing between load and save (ADR-0014 §5).
+                        match io::write_file_guarded(
+                            file.relative_path(),
+                            &path,
+                            &content,
+                            meta,
+                        ) {
+                            Ok(new_meta) => {
+                                open_file_meta.set(Some(new_meta));
+                            }
+                            Err(GuardedWriteError::ExternalChange { .. }) => {
+                                // Banner UI is added in a follow-up
+                                // commit. Keep the stale meta so every
+                                // subsequent keystroke also fails to
+                                // save — this prevents clobbering the
+                                // external change. The user has to
+                                // re-select the file to reload it.
+                                RuntimeError::log_and_set(
+                                    &mut error_state,
+                                    format!(
+                                        "'{}' changed on disk; re-select the file to reload",
+                                        file.relative_path()
+                                    ),
+                                    "external write detected by mtime/size guard",
+                                );
+                            }
+                            Err(GuardedWriteError::NotFound(_)) => {
+                                // Open file vanished externally — treat
+                                // like a brand-new file on next save.
+                                open_file_meta.set(None);
+                            }
+                            Err(GuardedWriteError::Io(e)) => {
+                                RuntimeError::log_and_set(
+                                    &mut error_state,
+                                    format!("Failed to save '{}'", file.relative_path()),
+                                    e,
+                                );
+                            }
                         }
                     }
-                    Err(e) => {
-                        RuntimeError::log_and_set(
-                            &mut error_state,
-                            format!("Failed to save '{}'", file.relative_path()),
-                            e,
-                        );
+                    None => {
+                        // New unsaved file (or one whose meta we lost).
+                        // Skip creating empty files; otherwise do an
+                        // unguarded write and capture meta from disk
+                        // for subsequent guarded saves.
+                        if content.trim().is_empty() {
+                            *current_document.write() = Some(document_arc);
+                            *current_snapshot.write() = Some(new_snapshot);
+                            return;
+                        }
+                        match io::write_file(file.relative_path(), &path, &content) {
+                            Ok(()) => {
+                                let absolute_path = file.relative_path().to_path(&*path);
+                                file_tree.write().add_file(&absolute_path, &path);
+                                is_new_file.set(false);
+                                log::info!(
+                                    "New file created and auto-saved: {:?}",
+                                    file.relative_path()
+                                );
+                                if let Ok((_, new_meta)) =
+                                    io::read_file_with_meta(file.relative_path(), &path)
+                                {
+                                    open_file_meta.set(Some(new_meta));
+                                }
+                            }
+                            Err(e) => {
+                                RuntimeError::log_and_set(
+                                    &mut error_state,
+                                    format!("Failed to save '{}'", file.relative_path()),
+                                    e,
+                                );
+                            }
+                        }
                     }
                 }
             }
