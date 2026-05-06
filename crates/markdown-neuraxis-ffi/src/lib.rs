@@ -65,7 +65,10 @@ use markdown_neuraxis_engine::Document;
 use markdown_neuraxis_engine::editing::snapshot::{
     self as engine, BlockContent, BlockKind, InlineNode, InlineSegment,
 };
+use markdown_neuraxis_engine::io as engine_io;
+use relative_path::RelativePath;
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime};
 
 uniffi::setup_scaffolding!();
 
@@ -385,6 +388,26 @@ impl TextSegment {
 ///
 /// Searches the given file paths for a match (case-insensitive, with or without .md extension).
 /// Returns the matching file path, or None if not found.
+/// Build a Syncthing-distinct conflict filename for `original`
+/// (ADR-0014 §6).
+///
+/// Wraps `engine_io::conflict_path` so the Android UI can produce the
+/// exact same filename format as the Dioxus desktop UI when the user
+/// taps "Save copy" in the external-change banner. The result is the
+/// relative path of the conflict file in the same folder as the
+/// original (e.g. `notes/draft.mdnx-conflict-20260506-143015-pixel.md`).
+///
+/// `now_unix_seconds` is the timestamp to embed (callers typically
+/// pass the device's current time). `device` is sanitised by the
+/// engine before being written into the filename, so any free-form
+/// device label is safe.
+#[uniffi::export]
+pub fn conflict_path(original: String, now_unix_seconds: u64, device: String) -> String {
+    let rel = RelativePath::new(&original);
+    let when = SystemTime::UNIX_EPOCH + Duration::from_secs(now_unix_seconds);
+    engine_io::conflict_path(rel, when, &device).into_string()
+}
+
 #[uniffi::export]
 pub fn resolve_wikilink(target: String, file_paths: Vec<String>) -> Option<String> {
     let search_name = target
@@ -646,6 +669,28 @@ mod tests {
         let paths = vec!["notes/Other.md".to_string()];
         let result = resolve_wikilink("Missing".to_string(), paths);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_conflict_path_ffi_exports_engine_format() {
+        // 2026-05-06 14:30:15 UTC, same fixture as the engine tests
+        // so any drift between engine and FFI surfaces immediately.
+        let result = conflict_path(
+            "notes/draft.md".to_string(),
+            1_778_077_815,
+            "pixel".to_string(),
+        );
+        assert_eq!(result, "notes/draft.mdnx-conflict-20260506-143015-pixel.md");
+    }
+
+    #[test]
+    fn test_conflict_path_ffi_sanitises_device() {
+        let result = conflict_path(
+            "draft.md".to_string(),
+            1_778_077_815,
+            "Tim's Phone".to_string(),
+        );
+        assert_eq!(result, "draft.mdnx-conflict-20260506-143015-Tim-s-Phone.md");
     }
 
     #[test]

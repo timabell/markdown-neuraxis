@@ -3057,6 +3057,7 @@ dependencies = [
  "env_logger",
  "futures-channel",
  "futures-util",
+ "gethostname",
  "insta",
  "log",
  "markdown-neuraxis-config",

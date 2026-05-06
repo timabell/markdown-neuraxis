@@ -13,6 +13,7 @@ name = "markdown_neuraxis_ffi"
 
 [dependencies]
 markdown-neuraxis-engine = { path = "../markdown-neuraxis-engine" }
+relative-path = { workspace = true }
 uniffi = { workspace = true, features = ["cli"] }
 thiserror.workspace = true
 
