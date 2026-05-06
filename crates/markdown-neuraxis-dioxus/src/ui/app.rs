@@ -1,14 +1,19 @@
 use crate::platform::pick_folder;
 use dioxus::prelude::*;
+use futures_util::StreamExt;
 use markdown_neuraxis_config::Config;
 use markdown_neuraxis_engine::{
     Document, FileTree, MarkdownFile, Snapshot,
     editing::commands::Cmd,
     io::{self, GuardedWriteError, OpenFileMeta},
+    watcher::{ExternalChange, FileWatcher},
 };
 use relative_path::RelativePathBuf;
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 
 const SOLARIZED_LIGHT_CSS: &str = include_str!("../assets/solarized-light.css");
 
@@ -70,12 +75,90 @@ pub fn App(notes_path: PathBuf) -> Element {
     // (mtime, size) of the loaded file used to detect external writes
     // and guard our autosaves (ADR-0014).
     let open_file_meta = use_signal(|| None::<OpenFileMeta>);
+    // Most recent external change reported by the file watcher. The
+    // watcher coroutine below populates this; downstream UI (banner
+    // and silent-reload paths) react to it.
+    let external_change = use_signal(|| None::<ExternalChange>);
     let focused_folder = use_signal(|| None::<RelativePathBuf>);
     // Track if current file is newly created (for focusing title input)
     let is_new_file = use_signal(|| false);
 
     // Mobile navigation state - tracks whether file tree is shown on mobile
     let mut mobile_nav_open = use_signal(|| false);
+
+    // File-watcher lifecycle (ADR-0014). The handle has to live across
+    // renders, so we park it in a use_hook'd RefCell rather than a
+    // Signal — Signal storage requires Send+Sync but the watcher's
+    // notify::RecommendedWatcher and the bridging futures channel
+    // sender are component-thread-local and don't need to be.
+    let watcher_holder: Rc<RefCell<Option<WatcherSlot>>> =
+        use_hook(|| Rc::new(RefCell::new(None)));
+
+    // Reactive (re)start of the watcher whenever the open file
+    // changes. The closure intentionally only restarts when the
+    // selected file's relative path differs from what we last started
+    // — open_file_meta updates on every save, but we want the
+    // watcher's own (mtime, size) dedupe to absorb our save-echoes
+    // rather than restarting it every keystroke.
+    {
+        let holder = Rc::clone(&watcher_holder);
+        use_effect(move || {
+            let new_target = selected_file
+                .read()
+                .as_ref()
+                .map(|f| f.relative_path().to_relative_path_buf());
+            let same_file = matches!(
+                (new_target.as_ref(), holder.borrow().as_ref()),
+                (Some(a), Some(slot)) if a == &slot.file_relative
+            );
+            if same_file {
+                return;
+            }
+
+            // Tearing down the previous slot drops the FileWatcher and
+            // closes its channel; the bridge thread and async drainer
+            // exit cleanly without us joining either.
+            *holder.borrow_mut() = None;
+
+            let (Some(file), Some(meta)) =
+                (selected_file.read().as_ref().cloned(), *open_file_meta.read())
+            else {
+                return;
+            };
+
+            let absolute = file.relative_path().to_path(&*notes_path.read());
+            let file_relative = file.relative_path().to_relative_path_buf();
+            match FileWatcher::watch(absolute, meta, Duration::from_secs(5)) {
+                Ok((watcher, std_rx)) => {
+                    let (async_tx, mut async_rx) =
+                        futures_util::channel::mpsc::unbounded::<ExternalChange>();
+                    // Bridge the std mpsc::Receiver (blocking recv) into
+                    // an async stream. Lives until the watcher is
+                    // dropped, which closes std_rx.
+                    std::thread::spawn(move || {
+                        while let Ok(event) = std_rx.recv() {
+                            if async_tx.unbounded_send(event).is_err() {
+                                break;
+                            }
+                        }
+                    });
+                    let mut external_change = external_change;
+                    spawn(async move {
+                        while let Some(event) = async_rx.next().await {
+                            external_change.set(Some(event));
+                        }
+                    });
+                    *holder.borrow_mut() = Some(WatcherSlot {
+                        _watcher: watcher,
+                        file_relative,
+                    });
+                }
+                Err(e) => {
+                    log::error!("Failed to start file watcher for {file_relative}: {e}");
+                }
+            }
+        });
+    }
 
     // Create callbacks outside the rsx! block for cleaner code
     let on_sidebar_file_select = {
@@ -424,6 +507,15 @@ pub fn App(notes_path: PathBuf) -> Element {
             }
         }
     }
+}
+
+/// Holder for the active FileWatcher plus the relative path of the
+/// file it is watching, so we can detect when the open file changes
+/// and avoid pointlessly restarting the watcher on save-driven meta
+/// updates.
+struct WatcherSlot {
+    _watcher: FileWatcher,
+    file_relative: RelativePathBuf,
 }
 
 /// Helper function to load and parse a document from an existing file
