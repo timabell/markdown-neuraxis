@@ -42,6 +42,8 @@ def convert_namespace_to_folders(directory):
         folder_path = dir_path
         for part in parts[:-1]:  # All parts except the last become folders
             folder_path = folder_path / part
+            if folder_path.exists() and not folder_path.is_dir():
+                raise SystemExit(f"collision: {folder_path} is a file, cannot create directory")
             folder_path.mkdir(exist_ok=True)
 
         # Last part becomes the filename
